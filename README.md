@@ -4,8 +4,9 @@ Typed, inert expression trees for Python, with the checking and node
 construction written in Rust (PyO3).
 
 - Every expression is an `Expr` and has a kind, `e.kind`. A kind is an object
-  declared in Python with `kind(name)`: `NumberKind` and `Bool` here. A kind
-  can also take other kinds as parameters, `TupleKind(NumberKind, Bool)`.
+  declared in Python with `kind(name)`: `NumberKind` and `BoolKind` here. A
+  kind can also take other kinds as parameters,
+  `TupleKind(NumberKind, BoolKind)`.
 - A function declares the kinds it accepts and the kind it returns. The result
   is always of the declared kind; nothing is inferred from the arguments.
 - A function can take any number of arguments of one kind (`rest=`).
@@ -16,8 +17,13 @@ construction written in Rust (PyO3).
 
 | Path | What it is |
 |---|---|
-| `src/lib.rs` | The compiled module `nary_rust`: `Expr`, `Kind`, `kind`, `KindFamily`, `kind_family`, `Function`, `function`, `set_operator`. It defines no particular kind and no particular function. |
-| `nary_rs.py` | Declares the kinds `NumberKind` and `Bool` with `kind(...)` and the functions `Add`, `Mul`, `Pow`, `sin`, `Lt` and `Eq` with `function(...)`, and sets which function each operator builds for each kind. This is the module to import. |
+| `src/lib.rs` | The compiled module `nary._core`: `Expr`, `Kind`, `kind`, `KindFamily`, `kind_family`, `Function`, `function`, `set_operator`. It defines no particular kind and no particular function. |
+| `python/nary/` | The package `nary`, the one to import. |
+| `python/nary/__init__.py` | Re-exports the names of `nary._core` and everything listed in the `__all__` of the modules below, so a name added to one of those lists is `nary.<name>` with no change here. |
+| `python/nary/kinds.py` | Declares the kinds `NumberKind` and `BoolKind` with `kind(...)`. |
+| `python/nary/arithmetic.py` | Declares `Add`, `Mul` and `Pow` with `function(...)`, and sets what `+` and `*` build for a `NumberKind`. |
+| `python/nary/elementary.py` | Declares `sin`. |
+| `python/nary/relational.py` | Declares `Lt` and `Eq`, and sets what `<` builds for a `NumberKind`. |
 | `tests/` | The tests. |
 | `bench/` | `bench_construct.py` times building, comparing and hashing expressions. `compare.py` runs it on several versions and prints their ratios. |
 
@@ -28,8 +34,9 @@ Needs a Rust toolchain and [uv](https://docs.astral.sh/uv/).
     uv venv
     uvx maturin develop -r
 
-This builds the compiled module and installs it into `.venv`. `nary_rs.py` is
-not installed; it is used from this directory. To run the tests:
+This builds the compiled module as `python/nary/_core` and installs the
+package `nary` into `.venv`, linked to `python/`, so an edit to a Python file
+needs no rebuild. To run the tests:
 
     uv pip install pytest
     .venv/bin/python -m pytest
@@ -38,23 +45,23 @@ To build a wheel instead, for the Python in `.venv`:
 
     uvx maturin build -r -i .venv/bin/python
 
-The wheel is written to `target/wheels/`. It contains only the compiled
-module.
+The wheel is written to `target/wheels/`. It contains the package `nary`,
+with the compiled module in it.
 
 ## Use
 
 ```python
->>> import nary_rs as nr
+>>> import nary as nr
 >>> x, y, z = (nr.NumberKind(n) for n in "xyz")
 
 >>> nr.Add(x, y, z)                  # any number of arguments
 Add(x, y, z)
 >>> x + y + z                        # operators build two-argument nodes
 Add(Add(x, y), z)
->>> nr.sin(x) * y < z                # a comparison is a Bool
+>>> nr.sin(x) * y < z                # a comparison is a BoolKind
 Lt(Mul(sin(x), y), z)
 >>> (x + y).kind, (x < y).kind
-(NumberKind, Bool)
+(NumberKind, BoolKind)
 
 >>> eq = nr.Eq(x + y, z)             # named arguments
 >>> eq.lhs, eq.rhs
@@ -63,7 +70,7 @@ Lt(Mul(sin(x), y), z)
 >>> nr.sin(x < y)
 Traceback (most recent call last):
     ...
-TypeError: sin expects NumberKind, got Bool: Lt(x, y)
+TypeError: sin expects NumberKind, got BoolKind: Lt(x, y)
 >>> nr.Pow(x, y, z)
 Traceback (most recent call last):
     ...
@@ -74,14 +81,14 @@ TypeError: Pow takes 2 arguments, got 3
 Declaring a function:
 
 ```python
->>> from nary_rs import Bool, NumberKind, function
+>>> from nary import BoolKind, NumberKind, function
 
 >>> cos = function("cos", NumberKind, returns=NumberKind)
 >>> Max = function("Max", rest=NumberKind, returns=NumberKind)
->>> Le = function("Le", NumberKind, NumberKind, returns=Bool, names=("lhs", "rhs"))
+>>> Le = function("Le", NumberKind, NumberKind, returns=BoolKind, names=("lhs", "rhs"))
 
 >>> Le.name, Le.params, Le.rest, Le.returns, Le.names     # what was declared
-('Le', (NumberKind, NumberKind), None, Bool, ('lhs', 'rhs'))
+('Le', (NumberKind, NumberKind), None, BoolKind, ('lhs', 'rhs'))
 >>> Max.params, Max.rest, Max.names
 ((), NumberKind, ())
 
@@ -92,11 +99,11 @@ Declaring a function:
 A kind is declared in Python, and adding one needs no change in Rust:
 
 ```python
->>> from nary_rs import kind, set_operator
+>>> from nary import kind, set_operator
 
 >>> SetKind = kind("SetKind")
 >>> Union = function("Union", rest=SetKind, returns=SetKind)
->>> Contains = function("Contains", NumberKind, SetKind, returns=Bool)
+>>> Contains = function("Contains", NumberKind, SetKind, returns=BoolKind)
 >>> set_operator(SetKind, "+", Union)        # what + builds for two sets
 
 >>> S, T = SetKind("S"), SetKind("T")        # calling a kind makes a leaf
@@ -130,7 +137,7 @@ TypeError: SetKind takes 1 argument, the name of a leaf, got 3; a node is built 
   Declare each kind once, when a module is imported.
 - `set_operator(kind, symbol, function)` says what an operator builds when its
   left operand is of that kind. A kind with no function for an operator does
-  not support it: `p + q` on two `Bool`s is a `TypeError`.
+  not support it: `p + q` on two `BoolKind`s is a `TypeError`.
 
 ## Parametrised kinds
 
@@ -139,22 +146,22 @@ as parameters gives a kind. Such a kind is like any other: it can be used in
 a signature, it has its own operators, and calling it makes a leaf.
 
 ```python
->>> from nary_rs import kind_family
+>>> from nary import kind_family
 
 >>> TupleKind = kind_family("TupleKind")              # one or more parameters
 >>> MatrixKind = kind_family("MatrixKind", params=1)  # exactly one parameter
 
->>> Pair = TupleKind(NumberKind, Bool)
+>>> Pair = TupleKind(NumberKind, BoolKind)
 >>> Pair
-TupleKind(NumberKind, Bool)
->>> Pair is TupleKind(NumberKind, Bool)               # the same kind every time
+TupleKind(NumberKind, BoolKind)
+>>> Pair is TupleKind(NumberKind, BoolKind)           # the same kind every time
 True
 >>> Pair.family, Pair.params
-(<kind family TupleKind>, (NumberKind, Bool))
+(<kind family TupleKind>, (NumberKind, BoolKind))
 >>> TupleKind(MatrixKind(NumberKind), Pair)           # parameters can be parametrised
-TupleKind(MatrixKind(NumberKind), TupleKind(NumberKind, Bool))
+TupleKind(MatrixKind(NumberKind), TupleKind(NumberKind, BoolKind))
 
->>> Piece = function("Piece", NumberKind, Bool, returns=Pair)
+>>> Piece = function("Piece", NumberKind, BoolKind, returns=Pair)
 >>> Piece(x, x < y).kind is Pair
 True
 
@@ -165,11 +172,11 @@ True
 >>> A, B = Matrix("A"), Matrix("B")
 >>> Trace(A * B)
 Trace(MatMul(A, B))
->>> Trace(MatrixKind(Bool)("P"))
+>>> Trace(MatrixKind(BoolKind)("P"))
 Traceback (most recent call last):
     ...
-TypeError: Trace expects MatrixKind(NumberKind), got MatrixKind(Bool): P
->>> MatrixKind(NumberKind, Bool)
+TypeError: Trace expects MatrixKind(NumberKind), got MatrixKind(BoolKind): P
+>>> MatrixKind(NumberKind, BoolKind)
 Traceback (most recent call last):
     ...
 TypeError: MatrixKind takes 1 parameter, got 2
@@ -206,7 +213,7 @@ TypeError: MatrixKind takes 1 parameter, got 2
   declared for particular kinds, and one function cannot accept every
   `MatrixKind(...)`. Working out a result kind from the arguments would be
   inference, which this package does not do.
-- `nary_rs.py` declares no families and no functions on them.
+- The package declares no families and no functions on them.
 - `==` compares structure and returns a Python `bool`; it does not build an
   `Eq`. `x + y + z` is not equal to `Add(x, y, z)`.
 - Equal expressions are not shared, so equality walks both trees.

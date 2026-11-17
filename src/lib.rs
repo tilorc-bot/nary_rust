@@ -3,14 +3,14 @@
 //! `Expr` is a head applied to arguments, and it is the only class of
 //! expression. Each expression has a kind. A kind is an object declared from
 //! Python with `kind(name)`, or made by instantiating a kind family declared
-//! with `kind_family(name)`: `TupleKind(NumberKind, Bool)`. A function
+//! with `kind_family(name)`: `TupleKind(NumberKind, BoolKind)`. A function
 //! declares the kinds it accepts and the kind it returns, with optional names
 //! for its arguments. The checking and node construction happen here.
 //!
 //! No kind and no particular function is defined in this file. The kinds
-//! (NumberKind, Bool) and the functions (Add, Mul, Eq and the rest) are
-//! declared in Python (nary_rs.py), and each kind is told which function an
-//! operator builds with `set_operator`.
+//! (NumberKind, BoolKind) and the functions (Add, Mul, Eq and the rest) are
+//! declared in Python, in the package `nary`, and each kind is told which
+//! function an operator builds with `set_operator`.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -73,10 +73,10 @@ fn kind_object(py: Python<'_>, data: KindRef) -> PyResult<Py<Kind>> {
 }
 
 /// A kind of expression, such as NumberKind. Declared with `kind(name)`, or
-/// made by instantiating a kind family: `TupleKind(NumberKind, Bool)`.
+/// made by instantiating a kind family: `TupleKind(NumberKind, BoolKind)`.
 ///
 /// Calling a kind with a name makes a leaf of that kind: `NumberKind("x")`.
-#[pyclass(frozen, module = "nary_rust")]
+#[pyclass(frozen, module = "nary")]
 struct Kind {
     data: KindRef,
 }
@@ -120,8 +120,8 @@ impl Kind {
         self.data.family.as_ref().map(|family| family.clone_ref(py))
     }
 
-    /// The parameters of this kind: `TupleKind(NumberKind, Bool).params` is
-    /// `(NumberKind, Bool)`. Empty for a kind declared with `kind(name)`.
+    /// The parameters of this kind: `TupleKind(NumberKind, BoolKind).params` is
+    /// `(NumberKind, BoolKind)`. Empty for a kind declared with `kind(name)`.
     #[getter]
     fn params<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
         let mut params = Vec::with_capacity(self.data.params.len());
@@ -145,11 +145,11 @@ fn declare_kind(py: Python<'_>, name: String) -> PyResult<Py<Kind>> {
 /// A family of kinds, each given by a list of parameters that are kinds.
 /// Declared with `kind_family(name, params=None)`.
 ///
-/// `TupleKind(NumberKind, Bool)` is the kind of the family with those
+/// `TupleKind(NumberKind, BoolKind)` is the kind of the family with those
 /// parameters. It is made the first time and the same kind is returned every
 /// time after, so two kinds of a family are the same kind exactly when their
 /// parameters are the same kinds in the same order.
-#[pyclass(frozen, module = "nary_rust")]
+#[pyclass(frozen, module = "nary")]
 struct KindFamily {
     name: String,
     /// The number of parameters every kind of the family has, or None for
@@ -270,7 +270,7 @@ fn expect_kind(obj: &Bound<'_, PyAny>) -> PyResult<KindRef> {
 /// A leaf, made by calling a kind, has no arguments. Any other expression is
 /// made by `Function::apply`, which checks that each argument is an `Expr`
 /// of the kind declared for it. Nothing else makes an `Expr`.
-#[pyclass(frozen, module = "nary_rust")]
+#[pyclass(frozen, module = "nary")]
 struct Expr {
     kind: KindRef,
     head: Py<PyString>,
@@ -423,7 +423,7 @@ impl Expr {
 }
 
 /// A declared function: a name, the kinds accepted, and the kind returned.
-#[pyclass(frozen, module = "nary_rust")]
+#[pyclass(frozen, module = "nary")]
 struct Function {
     name: Py<PyString>,
     arg_kinds: Vec<KindRef>,
@@ -616,7 +616,7 @@ fn set_operator(
 }
 
 #[pymodule]
-fn nary_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Expr>()?;
     m.add_class::<Kind>()?;
     m.add_class::<KindFamily>()?;
