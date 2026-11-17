@@ -80,6 +80,11 @@ Declaring a function:
 >>> Max = function("Max", rest=NumberKind, returns=NumberKind)
 >>> Le = function("Le", NumberKind, NumberKind, returns=Bool, names=("lhs", "rhs"))
 
+>>> Le.name, Le.params, Le.rest, Le.returns, Le.names     # what was declared
+('Le', (NumberKind, NumberKind), None, Bool, ('lhs', 'rhs'))
+>>> Max.params, Max.rest, Max.names
+((), NumberKind, ())
+
 ```
 
 ## Kinds

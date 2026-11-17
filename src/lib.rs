@@ -503,6 +503,43 @@ impl Function {
         self.apply(args)
     }
 
+    #[getter]
+    fn name(&self, py: Python<'_>) -> Py<PyString> {
+        self.name.clone_ref(py)
+    }
+
+    /// The kinds of the leading arguments: `Eq.params` is
+    /// `(NumberKind, NumberKind)`.
+    #[getter]
+    fn params<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
+        let mut params = Vec::with_capacity(self.arg_kinds.len());
+        for &kind in &self.arg_kinds {
+            params.push(kind_object(py, kind)?);
+        }
+        PyTuple::new(py, params)
+    }
+
+    /// The kind of any further arguments, or None if none are accepted.
+    #[getter]
+    fn rest(&self, py: Python<'_>) -> PyResult<Option<Py<Kind>>> {
+        self.rest.map(|kind| kind_object(py, kind)).transpose()
+    }
+
+    /// The kind of the result.
+    #[getter]
+    fn returns(&self, py: Python<'_>) -> PyResult<Py<Kind>> {
+        kind_object(py, self.returns)
+    }
+
+    /// The names of the leading arguments, or `()` if none were declared.
+    #[getter]
+    fn names<'py>(&self, py: Python<'py>) -> Bound<'py, PyTuple> {
+        match &self.names {
+            Some(names) => names.bind(py).clone(),
+            None => PyTuple::empty(py),
+        }
+    }
+
     fn __repr__(&self, py: Python<'_>) -> String {
         format!("<function {}>", self.name.bind(py))
     }
