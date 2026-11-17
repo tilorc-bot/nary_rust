@@ -21,9 +21,9 @@ construction written in Rust (PyO3).
 | `python/nary/` | The package `nary`, the one to import. |
 | `python/nary/__init__.py` | Re-exports the names of `nary._core` and everything listed in the `__all__` of the modules below, so a name added to one of those lists is `nary.<name>` with no change here. |
 | `python/nary/kinds.py` | Declares the kinds `NumberKind` and `BoolKind` with `kind(...)`. |
-| `python/nary/arithmetic.py` | Declares `Add`, `Mul` and `Pow` with `function(...)`, and sets what `+` and `*` build for a `NumberKind`. |
+| `python/nary/arithmetic.py` | Declares `Add`, `Mul` and `Pow` with `function(...)`, and sets what `+`, `*` and `**` build for a `NumberKind`. |
 | `python/nary/elementary.py` | Declares `sin`. |
-| `python/nary/relational.py` | Declares `Lt` and `Eq`, and sets what `<` builds for a `NumberKind`. |
+| `python/nary/relational.py` | Declares `Lt`, `Gt`, `Le`, `Ge` and `Eq`, and sets what `<`, `>`, `<=` and `>=` build for a `NumberKind`. |
 | `tests/` | The tests. |
 | `bench/` | `bench_construct.py` times building, comparing and hashing expressions. `compare.py` runs it on several versions and prints their ratios. |
 
@@ -62,6 +62,8 @@ Add(Add(x, y), z)
 Lt(Mul(sin(x), y), z)
 >>> (x + y).kind, (x < y).kind
 (NumberKind, BoolKind)
+>>> x ** y >= z                      # also >, <=
+Ge(Pow(x, y), z)
 
 >>> eq = nr.Eq(x + y, z)             # named arguments
 >>> eq.lhs, eq.rhs
@@ -200,8 +202,9 @@ TypeError: MatrixKind takes 1 parameter, got 2
 
 ## Limitations
 
-- The three operators (`+`, `*`, `<`) are fixed in Rust. `set_operator` can be
-  called once for each kind and operator.
+- The seven operators (`+`, `*`, `**`, `<`, `>`, `<=`, `>=`) are fixed in
+  Rust. There are no reflected operators (`1 + x`), and no `-` or `/`.
+  `set_operator` can be called once for each kind and operator.
 - A kind is only a name and its operators. It cannot have methods or
   attributes of its own, and there are no kinds of kinds.
 - The parameters of a kind family can only be kinds. A matrix shape or any
