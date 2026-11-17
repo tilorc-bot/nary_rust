@@ -4,7 +4,8 @@ Typed, inert expression trees for Python, with the checking and node
 construction written in Rust (PyO3).
 
 - Every expression is an `Expr` and has a kind, `e.kind`. A kind is an object
-  declared in Python with `kind(name)`: `NumberKind` and `Bool` here.
+  declared in Python with `kind(name)`: `NumberKind` and `Bool` here. A kind
+  can also take other kinds as parameters, `TupleKind(NumberKind, Bool)`.
 - A function declares the kinds it accepts and the kind it returns. The result
   is always of the declared kind; nothing is inferred from the arguments.
 - A function can take any number of arguments of one kind (`rest=`).
@@ -15,7 +16,7 @@ construction written in Rust (PyO3).
 
 | Path | What it is |
 |---|---|
-| `src/lib.rs` | The compiled module `nary_rust`: `Expr`, `Kind`, `kind`, `Function`, `function`, `set_operator`. It defines no particular kind and no particular function. |
+| `src/lib.rs` | The compiled module `nary_rust`: `Expr`, `Kind`, `kind`, `KindFamily`, `kind_family`, `Function`, `function`, `set_operator`. It defines no particular kind and no particular function. |
 | `nary_rs.py` | Declares the kinds `NumberKind` and `Bool` with `kind(...)` and the functions `Add`, `Mul`, `Pow`, `sin`, `Lt` and `Eq` with `function(...)`, and sets which function each operator builds for each kind. This is the module to import. |
 | `tests/` | The tests. |
 | `bench/` | `bench_construct.py` times building, comparing and hashing expressions. `compare.py` runs it on several versions and prints their ratios. |
@@ -117,12 +118,81 @@ TypeError: Union expects SetKind, got NumberKind: x
   left operand is of that kind. A kind with no function for an operator does
   not support it: `p + q` on two `Bool`s is a `TypeError`.
 
+## Parametrised kinds
+
+A kind family is declared with `kind_family(name)`, and calling it with kinds
+as parameters gives a kind. Such a kind is like any other: it can be used in
+a signature, it has its own operators, and calling it makes a leaf.
+
+```python
+>>> from nary_rs import kind_family
+
+>>> TupleKind = kind_family("TupleKind")              # one or more parameters
+>>> MatrixKind = kind_family("MatrixKind", params=1)  # exactly one parameter
+
+>>> Pair = TupleKind(NumberKind, Bool)
+>>> Pair
+TupleKind(NumberKind, Bool)
+>>> Pair is TupleKind(NumberKind, Bool)               # the same kind every time
+True
+>>> Pair.family, Pair.params
+(<kind family TupleKind>, (NumberKind, Bool))
+>>> TupleKind(MatrixKind(NumberKind), Pair)           # parameters can be parametrised
+TupleKind(MatrixKind(NumberKind), TupleKind(NumberKind, Bool))
+
+>>> Piece = function("Piece", NumberKind, Bool, returns=Pair)
+>>> Piece(x, x < y).kind is Pair
+True
+
+>>> Matrix = MatrixKind(NumberKind)
+>>> MatMul = function("MatMul", rest=Matrix, returns=Matrix)
+>>> Trace = function("Trace", Matrix, returns=NumberKind)
+>>> set_operator(Matrix, "*", MatMul)
+>>> A, B = Matrix("A"), Matrix("B")
+>>> Trace(A * B)
+Trace(MatMul(A, B))
+>>> Trace(MatrixKind(Bool)("P"))
+Traceback (most recent call last):
+    ...
+TypeError: Trace expects MatrixKind(NumberKind), got MatrixKind(Bool): P
+>>> MatrixKind(NumberKind, Bool)
+Traceback (most recent call last):
+    ...
+TypeError: MatrixKind takes 1 parameter, got 2
+
+```
+
+- A family returns the same kind object whenever it is given the same
+  parameters in the same order, so kinds are still compared by identity. A
+  family looks its kinds up in a table, guarded by a lock, only when it is
+  called. Nodes of a parametrised kind are built, compared and hashed exactly
+  as nodes of any other kind.
+- A kind made by a family lasts for the life of the process, as any kind
+  does, and so does its family. Each different list of parameters makes one
+  more kind, so instantiate families when a module is imported, not with
+  parameters that keep changing.
+- `kind.family` and `kind.params` are `None` and `()` for a kind declared
+  with `kind(name)`. A family has `name`, and `params`, the number of
+  parameters it takes or `None`.
+- Every `kind_family(...)` call makes a new family, even with a name already
+  used, and its kinds are different from those of any other family.
+
 ## Limitations
 
 - The three operators (`+`, `*`, `<`) are fixed in Rust. `set_operator` can be
   called once for each kind and operator.
 - A kind is only a name and its operators. It cannot have methods or
   attributes of its own, and there are no kinds of kinds.
+- The parameters of a kind family can only be kinds. A matrix shape or any
+  other value cannot be a parameter.
+- Nothing builds values of a family's kinds automatically. A Python tuple is
+  not turned into an expression where a `TupleKind(...)` is expected; values
+  are built by declared functions, such as `Piece` above.
+- There are no generic functions and no kind variables: a function is
+  declared for particular kinds, and one function cannot accept every
+  `MatrixKind(...)`. Working out a result kind from the arguments would be
+  inference, which this package does not do.
+- `nary_rs.py` declares no families and no functions on them.
 - `==` compares structure and returns a Python `bool`; it does not build an
   `Eq`. `x + y + z` is not equal to `Add(x, y, z)`.
 - Equal expressions are not shared, so equality walks both trees.

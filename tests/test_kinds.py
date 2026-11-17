@@ -21,7 +21,10 @@ def test_the_compiled_module_defines_no_kind_and_no_function():
     public = {name for name in dir(nary_rust) if not name.startswith("_")}
     # maturin wraps the compiled module in a package of the same name.
     public.discard("nary_rust")
-    assert public == {"Expr", "Function", "Kind", "function", "kind", "set_operator"}
+    assert public == {
+        "Expr", "Function", "Kind", "KindFamily",
+        "function", "kind", "kind_family", "set_operator",
+    }
 
 
 def test_a_kind_is_an_object_declared_with_kind():

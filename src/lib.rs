@@ -2,29 +2,33 @@
 //!
 //! `Expr` is a head applied to arguments, and it is the only class of
 //! expression. Each expression has a kind. A kind is an object declared from
-//! Python with `kind(name)`, and a function declares the kinds it accepts and
-//! the kind it returns, with optional names for its arguments. The checking
-//! and node construction happen here.
+//! Python with `kind(name)`, or made by instantiating a kind family declared
+//! with `kind_family(name)`: `TupleKind(NumberKind, Bool)`. A function
+//! declares the kinds it accepts and the kind it returns, with optional names
+//! for its arguments. The checking and node construction happen here.
 //!
 //! No kind and no particular function is defined in this file. The kinds
 //! (NumberKind, Bool) and the functions (Add, Mul, Eq and the rest) are
 //! declared in Python (nary_rs.py), and each kind is told which function an
 //! operator builds with `set_operator`.
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Mutex, PoisonError};
 
 use pyo3::exceptions::{PyAttributeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::pyclass::CompareOp;
-use pyo3::sync::PyOnceLock;
+use pyo3::sync::{MutexExt, PyOnceLock};
 use pyo3::types::{PyString, PyTuple};
 
 /// What is known about a kind.
 ///
-/// One of these is made for each `kind(name)` call and is never freed, so an
-/// expression refers to its kind with a plain reference: building a node
-/// does no reference counting on the kind, and two kinds are the same kind
-/// exactly when the references are the same.
+/// One of these is made for each `kind(name)` call, and for each different
+/// list of parameters a kind family is instantiated with, and is never
+/// freed. So an expression refers to its kind with a plain reference:
+/// building a node does no reference counting on the kind, and two kinds are
+/// the same kind exactly when the references are the same.
 struct KindData {
     /// The position of the kind in the order of declaration. Used in hashes.
     id: usize,
@@ -34,6 +38,12 @@ struct KindData {
     /// The function each operator builds for this kind, indexed by
     /// `Operator`. Filled in from Python with `set_operator`.
     operators: [PyOnceLock<Py<Function>>; Operator::COUNT],
+    /// The family this kind is an instance of, or None for a kind declared
+    /// with `kind(name)`.
+    family: Option<Py<KindFamily>>,
+    /// The parameters the family was instantiated with. Empty for a kind
+    /// declared with `kind(name)`.
+    params: Box<[KindRef]>,
 }
 
 type KindRef = &'static KindData;
@@ -44,7 +54,26 @@ fn same_kind(a: KindRef, b: KindRef) -> bool {
 
 static KIND_COUNT: AtomicUsize = AtomicUsize::new(0);
 
-/// A kind of expression, such as NumberKind. Declared with `kind(name)`.
+/// Make the record for a new kind. It is never freed.
+fn new_kind_data(name: String, family: Option<Py<KindFamily>>, params: Box<[KindRef]>) -> KindRef {
+    Box::leak(Box::new(KindData {
+        id: KIND_COUNT.fetch_add(1, Ordering::Relaxed),
+        name,
+        object: PyOnceLock::new(),
+        operators: [const { PyOnceLock::new() }; Operator::COUNT],
+        family,
+        params,
+    }))
+}
+
+/// The Python object of a kind, made the first time it is asked for.
+fn kind_object(py: Python<'_>, data: KindRef) -> PyResult<Py<Kind>> {
+    let object = data.object.get_or_try_init(py, || Py::new(py, Kind { data }))?;
+    Ok(object.clone_ref(py))
+}
+
+/// A kind of expression, such as NumberKind. Declared with `kind(name)`, or
+/// made by instantiating a kind family: `TupleKind(NumberKind, Bool)`.
 ///
 /// Calling a kind makes a leaf of that kind: `NumberKind("x")`.
 #[pyclass(frozen, module = "nary_rust")]
@@ -74,6 +103,23 @@ impl Kind {
     fn __repr__(&self) -> &str {
         &self.data.name
     }
+
+    /// The family this kind is an instance of, or None.
+    #[getter]
+    fn family(&self, py: Python<'_>) -> Option<Py<KindFamily>> {
+        self.data.family.as_ref().map(|family| family.clone_ref(py))
+    }
+
+    /// The parameters of this kind: `TupleKind(NumberKind, Bool).params` is
+    /// `(NumberKind, Bool)`. Empty for a kind declared with `kind(name)`.
+    #[getter]
+    fn params<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
+        let mut params = Vec::with_capacity(self.data.params.len());
+        for &param in self.data.params.iter() {
+            params.push(kind_object(py, param)?);
+        }
+        PyTuple::new(py, params)
+    }
 }
 
 /// Declare a kind: `NumberKind = kind("NumberKind")`.
@@ -83,16 +129,113 @@ impl Kind {
 /// is imported.
 #[pyfunction(name = "kind")]
 fn declare_kind(py: Python<'_>, name: String) -> PyResult<Py<Kind>> {
-    let data: KindRef = Box::leak(Box::new(KindData {
-        id: KIND_COUNT.fetch_add(1, Ordering::Relaxed),
-        name,
-        object: PyOnceLock::new(),
-        operators: [const { PyOnceLock::new() }; Operator::COUNT],
-    }));
-    let object = Py::new(py, Kind { data })?;
-    // Nothing else can have set it: `data` was made above.
-    let _ = data.object.set(py, object.clone_ref(py));
-    Ok(object)
+    kind_object(py, new_kind_data(name, None, Box::new([])))
+}
+
+/// A family of kinds, each given by a list of parameters that are kinds.
+/// Declared with `kind_family(name, params=None)`.
+///
+/// `TupleKind(NumberKind, Bool)` is the kind of the family with those
+/// parameters. It is made the first time and the same kind is returned every
+/// time after, so two kinds of a family are the same kind exactly when their
+/// parameters are the same kinds in the same order.
+#[pyclass(frozen, module = "nary_rust")]
+struct KindFamily {
+    name: String,
+    /// The number of parameters every kind of the family has, or None for
+    /// any number from one up.
+    params: Option<usize>,
+    /// The kinds made so far, by the ids of their parameters. Only looked at
+    /// when the family is instantiated.
+    instances: Mutex<HashMap<Box<[usize]>, KindRef>>,
+}
+
+fn count(n: usize, what: &str) -> String {
+    if n == 1 {
+        format!("1 {what}")
+    } else {
+        format!("{n} {what}s")
+    }
+}
+
+#[pymethods]
+impl KindFamily {
+    #[pyo3(signature = (*params))]
+    fn __call__(slf: &Bound<'_, Self>, params: &Bound<'_, PyTuple>) -> PyResult<Py<Kind>> {
+        let py = slf.py();
+        let family = slf.get();
+        let given = params.len();
+        let expected = match family.params {
+            Some(n) if given != n => Some(count(n, "parameter")),
+            None if given == 0 => Some(format!("at least {}", count(1, "parameter"))),
+            _ => None,
+        };
+        if let Some(expected) = expected {
+            return Err(PyTypeError::new_err(format!(
+                "{} takes {}, got {}",
+                family.name, expected, given
+            )));
+        }
+        let mut kinds = Vec::with_capacity(given);
+        for param in params.iter() {
+            kinds.push(expect_kind(&param)?);
+        }
+        let key: Box<[usize]> = kinds.iter().map(|kind| kind.id).collect();
+        let data = {
+            // No Python code runs while the table is locked, so the lock
+            // cannot be asked for again by this thread before it is released.
+            let mut instances = family
+                .instances
+                .lock_py_attached(py)
+                .unwrap_or_else(PoisonError::into_inner);
+            *instances.entry(key).or_insert_with(|| {
+                let names: Vec<&str> = kinds.iter().map(|kind| kind.name.as_str()).collect();
+                new_kind_data(
+                    format!("{}({})", family.name, names.join(", ")),
+                    Some(slf.clone().unbind()),
+                    kinds.into_boxed_slice(),
+                )
+            })
+        };
+        kind_object(py, data)
+    }
+
+    #[getter]
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// The number of parameters, or None if any number from one up is
+    /// accepted.
+    #[getter]
+    fn params(&self) -> Option<usize> {
+        self.params
+    }
+
+    fn __repr__(&self) -> String {
+        format!("<kind family {}>", self.name)
+    }
+}
+
+/// Declare a kind family: `TupleKind = kind_family("TupleKind")` takes any
+/// number of parameters from one up, and
+/// `MatrixKind = kind_family("MatrixKind", params=1)` takes exactly one.
+///
+/// Every call makes a new family, and the kinds of a family last for the
+/// life of the process. Declare each family once, when a module is imported.
+#[pyfunction]
+#[pyo3(signature = (name, params=None))]
+fn kind_family(name: String, params: Option<isize>) -> PyResult<KindFamily> {
+    let params = match params {
+        None => None,
+        Some(n) if n >= 1 => Some(n as usize),
+        Some(n) => {
+            return Err(PyValueError::new_err(format!(
+                "{name}: params must be at least 1, got {n}"
+            )));
+        }
+    };
+    Ok(KindFamily { name, params, instances: Mutex::new(HashMap::new()) })
 }
 
 fn describe(obj: &Bound<'_, PyAny>) -> String {
@@ -425,8 +568,10 @@ fn set_operator(
 fn nary_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Expr>()?;
     m.add_class::<Kind>()?;
+    m.add_class::<KindFamily>()?;
     m.add_class::<Function>()?;
     m.add_function(wrap_pyfunction!(declare_kind, m)?)?;
+    m.add_function(wrap_pyfunction!(kind_family, m)?)?;
     m.add_function(wrap_pyfunction!(function, m)?)?;
     m.add_function(wrap_pyfunction!(set_operator, m)?)?;
     Ok(())
