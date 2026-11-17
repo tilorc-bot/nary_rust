@@ -1,38 +1,37 @@
 """Kinds are declared in Python. The compiled module defines none."""
 
-import nary_rust
-import nary_rs as nr
+import nary as nr
 import pytest
-from nary_rs import Bool, Expr, Kind, NumberKind, function, kind, set_operator
+from nary import BoolKind, Expr, Kind, NumberKind, _core, function, kind, set_operator
 
-# A kind that nary_rs does not have, declared here with its functions and an
-# operator. Nothing in Rust knows about it.
+# A kind of this file, declared here with its functions and an operator.
+# Nothing in Rust knows about it. The package has a family named SetKind
+# too; this kind has nothing to do with it, as every kind(...) call makes a
+# new kind.
 SetKind = kind("SetKind")
 
 Union = function("Union", rest=SetKind, returns=SetKind)
 Interval = function("Interval", NumberKind, NumberKind, returns=SetKind, names=("start", "end"))
-Contains = function("Contains", NumberKind, SetKind, returns=Bool)
+Contains = function("Contains", NumberKind, SetKind, returns=BoolKind)
 set_operator(SetKind, "+", Union)
 
 x, y = NumberKind("x"), NumberKind("y")
 
 
 def test_the_compiled_module_defines_no_kind_and_no_function():
-    public = {name for name in dir(nary_rust) if not name.startswith("_")}
-    # maturin wraps the compiled module in a package of the same name.
-    public.discard("nary_rust")
+    public = {name for name in dir(_core) if not name.startswith("_")}
     assert public == {
-        "Expr", "Function", "Kind", "KindFamily",
-        "function", "kind", "kind_family", "set_operator",
+        "Expr", "Function", "Integer", "Kind", "KindFamily", "Symbol",
+        "function", "kind", "kind_family", "set_integer_kind", "set_operator",
     }
 
 
 def test_a_kind_is_an_object_declared_with_kind():
-    for declared, name in ((NumberKind, "NumberKind"), (Bool, "Bool"), (SetKind, "SetKind")):
+    for declared, name in ((NumberKind, "NumberKind"), (BoolKind, "BoolKind"), (SetKind, "SetKind")):
         assert type(declared) is Kind
         assert declared.name == name
         assert repr(declared) == name
-    assert NumberKind is not Bool
+    assert NumberKind is not BoolKind
 
 
 def test_every_call_of_kind_makes_a_different_kind():
@@ -71,7 +70,7 @@ def test_calling_a_kind_takes_only_the_name():
 
 
 def test_a_leaf_has_no_arguments_and_nodes_are_built_by_functions():
-    for leaf in (x, NumberKind("x"), Bool("p"), SetKind("S")):
+    for leaf in (x, NumberKind("x"), BoolKind("p"), SetKind("S")):
         assert leaf.args == ()
     assert nr.Add(x, y) == x + y
     assert nr.Add(x, y).args == (x, y)
@@ -95,7 +94,7 @@ def test_expr_cannot_be_called_or_subclassed():
 
 def test_kind_is_read_only():
     with pytest.raises(AttributeError):
-        x.kind = Bool
+        x.kind = BoolKind
     with pytest.raises(AttributeError):
         x.head = "y"
 
@@ -109,7 +108,7 @@ def test_a_new_kind_in_signatures():
     assert u.kind is SetKind
     assert repr(u) == "Union(Interval(x, y), S, S)"
     c = Contains(x, u)
-    assert c.kind is Bool
+    assert c.kind is BoolKind
     assert repr(c) == "Contains(x, Union(Interval(x, y), S, S))"
 
 
@@ -121,10 +120,10 @@ def test_a_new_kind_is_checked_against_the_others():
         Contains(s, s)
     with pytest.raises(TypeError, match=r"^sin expects NumberKind, got SetKind: S$"):
         nr.sin(s)
-    with pytest.raises(TypeError, match=r"^Contains expects SetKind, got Bool: Lt\(x, y\)$"):
+    with pytest.raises(TypeError, match=r"^Contains expects SetKind, got BoolKind: Lt\(x, y\)$"):
         Contains(x, x < y)
     assert SetKind("p") != NumberKind("p")
-    assert SetKind("p") != Bool("p")
+    assert SetKind("p") != BoolKind("p")
     assert hash(SetKind("p")) != hash(NumberKind("p"))
 
 
@@ -157,10 +156,11 @@ def test_set_operator_once_for_each_kind_and_operator():
 
 
 def test_only_a_kind_is_accepted_where_a_kind_is_expected():
-    for not_a_kind, text in ((Expr, "<class 'nary_rust.Expr'>"), (int, "<class 'int'>"), (x, "x"), ("NumberKind", "'NumberKind'"), (Kind, "<class 'nary_rust.Kind'>")):
-        with pytest.raises(TypeError, match=f"^expected a kind, got {text}$"):
+    for not_a_kind, text in ((Expr, "<class 'nary.Expr'>"), (int, "<class 'int'>"), (x, "x"), ("NumberKind", "'NumberKind'"), (Kind, "<class 'nary.Kind'>")):
+        # A signature can also hold Symbol(kind), and its error says so.
+        with pytest.raises(TypeError, match=rf"^a signature is made of kinds and Symbol\(kind\), got {text}$"):
             function("f", not_a_kind, returns=NumberKind)
-        with pytest.raises(TypeError, match=f"^expected a kind, got {text}$"):
+        with pytest.raises(TypeError, match=rf"^a signature is made of kinds and Symbol\(kind\), got {text}$"):
             function("f", rest=not_a_kind, returns=NumberKind)
         with pytest.raises(ValueError, match=f"^returns must be a kind, got {text}$"):
             function("f", NumberKind, returns=not_a_kind)
@@ -169,6 +169,9 @@ def test_only_a_kind_is_accepted_where_a_kind_is_expected():
 
 
 def test_an_argument_must_be_an_expression():
-    for value, text in ((1, "int: 1"), ("x", "str: 'x'"), (NumberKind, "Kind: NumberKind"), (None, "NoneType: None")):
+    for value, text in ((1.0, "float: 1.0"), ("x", "str: 'x'"), (NumberKind, "Kind: NumberKind"), (None, "NoneType: None")):
         with pytest.raises(TypeError, match=f"^sin expects NumberKind, got {text}$"):
             nr.sin(value)
+    # The one exception: a Python int where a NumberKind is expected becomes
+    # an Integer.
+    assert nr.sin(1).args == (nr.Integer(1),)

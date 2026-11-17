@@ -1,6 +1,7 @@
-"""nary_rs.py is not part of the wheel; it is imported from the repository."""
+import nary as nr
+import pytest
 
-import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+@pytest.fixture
+def xyz():
+    return tuple(nr.NumberKind(name) for name in "xyz")

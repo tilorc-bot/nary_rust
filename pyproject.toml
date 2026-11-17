@@ -6,3 +6,10 @@ build-backend = "maturin"
 name = "nary_rust"
 version = "0.1.0"
 requires-python = ">=3.9"
+
+[tool.maturin]
+python-source = "python"
+module-name = "nary._core"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
