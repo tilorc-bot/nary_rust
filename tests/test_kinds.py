@@ -1,0 +1,141 @@
+"""Kinds are declared in Python. The compiled module defines none."""
+
+import nary_rust
+import nary_rs as nr
+import pytest
+from nary_rs import Bool, Expr, Kind, NumberKind, function, kind, set_operator
+
+# A kind that nary_rs does not have, declared here with its functions and an
+# operator. Nothing in Rust knows about it.
+SetKind = kind("SetKind")
+
+Union = function("Union", rest=SetKind, returns=SetKind)
+Interval = function("Interval", NumberKind, NumberKind, returns=SetKind, names=("start", "end"))
+Contains = function("Contains", NumberKind, SetKind, returns=Bool)
+set_operator(SetKind, "+", Union)
+
+x, y = NumberKind("x"), NumberKind("y")
+
+
+def test_the_compiled_module_defines_no_kind_and_no_function():
+    public = {name for name in dir(nary_rust) if not name.startswith("_")}
+    # maturin wraps the compiled module in a package of the same name.
+    public.discard("nary_rust")
+    assert public == {"Expr", "Function", "Kind", "function", "kind", "set_operator"}
+
+
+def test_a_kind_is_an_object_declared_with_kind():
+    for declared, name in ((NumberKind, "NumberKind"), (Bool, "Bool"), (SetKind, "SetKind")):
+        assert type(declared) is Kind
+        assert declared.name == name
+        assert repr(declared) == name
+    assert NumberKind is not Bool
+
+
+def test_every_call_of_kind_makes_a_different_kind():
+    a, b = kind("Twin"), kind("Twin")
+    assert a is not b
+    f = function("f", a, returns=a)
+    with pytest.raises(TypeError, match=r"^f expects Twin, got Twin: t$"):
+        f(b("t"))
+    assert a("t") != b("t")
+
+
+def test_calling_a_kind_makes_a_leaf_of_that_kind():
+    s = SetKind("S")
+    assert type(s) is Expr
+    assert s.kind is SetKind
+    assert (s.head, s.args, repr(s)) == ("S", (), "S")
+    with pytest.raises(TypeError):
+        SetKind(1)
+    with pytest.raises(TypeError):
+        SetKind()
+
+
+def test_expr_cannot_be_called_or_subclassed():
+    with pytest.raises(TypeError):
+        Expr("x")
+    with pytest.raises(TypeError):
+        class Sub(Expr):
+            pass
+
+
+def test_kind_is_read_only():
+    with pytest.raises(AttributeError):
+        x.kind = Bool
+    with pytest.raises(AttributeError):
+        x.head = "y"
+
+
+def test_a_new_kind_in_signatures():
+    s = SetKind("S")
+    i = Interval(x, y)
+    assert i.kind is SetKind
+    assert (i.start, i.end) == (x, y)
+    u = Union(i, s, s)
+    assert u.kind is SetKind
+    assert repr(u) == "Union(Interval(x, y), S, S)"
+    c = Contains(x, u)
+    assert c.kind is Bool
+    assert repr(c) == "Contains(x, Union(Interval(x, y), S, S))"
+
+
+def test_a_new_kind_is_checked_against_the_others():
+    s = SetKind("S")
+    with pytest.raises(TypeError, match=r"^Union expects SetKind, got NumberKind: x$"):
+        Union(s, x)
+    with pytest.raises(TypeError, match=r"^Contains expects NumberKind, got SetKind: S$"):
+        Contains(s, s)
+    with pytest.raises(TypeError, match=r"^sin expects NumberKind, got SetKind: S$"):
+        nr.sin(s)
+    with pytest.raises(TypeError, match=r"^Contains expects SetKind, got Bool: Lt\(x, y\)$"):
+        Contains(x, x < y)
+    assert SetKind("p") != NumberKind("p")
+    assert SetKind("p") != Bool("p")
+    assert hash(SetKind("p")) != hash(NumberKind("p"))
+
+
+def test_operators_are_registered_for_each_kind():
+    s, t = SetKind("S"), SetKind("T")
+    assert repr(s + t) == "Union(S, T)"
+    assert repr(x + y) == "Add(x, y)"
+    assert (s + t).kind is SetKind
+    # The function of the left operand's kind is the one that is built.
+    with pytest.raises(TypeError, match=r"^Union expects SetKind, got NumberKind: x$"):
+        s + x
+    with pytest.raises(TypeError, match=r"^Add expects NumberKind, got SetKind: S$"):
+        x + s
+    # SetKind has + but not * or <.
+    with pytest.raises(TypeError, match="unsupported operand"):
+        s * t
+    with pytest.raises(TypeError, match="not supported between instances"):
+        s < t
+
+
+def test_set_operator_once_for_each_kind_and_operator():
+    with pytest.raises(ValueError, match=r"^the \+ operator is already set for NumberKind$"):
+        set_operator(NumberKind, "+", nr.Add)
+    with pytest.raises(ValueError, match=r"^the \+ operator is already set for SetKind$"):
+        set_operator(SetKind, "+", Union)
+    with pytest.raises(ValueError, match='^unknown operator "-"$'):
+        set_operator(NumberKind, "-", nr.Add)
+    with pytest.raises(TypeError):
+        set_operator(NumberKind, "*", "Mul")
+
+
+def test_only_a_kind_is_accepted_where_a_kind_is_expected():
+    for not_a_kind, text in ((Expr, "<class 'nary_rust.Expr'>"), (int, "<class 'int'>"), (x, "x"), ("NumberKind", "'NumberKind'"), (Kind, "<class 'nary_rust.Kind'>")):
+        with pytest.raises(TypeError, match=f"^expected a kind, got {text}$"):
+            function("f", not_a_kind, returns=NumberKind)
+        with pytest.raises(TypeError, match=f"^expected a kind, got {text}$"):
+            function("f", rest=not_a_kind, returns=NumberKind)
+        with pytest.raises(ValueError, match=f"^returns must be a kind, got {text}$"):
+            function("f", NumberKind, returns=not_a_kind)
+        with pytest.raises(TypeError, match=f"^expected a kind, got {text}$"):
+            set_operator(not_a_kind, "+", nr.Add)
+
+
+def test_an_argument_must_be_an_expression():
+    for value, text in ((1, "int: 1"), ("x", "str: 'x'"), (NumberKind, "Kind: NumberKind"), (None, "NoneType: None")):
+        with pytest.raises(TypeError, match=f"^sin expects NumberKind, got {text}$"):
+            nr.sin(value)
