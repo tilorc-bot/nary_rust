@@ -19,7 +19,7 @@ x, y = NumberKind("x"), NumberKind("y")
 def test_the_compiled_module_defines_no_kind_and_no_function():
     public = {name for name in dir(_core) if not name.startswith("_")}
     assert public == {
-        "Expr", "Function", "Kind", "KindFamily",
+        "Expr", "Function", "Kind", "KindFamily", "Symbol",
         "function", "kind", "kind_family", "set_operator",
     }
 

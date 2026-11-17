@@ -19,6 +19,7 @@ from ._core import (
     Function,
     Kind,
     KindFamily,
+    Symbol,
     function,
     kind,
     kind_family,
@@ -31,7 +32,7 @@ from .relational import *  # noqa: F403
 
 __all__ = [
     # the declaration machinery, from the compiled module
-    "Expr", "Function", "Kind", "KindFamily", "function", "kind",
+    "Expr", "Function", "Kind", "KindFamily", "Symbol", "function", "kind",
     "kind_family", "set_operator",
     # the kinds and functions declared in the modules of this package
     *kinds.__all__,

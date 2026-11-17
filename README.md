@@ -94,6 +94,46 @@ Declaring a function:
 
 ```
 
+## Symbols and bound variables
+
+Calling a kind makes a symbol, and `e.is_symbol` tells a symbol from a
+function applied to arguments, even to none. In a signature,
+`Symbol(NumberKind)` is a position that accepts only a NumberKind symbol, and
+`binds={1: (0,)}` records that argument 1 is a variable bound in argument 0.
+The module `nary.calculus` declares its functions this way:
+
+```python
+>>> from nary import Add, NumberKind, Symbol, function, sin
+>>> from nary.calculus import Derivative, Integral
+
+>>> x, a, b = NumberKind("x"), NumberKind("a"), NumberKind("b")
+>>> x.is_symbol, sin(x).is_symbol
+(True, False)
+>>> NumberKind("Add") == Add()               # a symbol is not a call
+False
+
+>>> i = Integral(sin(x), x, a, b)
+>>> i.body, i.var, i.lower, i.upper
+(sin(x), x, a, b)
+>>> Integral.params, Integral.binds          # x is bound in the body only
+((NumberKind, Symbol(NumberKind), NumberKind, NumberKind), {1: (0,)})
+>>> Derivative.binds                         # the variable stays free
+{}
+>>> Integral(x, sin(x), a, b)
+Traceback (most recent call last):
+    ...
+TypeError: Integral expects a NumberKind symbol, got NumberKind: sin(x)
+
+>>> F = function("F", NumberKind, Symbol(NumberKind), returns=NumberKind, binds={0: (1,)})
+Traceback (most recent call last):
+    ...
+ValueError: F: argument 0 is bound, so it must be declared as Symbol(kind)
+
+```
+
+`binds` is only recorded; nothing reads it yet. See the docstring of
+`nary.calculus` for what each of its functions binds.
+
 ## Kinds
 
 A kind is declared in Python, and adding one needs no change in Rust:
@@ -217,6 +257,3 @@ TypeError: MatrixKind takes 1 parameter, got 2
 - `==` compares structure and returns a Python `bool`; it does not build an
   `Eq`. `x + y + z` is not equal to `Add(x, y, z)`.
 - Equal expressions are not shared, so equality walks both trees.
-- A leaf can be given any name, including the name of a function, so
-  `NumberKind("Add")` is equal to `Add()`, the call of `Add` with no
-  arguments: a leaf and a node with no arguments are not told apart.
