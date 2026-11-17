@@ -4,11 +4,9 @@
     python bench/bench_construct.py --json         # {"label": [ns, ...], ...}
     python bench/bench_construct.py --only "x + y" # one operation
 
-The module that declares the kinds and functions is ``nary_rs`` by default.
-It is looked for on PYTHONPATH and then in the repository that this script is
-in. The compiled module has to be installed or on PYTHONPATH. ``--module``
-names another module with the same names, so that one copy of this script
-can time several versions; ``bench/compare.py`` does that.
+The package ``nary`` has to be installed or on PYTHONPATH. ``--module`` names
+another module with the same names, so that one copy of this script can time
+several versions; ``bench/compare.py`` does that.
 
 Each statement is timed with ``timeit``. The number of loops is chosen so
 that one repeat takes about ``--target`` seconds, and the result is the time
@@ -20,10 +18,6 @@ import importlib
 import json
 import sys
 import timeit
-from pathlib import Path
-
-# Last, so that a version named on PYTHONPATH is the one that is timed.
-sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 # The statements, each with the number of operations in it. A time is
 # reported for one operation.
@@ -76,7 +70,7 @@ def measure(nr, repeats, target, only=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--module", default="nary_rs")
+    parser.add_argument("--module", default="nary")
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--target", type=float, default=0.1, help="seconds per repeat")
     parser.add_argument(
