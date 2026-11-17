@@ -119,6 +119,20 @@ def test_an_instantiated_kind_in_signatures():
     assert Trace(MatrixKind(NumberKind)("C")).kind is NumberKind
 
 
+def test_a_function_shows_what_was_declared():
+    Matrix = MatrixKind(NumberKind)
+    MatAdd = function("MatAdd", Matrix, rest=Matrix, returns=Matrix)
+    assert MatAdd.name == "MatAdd"
+    assert len(MatAdd.params) == 1 and MatAdd.params[0] is Matrix
+    assert MatAdd.rest is Matrix and MatAdd.returns is Matrix
+    assert MatAdd.names == ()
+    assert Piece.params == (NumberKind, Bool) and Piece.rest is None
+    assert Piece.returns is Pair and Piece.names == ("value", "condition")
+    assert nr.Add.params == () and nr.Add.rest is NumberKind
+    with pytest.raises(AttributeError):
+        Piece.returns = Bool
+
+
 def test_an_instantiated_kind_is_checked():
     Matrix = MatrixKind(NumberKind)
     Trace = function("Trace", Matrix, returns=NumberKind)
