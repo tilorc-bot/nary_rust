@@ -1,8 +1,8 @@
-"""Building expressions with the kinds and functions declared in nary_rs."""
+"""Building expressions with the kinds and functions declared in nary."""
 
-import nary_rs as nr
+import nary as nr
 import pytest
-from nary_rs import Bool, Expr, NumberKind
+from nary import BoolKind, Expr, NumberKind
 
 x, y, z = (NumberKind(n) for n in "xyz")
 
@@ -19,8 +19,8 @@ def test_functions_and_operators():
 def test_result_is_of_the_declared_kind():
     assert (x + y).kind is NumberKind
     assert nr.sin(x).kind is NumberKind
-    assert (x < y).kind is Bool
-    assert nr.Eq(x, y).kind is Bool
+    assert (x < y).kind is BoolKind
+    assert nr.Eq(x, y).kind is BoolKind
     # Every expression is an Expr, whatever its kind.
     assert type(x + y) is Expr and type(x < y) is Expr
 
@@ -36,7 +36,7 @@ def test_head_args_and_named_arguments():
 
 
 def test_wrong_kind_and_wrong_count():
-    with pytest.raises(TypeError, match=r"^sin expects NumberKind, got Bool: Lt\(x, y\)$"):
+    with pytest.raises(TypeError, match=r"^sin expects NumberKind, got BoolKind: Lt\(x, y\)$"):
         nr.sin(x < y)
     with pytest.raises(TypeError, match=r"^Add expects NumberKind, got int: 1$"):
         nr.Add(x, 1)
@@ -44,7 +44,7 @@ def test_wrong_kind_and_wrong_count():
         nr.Pow(x, y, z)
     with pytest.raises(TypeError, match=r"^sin takes 1 arguments, got 0$"):
         nr.sin()
-    with pytest.raises(TypeError, match=r"^Add expects NumberKind, got Bool: Lt\(x, y\)$"):
+    with pytest.raises(TypeError, match=r"^Add expects NumberKind, got BoolKind: Lt\(x, y\)$"):
         x + (x < y)
     with pytest.raises(TypeError, match=r"^Lt expects NumberKind, got str: 'a'$"):
         x < "a"
@@ -62,17 +62,17 @@ def test_equality_and_hash_are_structural():
 
 
 def test_equality_and_hash_distinguish_kinds():
-    assert NumberKind("p") != Bool("p")
-    assert hash(NumberKind("p")) != hash(Bool("p"))
-    assert len({NumberKind("p"), Bool("p"), NumberKind("p")}) == 2
+    assert NumberKind("p") != BoolKind("p")
+    assert hash(NumberKind("p")) != hash(BoolKind("p"))
+    assert len({NumberKind("p"), BoolKind("p"), NumberKind("p")}) == 2
     f = nr.function("f", NumberKind, returns=NumberKind)
-    g = nr.function("f", NumberKind, returns=Bool)
+    g = nr.function("f", NumberKind, returns=BoolKind)
     assert f(x) == f(x)
     assert f(x) != g(x)
 
 
 def test_a_kind_with_no_operators_does_not_support_them():
-    p, q = Bool("p"), Bool("q")
+    p, q = BoolKind("p"), BoolKind("q")
     with pytest.raises(TypeError, match=r"unsupported operand type\(s\) for \+"):
         p + q
     with pytest.raises(TypeError, match="unsupported operand"):

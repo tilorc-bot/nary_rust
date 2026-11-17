@@ -1,16 +1,15 @@
 """Compare versions of the package with bench_construct.py.
 
     python bench/compare.py --rounds 10 \\
-        base=/work/main base-again=/work/main candidate=/work/python-kinds
+        base=/work/base base-again=/work/base candidate=/work/candidate
 
 Each argument is ``label=path`` or ``label=path:module``. The path is put on
-PYTHONPATH, so it has to hold the compiled module and the module that
-declares the kinds and functions (``nary_rs`` unless a module is named). One
-way to make such a directory from a checkout:
+PYTHONPATH, so it has to hold the package ``nary``, or the module that is
+named: a version from before the package existed is ``label=path:nary_rs``.
+One way to make such a directory from a checkout:
 
     uvx maturin build -r -i python3.13 -o /tmp/wheels
-    uv pip install --target /work/python-kinds /tmp/wheels/nary_rust-*.whl
-    cp nary_rs.py /work/python-kinds/
+    uv pip install --target /work/candidate /tmp/wheels/nary_rust-*.whl
 
 The first argument is the base and the others are compared with it. Naming
 the base twice gives the noise: the ratio that two runs of the same code
@@ -71,7 +70,7 @@ def main():
     for text in args.versions:
         label, _, rest = text.partition("=")
         path, _, module = rest.partition(":")
-        versions.append((label, path, module or "nary_rs"))
+        versions.append((label, path, module or "nary"))
     labels = [label for label, _, _ in versions]
 
     operations = [label for label, _, _ in STATEMENTS if not args.only or label in args.only]
