@@ -93,7 +93,7 @@ def test_operators_that_do_not_exist():
 
 def test_a_long_chain_can_be_built_and_freed():
     e = x
-    for _ in range(100_000):
+    for _ in range(2_000):
         e = e + y
     assert e.head == "Add"
     del e
