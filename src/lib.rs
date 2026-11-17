@@ -75,7 +75,7 @@ fn kind_object(py: Python<'_>, data: KindRef) -> PyResult<Py<Kind>> {
 /// A kind of expression, such as NumberKind. Declared with `kind(name)`, or
 /// made by instantiating a kind family: `TupleKind(NumberKind, Bool)`.
 ///
-/// Calling a kind makes a leaf of that kind: `NumberKind("x")`.
+/// Calling a kind with a name makes a leaf of that kind: `NumberKind("x")`.
 #[pyclass(frozen, module = "nary_rust")]
 struct Kind {
     data: KindRef,
@@ -83,16 +83,26 @@ struct Kind {
 
 #[pymethods]
 impl Kind {
-    /// `NumberKind("x")` is a leaf named x of this kind. Further arguments
-    /// build a node without any checking.
-    #[pyo3(signature = (head, *args))]
+    /// `NumberKind("x")` is a leaf named x of this kind, with no arguments.
+    /// The name is the only argument accepted: any other is a TypeError. A
+    /// node with arguments is built only by calling a declared function, so
+    /// every argument of every node has passed a kind check.
+    #[pyo3(signature = (head, *extra))]
     fn __call__(
         &self,
         py: Python<'_>,
         head: Py<PyString>,
-        args: &Bound<'_, PyTuple>,
+        extra: &Bound<'_, PyTuple>,
     ) -> PyResult<Py<Expr>> {
-        Py::new(py, Expr { kind: self.data, head, args: args.clone().unbind(), names: None })
+        if !extra.is_empty() {
+            return Err(PyTypeError::new_err(format!(
+                "{} takes 1 argument, the name of a leaf, got {}; \
+                 a node is built by calling a function",
+                self.data.name,
+                extra.len() + 1
+            )));
+        }
+        Py::new(py, Expr { kind: self.data, head, args: PyTuple::empty(py).unbind(), names: None })
     }
 
     #[getter]
@@ -256,6 +266,10 @@ fn expect_kind(obj: &Bound<'_, PyAny>) -> PyResult<KindRef> {
 }
 
 /// A head applied to arguments, of some kind.
+///
+/// A leaf, made by calling a kind, has no arguments. Any other expression is
+/// made by `Function::apply`, which checks that each argument is an `Expr`
+/// of the kind declared for it. Nothing else makes an `Expr`.
 #[pyclass(frozen, module = "nary_rust")]
 struct Expr {
     kind: KindRef,

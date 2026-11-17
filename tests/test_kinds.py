@@ -55,6 +55,36 @@ def test_calling_a_kind_makes_a_leaf_of_that_kind():
         SetKind()
 
 
+def test_calling_a_kind_takes_only_the_name():
+    # Calling a kind cannot build a node: that would skip every kind check.
+    message = r"^{} takes 1 argument, the name of a leaf, got {}; a node is built by calling a function$"
+    with pytest.raises(TypeError, match=message.format("NumberKind", 4)):
+        NumberKind("Add", x, 1, [2])
+    with pytest.raises(TypeError, match=message.format("NumberKind", 3)):
+        NumberKind("Add", x, y)
+    with pytest.raises(TypeError, match=message.format("NumberKind", 2)):
+        NumberKind("sin", x < y)
+    with pytest.raises(TypeError, match=message.format("SetKind", 2)):
+        SetKind("S", "T")
+    with pytest.raises(TypeError):
+        NumberKind("x", args=(y,))
+
+
+def test_a_leaf_has_no_arguments_and_nodes_are_built_by_functions():
+    for leaf in (x, NumberKind("x"), Bool("p"), SetKind("S")):
+        assert leaf.args == ()
+    assert nr.Add(x, y) == x + y
+    assert nr.Add(x, y).args == (x, y)
+    assert nr.sin(x).args == (x,)
+    assert Contains(x, SetKind("S")).args == (x, SetKind("S"))
+    # Every argument of every node is an expression that passed a kind check.
+    stack = [nr.Eq(nr.sin(x) * y + x, nr.Pow(x, y)), Contains(x, Union(Interval(x, y)))]
+    while stack:
+        node = stack.pop()
+        assert type(node) is Expr
+        stack.extend(node.args)
+
+
 def test_expr_cannot_be_called_or_subclassed():
     with pytest.raises(TypeError):
         Expr("x")

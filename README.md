@@ -103,9 +103,18 @@ True
 Traceback (most recent call last):
     ...
 TypeError: Union expects SetKind, got NumberKind: x
+>>> SetKind("Union", S, T)                   # only a function builds a node
+Traceback (most recent call last):
+    ...
+TypeError: SetKind takes 1 argument, the name of a leaf, got 3; a node is built by calling a function
 
 ```
 
+- Calling a kind takes one argument, the name, and makes a leaf, whose
+  `args` is `()`. Any further argument is a `TypeError`. A node with
+  arguments is built only by calling a declared function (directly or
+  through an operator), so every argument of every node is an `Expr` that
+  passed that function's kind check.
 - There is one class of expression, `Expr`, whatever the kind. Test the kind
   with `e.kind is NumberKind`. A kind is not a class, so
   `isinstance(e, NumberKind)` is an error, and `Expr` cannot be subclassed.
@@ -196,3 +205,6 @@ TypeError: MatrixKind takes 1 parameter, got 2
 - `==` compares structure and returns a Python `bool`; it does not build an
   `Eq`. `x + y + z` is not equal to `Add(x, y, z)`.
 - Equal expressions are not shared, so equality walks both trees.
+- A leaf can be given any name, including the name of a function, so
+  `NumberKind("Add")` is equal to `Add()`, the call of `Add` with no
+  arguments: a leaf and a node with no arguments are not told apart.

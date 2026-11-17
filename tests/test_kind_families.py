@@ -97,6 +97,8 @@ def test_calling_an_instantiated_kind_makes_a_leaf():
     assert type(A) is Expr
     assert A.kind is MatrixKind(NumberKind)
     assert (A.head, A.args, repr(A)) == ("A", (), "A")
+    with pytest.raises(TypeError, match=r"^MatrixKind\(NumberKind\) takes 1 argument, the name of a leaf, got 2; "):
+        MatrixKind(NumberKind)("MatMul", A)
 
 
 def test_an_instantiated_kind_in_signatures():
