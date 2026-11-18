@@ -51,7 +51,8 @@ Known gaps:
   ever computed or simplified.
 """
 
-from ._core import FunctionKind, declare_function
+from ._core import FunctionKind
+from .domains import declare_function
 from .kinds import NumberKind
 
 __all__ = [
@@ -61,25 +62,29 @@ __all__ = [
 
 NumberFunction = FunctionKind((NumberKind,), NumberKind)
 
+# No domain is stated (domain=None): an integral, sum, product, limit or
+# derivative need not exist, and when it does is not written down yet.
 Integral = declare_function(
     "Integral", NumberFunction, NumberKind, NumberKind,
-    returns=NumberKind, names=("integrand", "lower", "upper"),
+    returns=NumberKind, names=("integrand", "lower", "upper"), domain=None,
 )
 Sum = declare_function(
     "Sum", NumberFunction, NumberKind, NumberKind,
-    returns=NumberKind, names=("summand", "lower", "upper"),
+    returns=NumberKind, names=("summand", "lower", "upper"), domain=None,
 )
 Product = declare_function(
     "Product", NumberFunction, NumberKind, NumberKind,
-    returns=NumberKind, names=("factor", "lower", "upper"),
+    returns=NumberKind, names=("factor", "lower", "upper"), domain=None,
 )
 Limit = declare_function(
     "Limit", NumberFunction, NumberKind,
-    returns=NumberKind, names=("function", "point"),
+    returns=NumberKind, names=("function", "point"), domain=None,
 )
 Derivative = declare_function(
-    "Derivative", NumberFunction, returns=NumberFunction, names=("function",),
+    "Derivative", NumberFunction,
+    returns=NumberFunction, names=("function",), domain=None,
 )
 Antiderivative = declare_function(
-    "Antiderivative", NumberFunction, returns=NumberFunction, names=("function",),
+    "Antiderivative", NumberFunction,
+    returns=NumberFunction, names=("function",), domain=None,
 )

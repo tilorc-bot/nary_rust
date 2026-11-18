@@ -32,13 +32,13 @@ construction written in Rust (PyO3).
 |---|---|
 | `src/lib.rs` | The compiled module `nary._core`: `Expr`, `Kind`, `declare_kind`, `KindFamily`, `declare_kind_family`, `FunctionKind`, `declare_function`, `declare_constant`, `Symbol`, `set_operator`. It defines no kind other than the function kinds, and no particular function or constant. |
 | `python/nary/` | The package `nary`, the one to import. |
-| `python/nary/__init__.py` | Re-exports the names of `nary._core` and everything listed in the `__all__` of the modules below, so a name added to one of those lists is `nary.<name>` with no change here. |
+| `python/nary/__init__.py` | Re-exports the names of `nary._core` (with `declare_function` taken from `nary/domains.py`) and everything listed in the `__all__` of the modules below, so a name added to one of those lists is `nary.<name>` with no change here. |
 | `python/nary/kinds.py` | Declares the kinds `NumberKind` (whose literals are `int`s) and `BoolKind` with `declare_kind(...)`. |
-| `python/nary/arithmetic.py` | Declares `Add`, `Mul`, `Pow` and the literal `NegativeOne` (`-1`), sets what `+`, `-`, `*`, `/`, `**` and unary minus build for a `NumberKind`, and records the domain of `Pow`. |
-| `python/nary/elementary.py` | Declares `sin`, `cos`, `tan`, `exp`, `log` and `re`, and records the domains of `log` and `tan`. |
+| `python/nary/arithmetic.py` | Declares `Add`, `Mul`, `Pow` and the literal `NegativeOne` (`-1`), sets what `+`, `-`, `*`, `/`, `**` and unary minus build for a `NumberKind`. |
+| `python/nary/elementary.py` | Declares `sin`, `cos`, `tan`, `exp`, `log` and `re`. |
 | `python/nary/constants.py` | Declares the constants `pi`, `E` and `I`. |
 | `python/nary/functions.py` | Defines `Lambda` and `is_lambda`, with `declare_function(...)` and `Symbol(kind)`. |
-| `python/nary/domains.py` | `set_domain(...)` and `domain(...)`: records the domain of a partial function, the condition under which it has a value. Not re-exported; import it as `nary.domains`. |
+| `python/nary/domains.py` | `declare_function(...)`, which declares a function with its domain (the condition under which it has a value), and `domain(...)`, which returns it. `declare_function` is re-exported from `nary`; `domain` is not. |
 | `python/nary/relational.py` | Declares `Lt`, `Gt`, `Le`, `Ge`, `Eq` and `Ne`, and sets what `<`, `>`, `<=` and `>=` build for a `NumberKind`. |
 | `python/nary/lean.py` | `to_lean(...)` and `to_lean_example(...)`: write an expression as the Lean term built from the definitions in `lean/`. `to_lean_rule(...)` and `to_lean_facts(...)`: write a rule, or the facts about a function, as a Lean statement. Not re-exported; import it as `nary.lean`. See `lean/README.md`. |
 | `lean/` | A separate Lean 4 project (with Mathlib) that defines what the functions declared in `python/nary/` mean, where each has a value, and proves the rules and facts of `python/nary/arithmetic_rules.py`, whose statements are generated from Python by `lean/generate_rules.py`. See `lean/README.md`. |
@@ -220,15 +220,15 @@ TypeError: Lambda expects a NumberKind symbol, got NumberKind: pi
 
 A declared function is an expression: a declared constant whose kind is a
 function kind.
-`declare_function(name, *inputs, rest=None, returns, names=None)` declares
-one.
+`declare_function(name, *inputs, rest=None, returns, names=None, domain)`
+declares one.
 
 ```python
 >>> from nary import BoolKind, FunctionKind, NumberKind, declare_function
 
->>> cos = declare_function("cos", NumberKind, returns=NumberKind)
->>> Max = declare_function("Max", rest=NumberKind, returns=NumberKind)
->>> Le = declare_function("Le", NumberKind, NumberKind, returns=BoolKind, names=("lhs", "rhs"))
+>>> cos = declare_function("cos", NumberKind, returns=NumberKind, domain=lambda x: true)
+>>> Max = declare_function("Max", rest=NumberKind, returns=NumberKind, domain=lambda *args: true)
+>>> Le = declare_function("Le", NumberKind, NumberKind, returns=BoolKind, names=("lhs", "rhs"), domain=None)
 
 >>> Le, Le.kind
 (Le, FunctionKind((NumberKind, NumberKind), BoolKind))
@@ -253,7 +253,7 @@ Add(f(x), cos(x))
 >>> f(x).head is f, f(x).args, cos(x).head is cos
 (True, (x,), True)
 
->>> At = declare_function("At", f.kind, NumberKind, returns=NumberKind)
+>>> At = declare_function("At", f.kind, NumberKind, returns=NumberKind, domain=None)
 >>> At(cos, x), At(f, y)
 (At(cos, x), At(f, y))
 >>> At(nr.Lt, x)
@@ -267,6 +267,17 @@ TypeError: x is of kind NumberKind, which is not a function kind, so it cannot b
 
 ```
 
+`domain=` must be given. It is the function's domain: the condition under
+which it has a value, given that its arguments have one (functions are
+partial, so `log(0)` has no value). It is a Python function that takes the
+argument expressions of an application and returns a `BoolKind` expression,
+such as `lambda x: Ne(x, 0)` for `log`, or `lambda x: true` for a function
+that always has a value. `domain=None` says that no domain is stated: the
+function may have no value even where its arguments have one.
+`nary.domains.domain(f)` returns what was given. The rewriting engine,
+`nary.rewriting`, uses the domains to decide whether an expression has a
+value.
+
 ### Positions that accept only a symbol
 
 `Symbol(kind)` in a leading position of a declaration means that the
@@ -277,7 +288,7 @@ function shows the markers in `params`.
 ```python
 >>> from nary import Symbol
 
->>> Derivative = declare_function("Derivative", NumberKind, Symbol(NumberKind), returns=NumberKind)
+>>> Derivative = declare_function("Derivative", NumberKind, Symbol(NumberKind), returns=NumberKind, domain=None)
 >>> Derivative.kind
 FunctionKind((NumberKind, NumberKind), NumberKind)
 >>> Derivative.params, Derivative.kind.inputs
@@ -365,8 +376,8 @@ A kind is declared in Python, and adding one needs no change in Rust:
 >>> from nary import declare_kind, set_operator
 
 >>> SetKind = declare_kind("SetKind")
->>> Union = declare_function("Union", rest=SetKind, returns=SetKind)
->>> Contains = declare_function("Contains", NumberKind, SetKind, returns=BoolKind)
+>>> Union = declare_function("Union", rest=SetKind, returns=SetKind, domain=None)
+>>> Contains = declare_function("Contains", NumberKind, SetKind, returns=BoolKind, domain=None)
 >>> set_operator(SetKind, "+", Union)        # what + builds for two sets
 
 >>> S, T = SetKind("S"), SetKind("T")        # calling a kind makes a symbol
@@ -429,13 +440,13 @@ True
 >>> TupleKind(MatrixKind(NumberKind), Pair)           # parameters can be parametrised
 TupleKind(MatrixKind(NumberKind), TupleKind(NumberKind, BoolKind))
 
->>> Piece = declare_function("Piece", NumberKind, BoolKind, returns=Pair)
+>>> Piece = declare_function("Piece", NumberKind, BoolKind, returns=Pair, domain=None)
 >>> Piece(x, x < y).kind is Pair
 True
 
 >>> Matrix = MatrixKind(NumberKind)
->>> MatMul = declare_function("MatMul", rest=Matrix, returns=Matrix)
->>> Trace = declare_function("Trace", Matrix, returns=NumberKind)
+>>> MatMul = declare_function("MatMul", rest=Matrix, returns=Matrix, domain=None)
+>>> Trace = declare_function("Trace", Matrix, returns=NumberKind, domain=None)
 >>> set_operator(Matrix, "*", MatMul)
 >>> A, B = Matrix("A"), Matrix("B")
 >>> Trace(A * B)

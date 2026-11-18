@@ -51,7 +51,7 @@ def test_a_value_takes_the_kind_of_its_position():
         And(p, 1)
     with pytest.raises(TypeError, match="^Add expects NumberKind, got bool: True$"):
         nr.Add(x, True)
-    D = declare_function("D", NumberKind, Symbol(NumberKind), returns=NumberKind)
+    D = declare_function("D", NumberKind, Symbol(NumberKind), returns=NumberKind, domain=None)
     with pytest.raises(TypeError, match="^D expects a NumberKind symbol, got NumberKind: 1$"):
         D(x, 1)
 

@@ -5,24 +5,23 @@ There are no Sub, Div or Neg functions. As in SymPy, ``x - y`` is
 ``Mul(-1, x)``, built by Python functions given to ``set_operator``.
 """
 
-from ._core import declare_function, set_operator
-from .domains import set_domain
+from ._core import set_operator
+from .domains import declare_function
 from .elementary import re
 from .kinds import NumberKind
-from .logic import Or
+from .logic import Or, true
 from .relational import Gt, Ne
 
 __all__ = ["Add", "Mul", "Pow", "NegativeOne"]
 
-Add = declare_function("Add", rest=NumberKind, returns=NumberKind)
-Mul = declare_function("Mul", rest=NumberKind, returns=NumberKind)
+Add = declare_function("Add", rest=NumberKind, returns=NumberKind, domain=lambda *args: true)
+Mul = declare_function("Mul", rest=NumberKind, returns=NumberKind, domain=lambda *args: true)
+# Division is Pow(y, -1), so the domain of Pow is where division by zero is
+# excluded. Under it 0**0 has no value.
 Pow = declare_function(
-    "Pow", NumberKind, NumberKind, returns=NumberKind, names=("base", "exp")
+    "Pow", NumberKind, NumberKind, returns=NumberKind, names=("base", "exp"),
+    domain=lambda base, exp: Or(Ne(base, 0), Gt(re(exp), 0)),
 )
-
-# Division is Pow(y, -1), so this is where division by zero is excluded.
-# Under this rule 0**0 has no value.
-set_domain(Pow, lambda base, exp: Or(Ne(base, 0), Gt(re(exp), 0)))
 
 # An ordinary literal, used by -, / and unary minus. It prints as -1.
 NegativeOne = NumberKind(-1)
