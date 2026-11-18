@@ -1,0 +1,48 @@
+"""Applying rules with nary.rewriting."""
+
+import doctest
+
+import nary.arithmetic_rules
+import nary.rewriting
+from nary import Add, Lambda, Mul, Ne, NumberKind, log, sin
+from nary.rewriting import rewrite
+from nary.rules import rules
+
+x, y = NumberKind("x"), NumberKind("y")
+R = rules()
+
+
+def test_docstring_examples():
+    result = doctest.testmod(nary.rewriting)
+    assert result.attempted > 0 and result.failed == 0
+
+
+def test_unordered_and_flat_matching():
+    assert rewrite(Add(0, x), R) == x
+    assert rewrite(Add(x, 0, y), R) == Add(x, y)
+    assert rewrite(Add(x, y, x), R) == Add(Mul(2, x), y)
+
+
+def test_inside_a_larger_expression():
+    assert rewrite(sin(x + 0) < y, R) == (sin(x) < y)
+
+
+def test_condition():
+    assert rewrite(x / x, R) == x / x
+    assert rewrite(x / x, R, known=lambda condition: condition == Ne(x, 0)) == NumberKind(1)
+
+
+def test_erased_variable():
+    assert rewrite(x * 0, R) == NumberKind(0)
+    assert rewrite(log(x) * 0, R) == log(x) * 0
+
+
+def test_lambda_untouched():
+    f = Lambda(x, x + 0)
+    assert rewrite(f, R) == f
+    assert rewrite(f(y * 1), R) == f(y)
+
+
+def test_several_rules_in_sequence():
+    e = (x * 1 + 0) ** 1 - (y + 0) * 0
+    assert rewrite(e, R) == x
