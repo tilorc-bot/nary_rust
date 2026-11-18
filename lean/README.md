@@ -40,6 +40,7 @@ domains are the same conditions that `python/nary/` records with
 | `Nary/Logic.lean` | Comparisons, `And`, `Or`, `Not`, `true`, `false`, and `Holds` (a condition has a value and it is true). |
 | `Nary/Calculus.lean` | Applying a function to an argument, and `Derivative`. |
 | `Nary/Rules.lean` | Issue #2's three kinds of rule, proved: `a + 0 → a`, `0 * a → 0` when `a` has a value, `a / a → 1` when `a ≠ 0`. |
+| `check_printer.py` | Checks with Lean that what `nary.lean` prints is accepted; see below. |
 
 ## Build
 
@@ -51,6 +52,49 @@ version named in `lean-toolchain`. In this directory:
 
 The first command downloads Mathlib's compiled files (a few GB), so Mathlib
 is not compiled from source; `lake build` then takes under a minute.
+
+## Printing expressions from Python
+
+`python/nary/lean.py` (imported as `nary.lean`) writes an `nary` expression
+as the Lean term built from these definitions. `to_lean(e)` returns the
+term; `to_lean_example(e)` returns a line that Lean checks on its own, with
+the free symbols as variables:
+
+    >>> from nary import NumberKind, sin
+    >>> from nary.calculus import Derivative
+    >>> from nary.lean import to_lean, to_lean_example
+    >>> x, y = NumberKind("x"), NumberKind("y")
+    >>> to_lean(Derivative(sin)(x ** 2))
+    'Nary.apply (Nary.Derivative (fun z => Nary.sin (some z))) (Nary.Pow (some x) (Nary.lit 2))'
+    >>> print(to_lean_example(x - y))
+    noncomputable example (x y : ℂ) : Nary.Number := Nary.Add [some x, Nary.Mul [Nary.lit (-1), some y]]
+
+The names are always the full ones (`Nary.Add`, `Nary.Eq`, `Nary.true`), so
+the output means the same inside or outside `namespace Nary` and after
+`open Nary`. A `NumberKind` symbol `x` is a variable `x : ℂ` and prints as
+`some x`, a `BoolKind` symbol `p : Prop` prints as `some p`, and a
+`FunctionKind((NumberKind,), NumberKind)` symbol is `f : ℂ → Nary.Number`.
+`f(a)`, and any other call whose head is not a declared function, prints as
+`Nary.apply f a`; so `Derivative(f)(a)` is `Nary.apply (Nary.Derivative f) a`.
+The line from `to_lean_example` starts with `noncomputable`, because these
+definitions are noncomputable and Lean would otherwise try to compile the
+example. Everything in "Left out" below, lambdas other than one `NumberKind`
+variable with a `NumberKind` body, and functions or constants not listed in
+`nary.lean.LEAN_NAMES` are refused with a `ValueError`. The module docstring
+gives the details.
+
+`check_printer.py` prints about a dozen examples, covering each of these
+rules, into a temporary Lean file that imports `Nary`, and runs Lean on it
+in this directory, once at the top level, once after `open Nary` and once
+inside `namespace Nary`. It reports success, or Lean's errors and the file.
+After `lake build`, from the top of the repository, with the Python that
+has `nary` installed:
+
+    .venv/bin/python lean/check_printer.py
+
+It needs `lake` on `PATH` or in `~/.elan/bin`. It is run by hand and is not
+part of the Python tests, which do not need Lean. Lean checks only that each
+line is well typed, not that it means the same as the Python expression.
 
 ## Python name → Lean definition
 
