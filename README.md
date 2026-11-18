@@ -40,8 +40,8 @@ construction written in Rust (PyO3).
 | `python/nary/functions.py` | Defines `Lambda` and `is_lambda`, with `declare_function(...)` and `Symbol(kind)`. |
 | `python/nary/domains.py` | `set_domain(...)` and `domain(...)`: records the domain of a partial function, the condition under which it has a value. Not re-exported; import it as `nary.domains`. |
 | `python/nary/relational.py` | Declares `Lt`, `Gt`, `Le`, `Ge`, `Eq` and `Ne`, and sets what `<`, `>`, `<=` and `>=` build for a `NumberKind`. |
-| `python/nary/lean.py` | `to_lean(...)` and `to_lean_example(...)`: write an expression as the Lean term built from the definitions in `lean/`. Not re-exported; import it as `nary.lean`. See `lean/README.md`. |
-| `lean/` | A separate Lean 4 project (with Mathlib) that defines what the functions declared in `python/nary/` mean, where each has a value, and proves three example rewrite rules. See `lean/README.md`. |
+| `python/nary/lean.py` | `to_lean(...)` and `to_lean_example(...)`: write an expression as the Lean term built from the definitions in `lean/`. `to_lean_rule(...)` and `to_lean_facts(...)`: write a rule, or the facts about a function, as a Lean statement. Not re-exported; import it as `nary.lean`. See `lean/README.md`. |
+| `lean/` | A separate Lean 4 project (with Mathlib) that defines what the functions declared in `python/nary/` mean, where each has a value, and proves the rules and facts of `python/nary/arithmetic_rules.py`, whose statements are generated from Python by `lean/generate_rules.py`. See `lean/README.md`. |
 | `tests/` | The tests. |
 | `bench/` | `bench_construct.py` times building, comparing and hashing expressions. `compare.py` runs it on several versions and prints their ratios. |
 

@@ -67,9 +67,10 @@ different kinds in one rule. A rule that contains a ``Lambda`` anywhere is
 refused for now: a variable bound by a lambda is not a variable of the rule,
 and how such rules are written and matched has not been designed.
 
-Not here: rules are applied by ``nary.rewriting``. Nothing decides a
-condition or computes with literals, and nothing writes a rule in Lean yet.
-The rules about numbers are the list ``nary.arithmetic_rules.rules``.
+Not here: rules are applied by ``nary.rewriting``, and ``nary.lean`` writes
+a rule's claim as a Lean statement. Nothing decides a condition or computes
+with literals. The rules about numbers are the list
+``nary.arithmetic_rules.rules``.
 
 The module is imported as ``nary.rules``; its names are not re-exported
 from ``nary``.
