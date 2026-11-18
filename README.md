@@ -59,6 +59,9 @@ needs no rebuild. To run the tests:
     uv pip install pytest
     .venv/bin/python -m pytest
 
+CI (`.github/workflows/ci.yml`) runs these tests, `lake build` in `lean/`
+and `lean/check_printer.py` on every pull request and push to `main`.
+
 To build a wheel instead, for the Python in `.venv`:
 
     uvx maturin build -r -i .venv/bin/python
