@@ -19,7 +19,7 @@ x, y = NumberKind("x"), NumberKind("y")
 def test_the_compiled_module_defines_no_kind_and_no_function():
     public = {name for name in dir(_core) if not name.startswith("_")}
     assert public == {
-        "Expr", "Function", "Kind", "KindFamily",
+        "Expr", "FunctionKind", "Kind", "KindFamily", "Lambda",
         "function", "kind", "kind_family", "set_operator",
     }
 
@@ -45,7 +45,7 @@ def test_calling_a_kind_makes_a_leaf_of_that_kind():
     s = SetKind("S")
     assert type(s) is Expr
     assert s.kind is SetKind
-    assert (s.head, s.args, repr(s)) == ("S", (), "S")
+    assert (s.head, s.name, s.args, repr(s)) == (None, "S", (), "S")
     with pytest.raises(TypeError):
         SetKind(1)
     with pytest.raises(TypeError):

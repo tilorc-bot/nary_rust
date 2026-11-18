@@ -1,11 +1,13 @@
 """Typed, inert expression trees.
 
 The compiled module ``nary._core`` provides ``Expr``, ``kind``,
-``kind_family``, ``function`` and ``set_operator``, and knows nothing about
-any particular kind or function. The kinds are declared in ``nary.kinds``,
+``kind_family``, ``FunctionKind``, ``function``, ``Lambda`` and
+``set_operator``, and knows nothing about any particular kind or function
+other than function kinds. The kinds are declared in ``nary.kinds``,
 and each function is declared in one of the other modules of this package
-with a ``function(...)`` call. A declaration is only data; calling the
-function still runs entirely in Rust.
+with a ``function(...)`` call, which makes an expression of a function kind.
+A declaration is only data; calling the function still runs entirely in
+Rust.
 
     import nary as nr
 
@@ -16,9 +18,10 @@ here, so a new name only needs adding to that module.
 from . import arithmetic, elementary, kinds, relational
 from ._core import (
     Expr,
-    Function,
+    FunctionKind,
     Kind,
     KindFamily,
+    Lambda,
     function,
     kind,
     kind_family,
@@ -31,8 +34,8 @@ from .relational import *  # noqa: F403
 
 __all__ = [
     # the declaration machinery, from the compiled module
-    "Expr", "Function", "Kind", "KindFamily", "function", "kind",
-    "kind_family", "set_operator",
+    "Expr", "FunctionKind", "Kind", "KindFamily", "Lambda", "function",
+    "kind", "kind_family", "set_operator",
     # the kinds and functions declared in the modules of this package
     *kinds.__all__,
     *arithmetic.__all__,

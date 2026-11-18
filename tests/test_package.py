@@ -8,7 +8,7 @@ from nary import relational
 
 def test_import_nary_exposes_the_core_and_the_declarations():
     assert set(nary.__all__) >= {
-        "Expr", "Function", "Kind", "KindFamily",
+        "Expr", "FunctionKind", "Kind", "KindFamily", "Lambda",
         "function", "kind", "kind_family", "set_operator",
         "NumberKind", "BoolKind", "Add", "Mul", "Pow", "sin", "Lt", "Eq",
     }

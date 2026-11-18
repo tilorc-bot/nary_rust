@@ -27,7 +27,7 @@ def test_result_is_of_the_declared_kind():
 
 def test_head_args_and_named_arguments():
     eq = nr.Eq(x + y, z)
-    assert eq.head == "Eq"
+    assert eq.head is nr.Eq
     assert eq.args == (x + y, z)
     assert (eq.lhs, eq.rhs) == (x + y, z)
     assert nr.Pow(x, y).base == x and nr.Pow(x, y).exp == y
@@ -95,5 +95,5 @@ def test_a_long_chain_can_be_built_and_freed():
     e = x
     for _ in range(2_000):
         e = e + y
-    assert e.head == "Add"
+    assert e.head is nr.Add
     del e
