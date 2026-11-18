@@ -34,11 +34,12 @@ construction written in Rust (PyO3).
 | `python/nary/` | The package `nary`, the one to import. |
 | `python/nary/__init__.py` | Re-exports the names of `nary._core` and everything listed in the `__all__` of the modules below, so a name added to one of those lists is `nary.<name>` with no change here. |
 | `python/nary/kinds.py` | Declares the kinds `NumberKind` (whose literals are `int`s) and `BoolKind` with `declare_kind(...)`. |
-| `python/nary/arithmetic.py` | Declares `Add`, `Mul`, `Pow` and the literal `NegativeOne` (`-1`), and sets what `+`, `-`, `*`, `/`, `**` and unary minus build for a `NumberKind`. |
-| `python/nary/elementary.py` | Declares `sin`. |
+| `python/nary/arithmetic.py` | Declares `Add`, `Mul`, `Pow` and the literal `NegativeOne` (`-1`), sets what `+`, `-`, `*`, `/`, `**` and unary minus build for a `NumberKind`, and records the domain of `Pow`. |
+| `python/nary/elementary.py` | Declares `sin`, `cos`, `tan`, `exp`, `log` and `re`, and records the domains of `log` and `tan`. |
 | `python/nary/constants.py` | Declares the constants `pi`, `E` and `I`. |
 | `python/nary/functions.py` | Defines `Lambda` and `is_lambda`, with `declare_function(...)` and `Symbol(kind)`. |
-| `python/nary/relational.py` | Declares `Lt`, `Gt`, `Le`, `Ge` and `Eq`, and sets what `<`, `>`, `<=` and `>=` build for a `NumberKind`. |
+| `python/nary/domains.py` | `set_domain(...)` and `domain(...)`: records the domain of a partial function, the condition under which it has a value. Not re-exported; import it as `nary.domains`. |
+| `python/nary/relational.py` | Declares `Lt`, `Gt`, `Le`, `Ge`, `Eq` and `Ne`, and sets what `<`, `>`, `<=` and `>=` build for a `NumberKind`. |
 | `tests/` | The tests. |
 | `bench/` | `bench_construct.py` times building, comparing and hashing expressions. `compare.py` runs it on several versions and prints their ratios. |
 
