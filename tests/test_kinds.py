@@ -2,15 +2,15 @@
 
 import nary as nr
 import pytest
-from nary import BoolKind, Expr, Kind, NumberKind, _core, function, kind, set_operator
+from nary import BoolKind, Expr, Kind, NumberKind, _core, declare_function, declare_kind, set_operator
 
 # A kind that nary does not have, declared here with its functions and an
 # operator. Nothing in Rust knows about it.
-SetKind = kind("SetKind")
+SetKind = declare_kind("SetKind")
 
-Union = function("Union", rest=SetKind, returns=SetKind)
-Interval = function("Interval", NumberKind, NumberKind, returns=SetKind, names=("start", "end"))
-Contains = function("Contains", NumberKind, SetKind, returns=BoolKind)
+Union = declare_function("Union", rest=SetKind, returns=SetKind)
+Interval = declare_function("Interval", NumberKind, NumberKind, returns=SetKind, names=("start", "end"))
+Contains = declare_function("Contains", NumberKind, SetKind, returns=BoolKind)
 set_operator(SetKind, "+", Union)
 
 x, y = NumberKind("x"), NumberKind("y")
@@ -20,11 +20,11 @@ def test_the_compiled_module_defines_no_kind_and_no_function():
     public = {name for name in dir(_core) if not name.startswith("_")}
     assert public == {
         "Expr", "FunctionKind", "Kind", "KindFamily", "Symbol",
-        "function", "kind", "kind_family", "set_operator",
+        "declare_function", "declare_kind", "declare_kind_family", "set_operator",
     }
 
 
-def test_a_kind_is_an_object_declared_with_kind():
+def test_a_kind_is_an_object_declared_with_declare_kind():
     for declared, name in ((NumberKind, "NumberKind"), (BoolKind, "BoolKind"), (SetKind, "SetKind")):
         assert type(declared) is Kind
         assert declared.name == name
@@ -32,10 +32,10 @@ def test_a_kind_is_an_object_declared_with_kind():
     assert NumberKind is not BoolKind
 
 
-def test_every_call_of_kind_makes_a_different_kind():
-    a, b = kind("Twin"), kind("Twin")
+def test_every_call_of_declare_kind_makes_a_different_kind():
+    a, b = declare_kind("Twin"), declare_kind("Twin")
     assert a is not b
-    f = function("f", a, returns=a)
+    f = declare_function("f", a, returns=a)
     with pytest.raises(TypeError, match=r"^f expects Twin, got Twin: t$"):
         f(b("t"))
     assert a("t") != b("t")
@@ -156,11 +156,11 @@ def test_set_operator_once_for_each_kind_and_operator():
 def test_only_a_kind_is_accepted_where_a_kind_is_expected():
     for not_a_kind, text in ((Expr, "<class 'nary.Expr'>"), (int, "<class 'int'>"), (x, "x"), ("NumberKind", "'NumberKind'"), (Kind, "<class 'nary.Kind'>")):
         with pytest.raises(TypeError, match=f"^expected a kind, got {text}$"):
-            function("f", not_a_kind, returns=NumberKind)
+            declare_function("f", not_a_kind, returns=NumberKind)
         with pytest.raises(TypeError, match=f"^expected a kind, got {text}$"):
-            function("f", rest=not_a_kind, returns=NumberKind)
+            declare_function("f", rest=not_a_kind, returns=NumberKind)
         with pytest.raises(ValueError, match=f"^returns must be a kind, got {text}$"):
-            function("f", NumberKind, returns=not_a_kind)
+            declare_function("f", NumberKind, returns=not_a_kind)
         with pytest.raises(TypeError, match=f"^expected a kind, got {text}$"):
             set_operator(not_a_kind, "+", nr.Add)
 

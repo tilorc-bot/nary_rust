@@ -9,11 +9,13 @@ from nary import functions, relational
 def test_import_nary_exposes_the_core_and_the_declarations():
     assert set(nary.__all__) >= {
         "Expr", "FunctionKind", "Kind", "KindFamily", "Symbol",
-        "function", "kind", "kind_family", "set_operator", "Lambda", "is_lambda",
+        "declare_function", "declare_kind", "declare_kind_family", "set_operator",
+        "Lambda", "is_lambda",
         "NumberKind", "BoolKind", "Add", "Mul", "Pow", "sin", "Lt", "Eq",
     }
     for name in nary.__all__:
         assert hasattr(nary, name), name
+    assert not any(hasattr(nary, name) for name in ("function", "kind", "kind_family"))
     assert nary.Expr is nary._core.Expr
     assert nary.Lt is relational.Lt
     assert nary.Lambda is functions.Lambda and not hasattr(nary._core, "Lambda")

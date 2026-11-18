@@ -1,13 +1,13 @@
 """Add, Mul and Pow, and the operators that build them."""
 
-from ._core import function, set_operator
+from ._core import declare_function, set_operator
 from .kinds import NumberKind
 
 __all__ = ["Add", "Mul", "Pow"]
 
-Add = function("Add", rest=NumberKind, returns=NumberKind)
-Mul = function("Mul", rest=NumberKind, returns=NumberKind)
-Pow = function(
+Add = declare_function("Add", rest=NumberKind, returns=NumberKind)
+Mul = declare_function("Mul", rest=NumberKind, returns=NumberKind)
+Pow = declare_function(
     "Pow", NumberKind, NumberKind, returns=NumberKind, names=("base", "exp")
 )
 

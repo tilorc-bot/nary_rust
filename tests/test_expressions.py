@@ -65,8 +65,8 @@ def test_equality_and_hash_distinguish_kinds():
     assert NumberKind("p") != BoolKind("p")
     assert hash(NumberKind("p")) != hash(BoolKind("p"))
     assert len({NumberKind("p"), BoolKind("p"), NumberKind("p")}) == 2
-    f = nr.function("f", NumberKind, returns=NumberKind)
-    g = nr.function("f", NumberKind, returns=BoolKind)
+    f = nr.declare_function("f", NumberKind, returns=NumberKind)
+    g = nr.declare_function("f", NumberKind, returns=BoolKind)
     assert f(x) == f(x)
     assert f(x) != g(x)
 

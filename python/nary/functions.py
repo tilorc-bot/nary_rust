@@ -1,13 +1,13 @@
 """Lambda: a function given by variables and a body.
 
 A lambda is not a special form. It is an ordinary application, made with
-the same ``function(...)`` and ``Symbol(kind)`` that any declaration uses.
-For each combination of kinds, a function named ``"Lambda"`` is declared
-once: it takes the variables, each declared ``Symbol(kind)`` so that only a
-symbol is accepted, then the body, and it returns the function kind from the
-kinds of the variables to the kind of the body. ``Lambda(variables, body)``
-applies that function. So a lambda prints as ``Lambda(x, y, body)``, with the
-variables and the body as its arguments:
+the same ``declare_function(...)`` and ``Symbol(kind)`` that any declaration
+uses. For each combination of kinds, a function named ``"Lambda"`` is
+declared once: it takes the variables, each declared ``Symbol(kind)`` so
+that only a symbol is accepted, then the body, and it returns the function
+kind from the kinds of the variables to the kind of the body.
+``Lambda(variables, body)`` applies that function. So a lambda prints as
+``Lambda(x, y, body)``, with the variables and the body as its arguments:
 
     >>> from nary import NumberKind
     >>> from nary.functions import Lambda, is_lambda
@@ -25,7 +25,7 @@ is inert: ``square(y)`` is an application whose head is ``square``. Nothing
 is substituted.
 """
 
-from ._core import Expr, FunctionKind, Symbol, function
+from ._core import Expr, FunctionKind, Symbol, declare_function
 
 __all__ = ["Lambda", "is_lambda"]
 
@@ -39,7 +39,7 @@ def _lambda_function(variable_kinds, body_kind):
     """The function named "Lambda" for these kinds, declared once."""
     key = (*variable_kinds, body_kind)
     if key not in _lambda_functions:
-        _lambda_functions[key] = function(
+        _lambda_functions[key] = declare_function(
             "Lambda",
             *(Symbol(kind) for kind in variable_kinds),
             body_kind,

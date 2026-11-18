@@ -5,21 +5,22 @@ import threading
 import nary as nr
 import pytest
 from nary import (
-    BoolKind, Expr, Kind, KindFamily, NumberKind, function, kind, kind_family, set_operator,
+    BoolKind, Expr, Kind, KindFamily, NumberKind, declare_function, declare_kind,
+    declare_kind_family, set_operator,
 )
 
 # Families that nary does not have, declared here. Nothing in Rust knows
 # about them.
-TupleKind = kind_family("TupleKind")              # one or more parameters
-MatrixKind = kind_family("MatrixKind", params=1)  # exactly one parameter
+TupleKind = declare_kind_family("TupleKind")              # one or more parameters
+MatrixKind = declare_kind_family("MatrixKind", params=1)  # exactly one parameter
 
 Pair = TupleKind(NumberKind, BoolKind)
-Piece = function("Piece", NumberKind, BoolKind, returns=Pair, names=("value", "condition"))
+Piece = declare_function("Piece", NumberKind, BoolKind, returns=Pair, names=("value", "condition"))
 
 x, y = NumberKind("x"), NumberKind("y")
 
 
-def test_a_family_is_an_object_declared_with_kind_family():
+def test_a_family_is_an_object_declared_with_declare_kind_family():
     assert type(TupleKind) is KindFamily
     assert (TupleKind.name, TupleKind.params) == ("TupleKind", None)
     assert (MatrixKind.name, MatrixKind.params) == ("MatrixKind", 1)
@@ -57,7 +58,7 @@ def test_different_parameters_give_different_kinds():
 
 def test_different_families_give_different_kinds():
     # Even with the same name and the same parameters.
-    other = kind_family("TupleKind")
+    other = declare_kind_family("TupleKind")
     assert other is not TupleKind
     assert other(NumberKind, BoolKind) is not Pair
     assert other(NumberKind, BoolKind).name == Pair.name
@@ -76,9 +77,9 @@ def test_parameters_can_be_parametrised_kinds():
 
 
 def test_parameters_can_be_plain_kinds_declared_anywhere():
-    local = kind("Local")
+    local = declare_kind("Local")
     assert TupleKind(local, local) is TupleKind(local, local)
-    assert TupleKind(local) is not TupleKind(kind("Local"))
+    assert TupleKind(local) is not TupleKind(declare_kind("Local"))
 
 
 def test_a_kind_shows_its_family_and_parameters():
@@ -86,10 +87,10 @@ def test_a_kind_shows_its_family_and_parameters():
     assert Pair.params == (NumberKind, BoolKind)
     assert MatrixKind(BoolKind).family is MatrixKind
     assert MatrixKind(BoolKind).params == (BoolKind,)
-    # A kind declared with kind(name) has neither.
+    # A kind declared with declare_kind(name) has neither.
     assert NumberKind.family is None
     assert NumberKind.params == ()
-    assert kind("Plain").family is None
+    assert declare_kind("Plain").family is None
 
 
 def test_calling_an_instantiated_kind_makes_a_leaf():
@@ -107,9 +108,9 @@ def test_an_instantiated_kind_in_signatures():
     assert repr(p) == "Piece(x, Lt(x, y))"
     assert (p.value, p.condition) == (x, x < y)
     Matrix = MatrixKind(NumberKind)
-    MatAdd = function("MatAdd", rest=Matrix, returns=Matrix)
-    Trace = function("Trace", Matrix, returns=NumberKind)
-    First = function("First", Pair, returns=NumberKind)
+    MatAdd = declare_function("MatAdd", rest=Matrix, returns=Matrix)
+    Trace = declare_function("Trace", Matrix, returns=NumberKind)
+    First = declare_function("First", Pair, returns=NumberKind)
     A, B = Matrix("A"), Matrix("B")
     assert MatAdd(A, B).kind is Matrix
     assert Trace(MatAdd(A, B)).kind is NumberKind
@@ -121,7 +122,7 @@ def test_an_instantiated_kind_in_signatures():
 
 def test_a_function_shows_what_was_declared():
     Matrix = MatrixKind(NumberKind)
-    MatAdd = function("MatAdd", Matrix, rest=Matrix, returns=Matrix)
+    MatAdd = declare_function("MatAdd", Matrix, rest=Matrix, returns=Matrix)
     assert MatAdd.name == "MatAdd"
     assert len(MatAdd.kind.inputs) == 1 and MatAdd.kind.inputs[0] is Matrix
     assert MatAdd.kind.rest is Matrix and MatAdd.kind.output is Matrix
@@ -135,7 +136,7 @@ def test_a_function_shows_what_was_declared():
 
 def test_an_instantiated_kind_is_checked():
     Matrix = MatrixKind(NumberKind)
-    Trace = function("Trace", Matrix, returns=NumberKind)
+    Trace = declare_function("Trace", Matrix, returns=NumberKind)
     with pytest.raises(TypeError, match=r"^Trace expects MatrixKind\(NumberKind\), got MatrixKind\(BoolKind\): P$"):
         Trace(MatrixKind(BoolKind)("P"))
     with pytest.raises(TypeError, match=r"^Trace expects MatrixKind\(NumberKind\), got NumberKind: x$"):
@@ -149,13 +150,13 @@ def test_an_instantiated_kind_is_checked():
 def test_the_result_kind_is_the_declared_one():
     # Nothing is inferred from the arguments: a function declared to return
     # TupleKind(NumberKind, BoolKind) returns that, whatever it is given.
-    Wrap = function("Wrap", rest=MatrixKind(NumberKind), returns=Pair)
+    Wrap = declare_function("Wrap", rest=MatrixKind(NumberKind), returns=Pair)
     assert Wrap(MatrixKind(NumberKind)("A")).kind is Pair
 
 
 def test_an_instantiated_kind_has_its_own_operators():
-    Matrix = MatrixKind(kind("Scalar"))
-    MatMul = function("MatMul", rest=Matrix, returns=Matrix)
+    Matrix = MatrixKind(declare_kind("Scalar"))
+    MatMul = declare_function("MatMul", rest=Matrix, returns=Matrix)
     set_operator(Matrix, "*", MatMul)
     A, B = Matrix("A"), MatrixKind(Matrix.params[0])("B")
     assert repr(A * B) == "MatMul(A, B)"
@@ -186,7 +187,7 @@ def test_wrong_number_of_parameters():
         MatrixKind(NumberKind, BoolKind)
     with pytest.raises(TypeError, match=r"^MatrixKind takes 1 parameter, got 0$"):
         MatrixKind()
-    Map = kind_family("Map", params=2)
+    Map = declare_kind_family("Map", params=2)
     assert repr(Map(NumberKind, BoolKind)) == "Map(NumberKind, BoolKind)"
     with pytest.raises(TypeError, match=r"^Map takes 2 parameters, got 1$"):
         Map(NumberKind)
@@ -197,9 +198,9 @@ def test_zero_parameters():
         TupleKind()
     for params in (0, -1):
         with pytest.raises(ValueError, match=f"^Empty: params must be at least 1, got {params}$"):
-            kind_family("Empty", params=params)
+            declare_kind_family("Empty", params=params)
     with pytest.raises(TypeError):
-        kind_family("Bad", params="1")
+        declare_kind_family("Bad", params="1")
 
 
 def test_a_parameter_must_be_a_kind():
@@ -221,9 +222,9 @@ def test_a_parameter_must_be_a_kind():
 
 def test_a_family_is_not_a_kind():
     with pytest.raises(TypeError, match=r"^expected a kind, got <kind family TupleKind>$"):
-        function("f", TupleKind, returns=NumberKind)
+        declare_function("f", TupleKind, returns=NumberKind)
     with pytest.raises(ValueError, match=r"^returns must be a kind, got <kind family TupleKind>$"):
-        function("f", NumberKind, returns=TupleKind)
+        declare_function("f", NumberKind, returns=TupleKind)
     with pytest.raises(TypeError, match=r"^expected a kind, got <kind family TupleKind>$"):
         set_operator(TupleKind, "+", nr.Add)
 
@@ -238,7 +239,7 @@ def test_kinds_and_families_are_read_only():
 
 
 def test_instantiation_from_many_threads_gives_one_kind():
-    Family = kind_family("Family")
+    Family = declare_kind_family("Family")
     barrier = threading.Barrier(8)
     results = []
 

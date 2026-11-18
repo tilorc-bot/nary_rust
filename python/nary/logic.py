@@ -21,15 +21,15 @@ required, and is not converted; use ``true`` and ``false``. There are no
 operators for these functions: ``&``, ``|`` and ``~`` do not build them.
 """
 
-from ._core import function
+from ._core import declare_function
 from .kinds import BoolKind
 
 __all__ = ["And", "Not", "Or", "false", "true"]
 
-And = function("And", rest=BoolKind, returns=BoolKind)
-Or = function("Or", rest=BoolKind, returns=BoolKind)
-Not = function("Not", BoolKind, returns=BoolKind)
+And = declare_function("And", rest=BoolKind, returns=BoolKind)
+Or = declare_function("Or", rest=BoolKind, returns=BoolKind)
+Not = declare_function("Not", BoolKind, returns=BoolKind)
 
 # A constant is a function of no arguments, applied once.
-true = function("true", returns=BoolKind)()
-false = function("false", returns=BoolKind)()
+true = declare_function("true", returns=BoolKind)()
+false = declare_function("false", returns=BoolKind)()
