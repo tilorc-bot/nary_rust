@@ -30,8 +30,8 @@ appear in a result. Each partial function is therefore written as a wrapper,
 named pieces: its domain, the condition under which it has a value
 (`logDomain`, `tanDomain`, `powDomain`), and a total function (`Complex.log`,
 `Complex.tan`, `powTotal`). Outside the domain the result is no value. The
-domains are the same conditions that `python/nary/` records with
-`set_domain`, kept apart so that they could later be generated from there.
+domains are the same conditions that `python/nary/` declares with
+`domain=`, kept apart so that they could later be generated from there.
 
 ## Files
 
@@ -247,8 +247,8 @@ every argument has a value, except for `And` and `Or`.
 | `Lambda(x, body)` | `fun x => body`, with `x` read as `some x` | |
 | `Derivative(f)(a)` | `Derivative f a` | `f` has a value at every point near `a` and is complex-differentiable at `a` |
 
-The domains of `Pow`, `tan` and `log` are the ones recorded with
-`set_domain` in `python/nary/`.
+The domains of `Pow`, `tan` and `log` are the ones declared with
+`domain=` in `python/nary/`.
 
 ## Choices not confirmed by the owner
 

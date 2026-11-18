@@ -75,9 +75,9 @@ How it works, in seven points:
    ``0``, but ``log(x) * 0`` is left alone unless ``Ne(x, 0)`` is known.
    An application of a function declared with ``domain=None``, a lambda, a
    call of a lambda, and an application of an unknown function, such as
-   ``f(x)``, are not known to have a value. The check applies to every rule that erases a variable,
-   with or without a condition. If one way of matching fails a condition or
-   this check, the next way is tried.
+   ``f(x)``, are not known to have a value. The check applies to every
+   rule that erases a variable, with or without a condition. If one way of
+   matching fails a condition or this check, the next way is tried.
 6. Computed literals. In the replacement, after each variable is replaced
    by what it matched, each ``computed(e)`` is replaced by the literal of
    the integer value of ``e``, worked out with the Python functions
