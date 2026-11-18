@@ -7,7 +7,7 @@ from nary import Add, Lambda, Mul, Ne, NumberKind, cos, log, sin
 from nary.arithmetic_rules import rules
 from nary.rewriting import rewrite
 
-x, y = NumberKind("x"), NumberKind("y")
+x, y, z = NumberKind("x"), NumberKind("y"), NumberKind("z")
 
 
 def test_docstring_examples():
@@ -54,3 +54,14 @@ def test_lambda_untouched():
 def test_several_rules_in_sequence():
     e = (x * 1 + 0) ** 1 - (y + 0) * 0
     assert rewrite(e, rules) == x
+
+
+def test_arithmetic_on_literals():
+    assert rewrite(Add(x, 2, y, 3), rules) == Add(x, 5, y)
+    assert rewrite(Mul(2, x, 3), rules) == Mul(6, x)
+    assert rewrite(2 * x + 3 * x, rules) == Mul(5, x)
+    assert rewrite(2 * x + x, rules) == Mul(3, x)
+    assert rewrite(2 * x - 2 * x, rules) == NumberKind(0)
+    # Nothing to combine: m and n match only literals.
+    assert rewrite(x * y + 2 * z, rules) == x * y + 2 * z
+    assert rewrite(Add(Mul(2, x, y), Mul(x, y)), rules) == Add(Mul(2, x, y), Mul(x, y))

@@ -76,6 +76,11 @@ def test_to_lean_rule():
         "abbrev exp_log : Prop :=\n"
         "  ∀ (a : Nary.Number), Nary.Holds (Nary.Ne a (Nary.lit 0)) → Nary.exp (Nary.log a) = a"
     )
+    assert to_lean_rule(by_name["collect"]) == (
+        "abbrev collect : Prop :=\n  ∀ (m n : ℤ) (a : Nary.Number), "
+        "Nary.Add [Nary.Mul [Nary.lit m, a], Nary.Mul [Nary.lit n, a]] "
+        "= Nary.Mul [Nary.lit (m + n), a]"
+    )
     # A function variable is a function, which always has a value, so the
     # wrong rule f(a) * 0 -> 0 prints as a false statement.
     assert to_lean_rule(rule(f(x) * 0, 0, name="wrong")) == (

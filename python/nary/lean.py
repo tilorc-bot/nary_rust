@@ -113,8 +113,22 @@ erased function variable gets no ``≠ none`` hypothesis: an expression of a
 function kind always means a function, though the function may have no
 value at some points. So the wrong rule ``f(a) * 0 -> 0`` prints as a
 statement that is false (take ``f`` with no value anywhere), and has no
-proof. The variables are grouped by type in that order, each group in the
-order the variables first appear in the pattern.
+proof.
+
+A literal variable of a rule (one inside ``computed(...)``, see
+``nary.rules``) matches only an integer literal, so it is ``m : ℤ`` and
+prints as ``Nary.lit m``; it is in the replacement, so it is never erased.
+``computed(e)`` prints as ``Nary.lit (e)``, with ``e`` written in Lean's
+integer arithmetic: ``Add`` as ``+`` (``0`` with no arguments) and ``Mul`` as
+``*`` (``1``), from the table ``_INTEGER_OPERATIONS`` below. That these
+agree with what ``nary.rules.computes`` records for the engine, Python's
+integer ``+`` and ``*``, is taken on trust. So
+``rule(m + n, computed(m + n), name="add_literals")`` prints as
+``∀ (m n : ℤ), Nary.Add [Nary.lit m, Nary.lit n] = Nary.lit (m + n)``.
+
+The variables are grouped by type, literal variables first and then in the
+order above, each group in the order the variables first appear in the
+pattern.
 
 Refused, besides everything ``to_lean`` refuses: a rule with no name, or
 whose name is not a plain ASCII identifier or is a Lean keyword (the name
@@ -135,7 +149,7 @@ from ._core import Expr
 from .calculus import NumberFunction
 from .functions import is_lambda
 from .kinds import BoolKind, NumberKind
-from .rules import Rule, is_flat, is_unordered
+from .rules import Rule, computed, is_flat, is_unordered
 
 __all__ = ["LEAN_NAMES", "to_lean", "to_lean_example", "to_lean_facts", "to_lean_rule"]
 
@@ -185,6 +199,12 @@ _RULE_VARIABLE_TYPES = {
     BoolKind: "Nary.Boolean",
     NumberFunction: "Nary.NumberFunction",
 }
+
+# How computed(...) in a rule writes each function that the engine computes
+# on integers (nary.rules.computes): the Lean operator on ℤ, and the value
+# with no arguments. Taken on trust to agree with the Python functions
+# recorded in nary.arithmetic_rules.
+_INTEGER_OPERATIONS = {arithmetic.Add: ("+", "0"), arithmetic.Mul: ("*", "1")}
 
 _IDENTIFIER = _re.compile(r"[A-Za-z_][A-Za-z0-9_']*\Z")
 
@@ -280,10 +300,12 @@ def _is_declared_function(e):
 
 
 class _Printer:
-    def __init__(self, rule=False):
+    def __init__(self, rule=False, literal_variables=()):
         # Whether symbols are the variables of a rule, which print as
         # themselves (``a``), not as a value (``some a``).
         self.rule = rule
+        # The literal variables of the rule, which are integers in Lean.
+        self.literal_variables = literal_variables
         # The free symbols, by name, in the order they are first met.
         self.free = {}
         # The variables of the lambdas around the current subexpression,
@@ -330,6 +352,8 @@ class _Printer:
 
         if e.is_symbol:
             name = self.symbol(e)
+            if e in self.literal_variables:
+                return f"Nary.lit {name}", False
             if e.kind is NumberFunction or self.rule:
                 return name, True
             return f"some {name}", False
@@ -371,6 +395,9 @@ class _Printer:
 
         # An application.
         head = e.head
+        if head == computed and self.rule:
+            text, atomic = self.integer(e.args[0])
+            return f"Nary.lit {text if atomic else f'({text})'}", False
         if _is_declared_function(head):
             if head not in LEAN_NAMES:
                 raise _not_in_table(head)
@@ -390,6 +417,26 @@ class _Printer:
             )
         (argument,) = e.args
         return f"Nary.apply {self.argument(head)} {self.argument(argument)}", False
+
+    def integer(self, e):
+        """``e``, the argument of a ``computed(...)`` in a rule, as a Lean
+        integer, and whether that is a single name or number. ``nary.rules``
+        has checked that ``e`` is made of symbols, literals and functions
+        recorded with ``computes``."""
+        if e.is_symbol:
+            return self.symbol(e), True
+        if e.is_literal:
+            return (str(e.value) if e.value >= 0 else f"({e.value})"), True
+        if e.head not in _INTEGER_OPERATIONS:
+            raise _no_definition(e.head, " on integers: it is not in _INTEGER_OPERATIONS")
+        operator, empty = _INTEGER_OPERATIONS[e.head]
+        parts = []
+        for arg in e.args:
+            text, atomic = self.integer(arg)
+            parts.append(text if atomic else f"({text})")
+        if len(parts) <= 1:
+            return (parts[0] if parts else empty), True
+        return f" {operator} ".join(parts), False
 
 
 def to_lean(e):
@@ -447,17 +494,21 @@ def to_lean_rule(r):
     if not isinstance(r, Rule):
         raise TypeError(f"to_lean_rule expects a Rule, got {r!r}")
     name = _declaration_name(r.name, f"the rule {r!r}")
-    printer = _Printer(rule=True)
+    printer = _Printer(rule=True, literal_variables=r.literal_variables)
     pattern, replacement = printer.print(r.pattern)[0], printer.print(r.replacement)[0]
     hypotheses = [f"Nary.Holds {printer.argument(r.condition)}"] if r.condition is not None else []
     for v in r.erased:
         if v.kind is not NumberFunction:
             hypotheses.append(f"{_identifier(v.name)} ≠ none")
+    groups = [[v for v in r.variables if v in r.literal_variables]]
+    groups += [
+        [v for v in r.variables if v.kind is kind and v not in r.literal_variables]
+        for kind in _RULE_VARIABLE_TYPES
+    ]
     binders = []
-    for kind, lean_type in _RULE_VARIABLE_TYPES.items():
-        names = [_identifier(v.name) for v in r.variables if v.kind is kind]
-        if names:
-            binders.append(f"({' '.join(names)} : {lean_type})")
+    for group, lean_type in zip(groups, ["ℤ", *_RULE_VARIABLE_TYPES.values()]):
+        if group:
+            binders.append(f"({' '.join(_identifier(v.name) for v in group)} : {lean_type})")
     claim = " → ".join([*hypotheses, f"{pattern} = {replacement}"])
     if binders:
         claim = f"∀ {' '.join(binders)}, {claim}"

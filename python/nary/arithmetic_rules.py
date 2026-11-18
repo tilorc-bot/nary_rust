@@ -1,7 +1,8 @@
 """Rules about numbers: the facts about ``Add`` and ``Mul``, and the first
 rewrite rules.
 
-Importing this module records the facts. The rules are the list ``rules``,
+Importing this module records the facts, and what ``Add`` and ``Mul`` do on
+integers (``computes``). The rules are the list ``rules``,
 which is what ``nary.rewriting.rewrite`` is given.
 
 Every rule and every fact here is proved in Lean, from the definitions in
@@ -26,22 +27,40 @@ not run) or ``lake build`` fails (a statement has no proof that fits).
     >>> [(r, r.erased) for r in rules if r.pattern == a * 0]
     [(Rule(Mul(a, 0), 0, name='mul_zero'), (a,))]
 
+The last four rules do arithmetic on literals. ``computed(m + n)`` is the
+literal whose value is ``m + n``, worked out with Python integers, and
+``m`` and ``n`` match only literals:
+
+    >>> from nary.rewriting import rewrite
+    >>> x = NumberKind("x")
+    >>> rewrite(Add(x, 2, 3), rules), rewrite(2 * x + 3 * x, rules)
+    (Add(x, 5), Mul(5, x))
+
 ``a ** 0 -> 1`` needs ``Ne(a, 0)`` because ``0**0`` has no value here: there
 is no separate power with a natural-number exponent yet.
 """
+
+import math
 
 from .arithmetic import Add, Mul
 from .elementary import exp, log
 from .kinds import NumberKind
 from .relational import Ne
-from .rules import flat, rule, unordered
+from .rules import computed, computes, flat, rule, unordered
 
 a = NumberKind("a")
+# Literal variables: each appears inside computed(...), so matches only a literal.
+m, n = NumberKind("m"), NumberKind("n")
 
 unordered(Add)
 flat(Add)
 unordered(Mul)
 flat(Mul)
+
+# What Add and Mul do on integers, for computed(...). nary.lean prints them
+# as + and * on Lean's ℤ; that the two agree is taken on trust.
+computes(Add, lambda *integers: sum(integers))
+computes(Mul, lambda *integers: math.prod(integers))
 
 rules = [
     rule(a + 0, a, name="add_zero"),
@@ -53,4 +72,8 @@ rules = [
     rule(a ** 1, a, name="pow_one"),
     rule(a ** 0, 1, when=Ne(a, 0), name="pow_zero"),
     rule(exp(log(a)), a, when=Ne(a, 0), name="exp_log"),
+    rule(m + n, computed(m + n), name="add_literals"),
+    rule(m * n, computed(m * n), name="mul_literals"),
+    rule(m * a + n * a, computed(m + n) * a, name="collect"),
+    rule(a + n * a, computed(n + 1) * a, name="collect_one"),
 ]

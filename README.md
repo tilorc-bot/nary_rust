@@ -484,8 +484,10 @@ TypeError: MatrixKind takes 1 parameter, got 2
   turning the left operand into a literal of the kind of the right one.
   `set_operator` can be called once for each kind and operator.
 - Integers are the only numbers: there are no rationals or floats, and
-  `x + 1.5` is a `TypeError`. Nothing is computed with integers, so
-  `x - 1` is `Add(x, Mul(-1, 1))` and `2 + 3` of two literals is `Add(2, 3)`.
+  `x + 1.5` is a `TypeError`. Building an expression computes nothing, so
+  `x - 1` is `Add(x, Mul(-1, 1))` and `2 + 3` of two literals is `Add(2, 3)`;
+  only the rules of `nary.arithmetic_rules`, applied with `nary.rewriting`,
+  turn it into `5`.
 - A literal is never equal to a Python value: `NumberKind(3) == 3` is
   `False`. A literal of an unhashable type cannot be hashed.
 - A kind is only a name and its operators (and, for a function kind, its
