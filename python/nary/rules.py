@@ -17,8 +17,8 @@ with the ordinary functions and operators, and recorded with ``rule``:
 A rule claims, following issue #2: wherever its condition holds and every
 erased variable has a value, the pattern and the replacement both have no
 value or both have the same value. A variable is erased when it is in the
-pattern and not in the replacement, as ``a`` is in ``0 * a -> 0``:
-``0 * log(0)`` has no value, so that rule is only claimed where ``a`` has
+pattern and not in the replacement, as ``a`` is in ``a * 0 -> 0``:
+``log(0) * 0`` has no value, so that rule is only claimed where ``a`` has
 one. ``Rule.erased`` lists those variables, and nothing more is derived from
 it. It does not cover every rule that needs a condition: a rule can keep
 every variable and still lose a partial function, as ``exp(log(a)) -> a``

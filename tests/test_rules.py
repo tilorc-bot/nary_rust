@@ -30,10 +30,10 @@ def test_stored_fields():
 
 
 def test_arithmetic_rules():
-    [zero_mul] = [r for r in rules() if r.pattern == 0 * a]
-    assert zero_mul.replacement == NumberKind(0)
-    assert zero_mul.condition is None
-    assert zero_mul.erased == (a,)
+    [mul_zero] = [r for r in rules() if r.pattern == a * 0]
+    assert mul_zero.replacement == NumberKind(0)
+    assert mul_zero.condition is None
+    assert mul_zero.erased == (a,)
     assert is_unordered(Add) and is_flat(Add) and is_unordered(Mul) and is_flat(Mul)
     assert not is_unordered(Pow) and not is_flat(Pow)
 
