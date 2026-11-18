@@ -41,7 +41,7 @@ Known gaps:
 - There are no explicit matrices: nothing builds a matrix from its elements.
 """
 
-from ._core import function, kind_family, set_operator
+from ._core import declare_function, declare_kind_family, set_operator
 from .kinds import NumberKind
 
 __all__ = [
@@ -49,16 +49,16 @@ __all__ = [
     "MatAdd", "MatMul", "Transpose", "Inverse", "Determinant", "Trace",
 ]
 
-MatrixKind = kind_family("MatrixKind", params=1)
+MatrixKind = declare_kind_family("MatrixKind", params=1)
 
 Matrix = MatrixKind(NumberKind)
 
-MatAdd = function("MatAdd", rest=Matrix, returns=Matrix)
-MatMul = function("MatMul", rest=Matrix, returns=Matrix)
-Transpose = function("Transpose", Matrix, returns=Matrix)
-Inverse = function("Inverse", Matrix, returns=Matrix)
-Determinant = function("Determinant", Matrix, returns=NumberKind)
-Trace = function("Trace", Matrix, returns=NumberKind)
+MatAdd = declare_function("MatAdd", rest=Matrix, returns=Matrix)
+MatMul = declare_function("MatMul", rest=Matrix, returns=Matrix)
+Transpose = declare_function("Transpose", Matrix, returns=Matrix)
+Inverse = declare_function("Inverse", Matrix, returns=Matrix)
+Determinant = declare_function("Determinant", Matrix, returns=NumberKind)
+Trace = declare_function("Trace", Matrix, returns=NumberKind)
 
 # Which function each operator builds when the left operand is a Matrix.
 set_operator(Matrix, "+", MatAdd)

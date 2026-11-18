@@ -3,8 +3,9 @@
 //! `Expr` is the only class of expression, and every expression is one of
 //! three forms: a symbol, a declared function, or an application of a head
 //! expression to arguments. Each expression has a kind. A kind is an object
-//! declared from Python with `kind(name)`, or made by instantiating a kind
-//! family declared with `kind_family(name)`: `TupleKind(NumberKind, BoolKind)`.
+//! declared from Python with `declare_kind(name)`, or made by instantiating
+//! a kind family declared with `declare_kind_family(name)`:
+//! `TupleKind(NumberKind, BoolKind)`.
 //!
 //! The one kind defined here is the function kind,
 //! `FunctionKind(inputs, output, rest=None)`, because application is checked
@@ -31,12 +32,12 @@ use pyo3::types::{PyString, PyTuple};
 
 /// What is known about a kind.
 ///
-/// One of these is made for each `kind(name)` call, for each different list
-/// of parameters a kind family is instantiated with, and for each different
-/// function kind, and is never freed. So an expression refers to its kind
-/// with a plain reference: building a node does no reference counting on the
-/// kind, and two kinds are the same kind exactly when the references are the
-/// same.
+/// One of these is made for each `declare_kind(name)` call, for each
+/// different list of parameters a kind family is instantiated with, and for
+/// each different function kind, and is never freed. So an expression
+/// refers to its kind with a plain reference: building a node does no
+/// reference counting on the kind, and two kinds are the same kind exactly
+/// when the references are the same.
 struct KindData {
     /// The position of the kind in the order of declaration. Used in hashes.
     id: usize,
@@ -47,10 +48,10 @@ struct KindData {
     /// `Operator`. Filled in from Python with `set_operator`.
     operators: [PyOnceLock<Py<Expr>>; Operator::COUNT],
     /// The family this kind is an instance of, or None for a kind declared
-    /// with `kind(name)` and for a function kind.
+    /// with `declare_kind(name)` and for a function kind.
     family: Option<Py<KindFamily>>,
     /// The parameters the family was instantiated with. Empty for a kind
-    /// declared with `kind(name)` and for a function kind.
+    /// declared with `declare_kind(name)` and for a function kind.
     params: Box<[KindRef]>,
     /// For a function kind, what it accepts and returns. None for any
     /// other kind.
@@ -105,9 +106,10 @@ fn kind_tuple<'py>(py: Python<'py>, kinds: &[KindRef]) -> PyResult<Bound<'py, Py
     PyTuple::new(py, objects)
 }
 
-/// A kind of expression, such as NumberKind. Declared with `kind(name)`,
-/// made by instantiating a kind family, `TupleKind(NumberKind, BoolKind)`,
-/// or a function kind, `FunctionKind((NumberKind,), NumberKind)`.
+/// A kind of expression, such as NumberKind. Declared with
+/// `declare_kind(name)`, made by instantiating a kind family,
+/// `TupleKind(NumberKind, BoolKind)`, or a function kind,
+/// `FunctionKind((NumberKind,), NumberKind)`.
 ///
 /// Calling a kind with a name makes a symbol of that kind: `NumberKind("x")`.
 #[pyclass(frozen, module = "nary")]
@@ -155,7 +157,8 @@ impl Kind {
     }
 
     /// The parameters of this kind: `TupleKind(NumberKind, BoolKind).params` is
-    /// `(NumberKind, BoolKind)`. Empty for a kind declared with `kind(name)`.
+    /// `(NumberKind, BoolKind)`. Empty for a kind declared with
+    /// `declare_kind(name)`.
     #[getter]
     fn params<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
         kind_tuple(py, &self.data.params)
@@ -185,12 +188,12 @@ impl Kind {
     }
 }
 
-/// Declare a kind: `NumberKind = kind("NumberKind")`.
+/// Declare a kind: `NumberKind = declare_kind("NumberKind")`.
 ///
 /// Every call makes a new kind, different from every other, and a kind
 /// lasts for the life of the process. Declare each kind once, when a module
 /// is imported.
-#[pyfunction(name = "kind")]
+#[pyfunction]
 fn declare_kind(py: Python<'_>, name: String) -> PyResult<Py<Kind>> {
     kind_object(py, new_kind_data(name, None, Box::new([]), None))
 }
@@ -280,7 +283,7 @@ fn function_kind_py(
 }
 
 /// A family of kinds, each given by a list of parameters that are kinds.
-/// Declared with `kind_family(name, params=None)`.
+/// Declared with `declare_kind_family(name, params=None)`.
 ///
 /// `TupleKind(NumberKind, BoolKind)` is the kind of the family with those
 /// parameters. It is made the first time and the same kind is returned every
@@ -365,15 +368,16 @@ impl KindFamily {
     }
 }
 
-/// Declare a kind family: `TupleKind = kind_family("TupleKind")` takes any
-/// number of parameters from one up, and
-/// `MatrixKind = kind_family("MatrixKind", params=1)` takes exactly one.
+/// Declare a kind family: `TupleKind = declare_kind_family("TupleKind")`
+/// takes any number of parameters from one up, and
+/// `MatrixKind = declare_kind_family("MatrixKind", params=1)` takes exactly
+/// one.
 ///
 /// Every call makes a new family, and the kinds of a family last for the
 /// life of the process. Declare each family once, when a module is imported.
 #[pyfunction]
 #[pyo3(signature = (name, params=None))]
-fn kind_family(name: String, params: Option<isize>) -> PyResult<KindFamily> {
+fn declare_kind_family(name: String, params: Option<isize>) -> PyResult<KindFamily> {
     let params = match params {
         None => None,
         Some(n) if n >= 1 => Some(n as usize),
@@ -432,8 +436,9 @@ impl SymbolMarker {
 /// An expression, of some kind.
 ///
 /// A symbol is made by calling a kind and a declared function by
-/// `function`. An application is made only by `apply`, which checks that
-/// each argument is an `Expr` of the kind the head's function kind expects.
+/// `declare_function`. An application is made only by `apply`, which checks
+/// that each argument is an `Expr` of the kind the head's function kind
+/// expects.
 /// Nothing else makes an `Expr`.
 #[pyclass(frozen, module = "nary")]
 struct Expr {
@@ -444,8 +449,8 @@ struct Expr {
 enum Form {
     /// `NumberKind("x")`.
     Symbol { name: Py<PyString> },
-    /// An opaque named constant of a function kind, made by `function`.
-    /// Equal only to itself.
+    /// An opaque named constant of a function kind, made by
+    /// `declare_function`. Equal only to itself.
     Declared {
         name: Py<PyString>,
         /// Names for the leading arguments of its applications.
@@ -856,7 +861,7 @@ impl Expr {
 /// different function.
 #[pyfunction]
 #[pyo3(signature = (name, *arg_kinds, rest=None, returns, names=None))]
-fn function<'py>(
+fn declare_function<'py>(
     py: Python<'py>,
     name: Py<PyString>,
     arg_kinds: &Bound<'py, PyTuple>,
@@ -945,9 +950,9 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<KindFamily>()?;
     m.add_class::<SymbolMarker>()?;
     m.add_function(wrap_pyfunction!(declare_kind, m)?)?;
-    m.add_function(wrap_pyfunction!(kind_family, m)?)?;
+    m.add_function(wrap_pyfunction!(declare_kind_family, m)?)?;
     m.add_function(wrap_pyfunction!(function_kind_py, m)?)?;
-    m.add_function(wrap_pyfunction!(function, m)?)?;
+    m.add_function(wrap_pyfunction!(declare_function, m)?)?;
     m.add_function(wrap_pyfunction!(set_operator, m)?)?;
     Ok(())
 }

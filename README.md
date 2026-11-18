@@ -4,8 +4,8 @@ Typed, inert expression trees for Python, with the checking and node
 construction written in Rust (PyO3).
 
 - Every expression is an `Expr` and has a kind, `e.kind`. A kind is an object
-  declared in Python with `kind(name)`: `NumberKind` and `BoolKind` here. A
-  kind can also take other kinds as parameters,
+  declared in Python with `declare_kind(name)`: `NumberKind` and `BoolKind`
+  here. A kind can also take other kinds as parameters,
   `TupleKind(NumberKind, BoolKind)`.
 - Every expression is one of three forms: a symbol (`NumberKind("x")`), a
   declared function (`sin`), or an application of a head expression to
@@ -25,13 +25,13 @@ construction written in Rust (PyO3).
 
 | Path | What it is |
 |---|---|
-| `src/lib.rs` | The compiled module `nary._core`: `Expr`, `Kind`, `kind`, `KindFamily`, `kind_family`, `FunctionKind`, `function`, `Symbol`, `set_operator`. It defines no kind other than the function kinds, and no particular function. |
+| `src/lib.rs` | The compiled module `nary._core`: `Expr`, `Kind`, `declare_kind`, `KindFamily`, `declare_kind_family`, `FunctionKind`, `declare_function`, `Symbol`, `set_operator`. It defines no kind other than the function kinds, and no particular function. |
 | `python/nary/` | The package `nary`, the one to import. |
 | `python/nary/__init__.py` | Re-exports the names of `nary._core` and everything listed in the `__all__` of the modules below, so a name added to one of those lists is `nary.<name>` with no change here. |
-| `python/nary/kinds.py` | Declares the kinds `NumberKind` and `BoolKind` with `kind(...)`. |
-| `python/nary/arithmetic.py` | Declares `Add`, `Mul` and `Pow` with `function(...)`, and sets what `+`, `*` and `**` build for a `NumberKind`. |
+| `python/nary/kinds.py` | Declares the kinds `NumberKind` and `BoolKind` with `declare_kind(...)`. |
+| `python/nary/arithmetic.py` | Declares `Add`, `Mul` and `Pow` with `declare_function(...)`, and sets what `+`, `*` and `**` build for a `NumberKind`. |
 | `python/nary/elementary.py` | Declares `sin`. |
-| `python/nary/functions.py` | Defines `Lambda` and `is_lambda`, with `function(...)` and `Symbol(kind)`. |
+| `python/nary/functions.py` | Defines `Lambda` and `is_lambda`, with `declare_function(...)` and `Symbol(kind)`. |
 | `python/nary/relational.py` | Declares `Lt`, `Gt`, `Le`, `Ge` and `Eq`, and sets what `<`, `>`, `<=` and `>=` build for a `NumberKind`. |
 | `tests/` | The tests. |
 | `bench/` | `bench_construct.py` times building, comparing and hashing expressions. `compare.py` runs it on several versions and prints their ratios. |
@@ -92,15 +92,16 @@ TypeError: Pow takes 2 arguments, got 3
 ## Functions
 
 A declared function is an expression: a named constant whose kind is a
-function kind. `function(name, *inputs, rest=None, returns, names=None)`
-declares one.
+function kind.
+`declare_function(name, *inputs, rest=None, returns, names=None)` declares
+one.
 
 ```python
->>> from nary import BoolKind, FunctionKind, NumberKind, function
+>>> from nary import BoolKind, FunctionKind, NumberKind, declare_function
 
->>> cos = function("cos", NumberKind, returns=NumberKind)
->>> Max = function("Max", rest=NumberKind, returns=NumberKind)
->>> Le = function("Le", NumberKind, NumberKind, returns=BoolKind, names=("lhs", "rhs"))
+>>> cos = declare_function("cos", NumberKind, returns=NumberKind)
+>>> Max = declare_function("Max", rest=NumberKind, returns=NumberKind)
+>>> Le = declare_function("Le", NumberKind, NumberKind, returns=BoolKind, names=("lhs", "rhs"))
 
 >>> Le, Le.kind
 (Le, FunctionKind((NumberKind, NumberKind), BoolKind))
@@ -125,7 +126,7 @@ Add(f(x), cos(x))
 >>> f(x).head is f, f(x).args, cos(x).head is cos
 (True, (x,), True)
 
->>> At = function("At", f.kind, NumberKind, returns=NumberKind)
+>>> At = declare_function("At", f.kind, NumberKind, returns=NumberKind)
 >>> At(cos, x), At(f, y)
 (At(cos, x), At(f, y))
 >>> At(nr.Lt, x)
@@ -149,7 +150,7 @@ function shows the markers in `params`.
 ```python
 >>> from nary import Symbol
 
->>> Derivative = function("Derivative", NumberKind, Symbol(NumberKind), returns=NumberKind)
+>>> Derivative = declare_function("Derivative", NumberKind, Symbol(NumberKind), returns=NumberKind)
 >>> Derivative.kind
 FunctionKind((NumberKind, NumberKind), NumberKind)
 >>> Derivative.params, Derivative.kind.inputs
@@ -170,7 +171,7 @@ kind, `Derivative.kind("D")`, accepts any `NumberKind` in both positions.
 ### Lambda
 
 `Lambda(variables, body)` is not built into the compiled module. It is
-defined in Python, in `nary/functions.py`, with `function(...)` and
+defined in Python, in `nary/functions.py`, with `declare_function(...)` and
 `Symbol(kind)`: for each combination of kinds it declares, once, a function
 named `Lambda` that takes the variables, each declared `Symbol(kind)`, then
 the body, and returns the function kind from the kinds of the variables to
@@ -217,8 +218,8 @@ names; a repeated name, whatever the kinds, is a `ValueError`.
   kinds are compared by identity like any other. They can nest, and can be
   parameters of kind families. For any other kind, `inputs`, `rest` and
   `output` are `None`.
-- Every `function(...)` call makes a new function, even with a name and
-  kind already used, and a declared function is equal only to itself.
+- Every `declare_function(...)` call makes a new function, even with a name
+  and kind already used, and a declared function is equal only to itself.
 - Symbols are equal when they have the same kind and name, and applications
   (lambdas among them) when their heads and arguments are equal. Expressions
   of different forms are never equal.
@@ -228,11 +229,11 @@ names; a repeated name, whatever the kinds, is a `ValueError`.
 A kind is declared in Python, and adding one needs no change in Rust:
 
 ```python
->>> from nary import kind, set_operator
+>>> from nary import declare_kind, set_operator
 
->>> SetKind = kind("SetKind")
->>> Union = function("Union", rest=SetKind, returns=SetKind)
->>> Contains = function("Contains", NumberKind, SetKind, returns=BoolKind)
+>>> SetKind = declare_kind("SetKind")
+>>> Union = declare_function("Union", rest=SetKind, returns=SetKind)
+>>> Contains = declare_function("Contains", NumberKind, SetKind, returns=BoolKind)
 >>> set_operator(SetKind, "+", Union)        # what + builds for two sets
 
 >>> S, T = SetKind("S"), SetKind("T")        # calling a kind makes a symbol
@@ -262,8 +263,8 @@ TypeError: SetKind takes 1 argument, the name of a leaf, got 3; a node is built 
 - A kind lasts for the life of the process, and an expression refers to it
   without reference counting. Building an expression costs the same whatever
   the kind and however many kinds there are.
-- Every `kind(...)` call makes a new kind, even with a name already used.
-  Declare each kind once, when a module is imported.
+- Every `declare_kind(...)` call makes a new kind, even with a name already
+  used. Declare each kind once, when a module is imported.
 - `set_operator(kind, symbol, function)` says what an operator builds when its
   left operand is of that kind. The function is any expression of a
   function kind. A kind with no function for an operator does
@@ -271,15 +272,16 @@ TypeError: SetKind takes 1 argument, the name of a leaf, got 3; a node is built 
 
 ## Parametrised kinds
 
-A kind family is declared with `kind_family(name)`, and calling it with kinds
-as parameters gives a kind. Such a kind is like any other: it can be used in
-a signature, it has its own operators, and calling it makes a symbol.
+A kind family is declared with `declare_kind_family(name)`, and calling it
+with kinds as parameters gives a kind. Such a kind is like any other: it can
+be used in a signature, it has its own operators, and calling it makes a
+symbol.
 
 ```python
->>> from nary import kind_family
+>>> from nary import declare_kind_family
 
->>> TupleKind = kind_family("TupleKind")              # one or more parameters
->>> MatrixKind = kind_family("MatrixKind", params=1)  # exactly one parameter
+>>> TupleKind = declare_kind_family("TupleKind")              # one or more parameters
+>>> MatrixKind = declare_kind_family("MatrixKind", params=1)  # exactly one parameter
 
 >>> Pair = TupleKind(NumberKind, BoolKind)
 >>> Pair
@@ -291,13 +293,13 @@ True
 >>> TupleKind(MatrixKind(NumberKind), Pair)           # parameters can be parametrised
 TupleKind(MatrixKind(NumberKind), TupleKind(NumberKind, BoolKind))
 
->>> Piece = function("Piece", NumberKind, BoolKind, returns=Pair)
+>>> Piece = declare_function("Piece", NumberKind, BoolKind, returns=Pair)
 >>> Piece(x, x < y).kind is Pair
 True
 
 >>> Matrix = MatrixKind(NumberKind)
->>> MatMul = function("MatMul", rest=Matrix, returns=Matrix)
->>> Trace = function("Trace", Matrix, returns=NumberKind)
+>>> MatMul = declare_function("MatMul", rest=Matrix, returns=Matrix)
+>>> Trace = declare_function("Trace", Matrix, returns=NumberKind)
 >>> set_operator(Matrix, "*", MatMul)
 >>> A, B = Matrix("A"), Matrix("B")
 >>> Trace(A * B)
@@ -323,10 +325,10 @@ TypeError: MatrixKind takes 1 parameter, got 2
   more kind, so instantiate families when a module is imported, not with
   parameters that keep changing.
 - `kind.family` and `kind.params` are `None` and `()` for a kind declared
-  with `kind(name)` and for a function kind. A family has `name`, and
+  with `declare_kind(name)` and for a function kind. A family has `name`, and
   `params`, the number of parameters it takes or `None`.
-- Every `kind_family(...)` call makes a new family, even with a name already
-  used, and its kinds are different from those of any other family.
+- Every `declare_kind_family(...)` call makes a new family, even with a name
+  already used, and its kinds are different from those of any other family.
 
 ## Limitations
 

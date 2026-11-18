@@ -10,7 +10,7 @@ from nary import (
     Lambda,
     NumberKind,
     Symbol,
-    function,
+    declare_function,
     is_lambda,
 )
 
@@ -19,9 +19,9 @@ p = BoolKind("p")
 NumToNum = FunctionKind((NumberKind,), NumberKind)
 f = NumToNum("f")
 # A function that takes a function.
-Apply = function("Apply", NumToNum, NumberKind, returns=NumberKind, names=("fn", "point"))
+Apply = declare_function("Apply", NumToNum, NumberKind, returns=NumberKind, names=("fn", "point"))
 # A function whose second position accepts only a symbol.
-Derivative = function("Derivative", NumberKind, Symbol(NumberKind), returns=NumberKind)
+Derivative = declare_function("Derivative", NumberKind, Symbol(NumberKind), returns=NumberKind)
 
 
 def test_a_declared_function_is_an_expression_of_a_function_kind():
@@ -41,7 +41,7 @@ def test_function_kinds_are_compared_by_identity_and_nest():
     assert FunctionKind((), NumberKind, rest=NumberKind) is not FunctionKind((), NumberKind)
     higher = FunctionKind((NumToNum,), NumToNum)
     assert higher.inputs[0] is NumToNum and higher.output is NumToNum
-    assert nr.kind_family("Box", params=1)(NumToNum).params == (NumToNum,)
+    assert nr.declare_kind_family("Box", params=1)(NumToNum).params == (NumToNum,)
     with pytest.raises(TypeError, match="^FunctionKind: inputs must be a tuple of kinds, got NumberKind$"):
         FunctionKind(NumberKind, NumberKind)
 
@@ -71,7 +71,7 @@ def test_wrong_kind_wrong_count_and_calling_a_non_function():
 
 
 def test_rest_functions():
-    Max = function("Max", NumberKind, rest=NumberKind, returns=NumberKind)
+    Max = declare_function("Max", NumberKind, rest=NumberKind, returns=NumberKind)
     assert Max.kind is FunctionKind((NumberKind,), NumberKind, rest=NumberKind)
     assert repr(Max(x, y, x)) == "Max(x, y, x)"
     with pytest.raises(TypeError, match=r"^Max takes at least 1 arguments, got 0$"):
@@ -81,8 +81,8 @@ def test_rest_functions():
 
 
 def test_two_declarations_with_the_same_name_are_different():
-    a = function("a", NumberKind, returns=NumberKind)
-    b = function("a", NumberKind, returns=NumberKind)
+    a = declare_function("a", NumberKind, returns=NumberKind)
+    b = declare_function("a", NumberKind, returns=NumberKind)
     assert a.kind is b.kind
     assert a != b and a == a
     assert a(x) != b(x) and a(x) == a(x)
@@ -174,7 +174,7 @@ def test_named_arguments_come_from_the_head():
 
 
 def test_set_operator_takes_any_expression_of_a_function_kind():
-    Point = nr.kind("Point")
+    Point = nr.declare_kind("Point")
     join = FunctionKind((Point, Point), Point)("join")
     nr.set_operator(Point, "+", join)
     P, Q = Point("P"), Point("Q")
