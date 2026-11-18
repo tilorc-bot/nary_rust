@@ -84,7 +84,7 @@ def test_a_kind_with_no_operators_does_not_support_them():
 
 def test_operators_that_do_not_exist():
     with pytest.raises(TypeError):
-        x - y
+        x + 1
     with pytest.raises(TypeError):
         x > 1
     with pytest.raises(TypeError):
