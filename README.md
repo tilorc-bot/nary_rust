@@ -29,7 +29,7 @@ construction written in Rust (PyO3).
 | `python/nary/` | The package `nary`, the one to import. |
 | `python/nary/__init__.py` | Re-exports the names of `nary._core` and everything listed in the `__all__` of the modules below, so a name added to one of those lists is `nary.<name>` with no change here. |
 | `python/nary/kinds.py` | Declares the kinds `NumberKind` and `BoolKind` with `declare_kind(...)`. |
-| `python/nary/arithmetic.py` | Declares `Add`, `Mul` and `Pow` with `declare_function(...)`, and sets what `+`, `*` and `**` build for a `NumberKind`. |
+| `python/nary/arithmetic.py` | Declares `Add`, `Mul`, `Pow` and the constant `NegativeOne` (`-1`), and sets what `+`, `-`, `*`, `/`, `**` and unary minus build for a `NumberKind`. |
 | `python/nary/elementary.py` | Declares `sin`. |
 | `python/nary/functions.py` | Defines `Lambda` and `is_lambda`, with `declare_function(...)` and `Symbol(kind)`. |
 | `python/nary/relational.py` | Declares `Lt`, `Gt`, `Le`, `Ge` and `Eq`, and sets what `<`, `>`, `<=` and `>=` build for a `NumberKind`. |
@@ -88,6 +88,43 @@ Traceback (most recent call last):
 TypeError: Pow takes 2 arguments, got 3
 
 ```
+
+## Subtraction, division and negation
+
+There are no `Sub`, `Div` or `Neg` functions. As in SymPy, `-`, `/` and
+unary minus are built from `Add`, `Mul`, `Pow` and a constant `-1`, by
+Python functions in `nary/arithmetic.py` given to `set_operator`. Unary
+minus is spelled `"neg"`.
+
+```python
+# A constant is a function of no arguments, applied once (as true/false in nary/logic.py).
+NegativeOne = declare_function("-1", returns=NumberKind)()
+
+def _subtract(a, b):   # a - b
+    return Add(a, Mul(NegativeOne, b))
+
+def _divide(a, b):     # a / b
+    return Mul(a, Pow(b, NegativeOne))
+
+def _negate(a):        # -a
+    return Mul(NegativeOne, a)
+
+set_operator(NumberKind, "-", _subtract)
+set_operator(NumberKind, "/", _divide)
+set_operator(NumberKind, "neg", _negate)
+```
+
+```python
+>>> x - y, x / y, -x
+(Add(x, Mul(-1, y)), Mul(x, Pow(y, -1)), Mul(-1, x))
+>>> x - y == nr.Add(x, nr.Mul(nr.NegativeOne, y))
+True
+
+```
+
+`NegativeOne` is the only number: there are no integers or other numbers
+yet, and a Python `int` is not accepted as an argument, so `x - 1` and
+`1 - x` are errors.
 
 ## Functions
 
@@ -266,8 +303,10 @@ TypeError: SetKind takes 1 argument, the name of a leaf, got 3; a node is built 
 - Every `declare_kind(...)` call makes a new kind, even with a name already
   used. Declare each kind once, when a module is imported.
 - `set_operator(kind, symbol, function)` says what an operator builds when its
-  left operand is of that kind. The function is any expression of a
-  function kind. A kind with no function for an operator does
+  left operand is of that kind. The operator calls the function (an
+  expression of a function kind, or a Python function) with the operands,
+  and the result must be an `Expr` (anything else is a `TypeError`). A kind
+  with nothing set for an operator does
   not support it: `p + q` on two `BoolKind`s is a `TypeError`.
 
 ## Parametrised kinds
@@ -332,9 +371,12 @@ TypeError: MatrixKind takes 1 parameter, got 2
 
 ## Limitations
 
-- The seven operators (`+`, `*`, `**`, `<`, `>`, `<=`, `>=`) are fixed in
-  Rust. There are no reflected operators (`1 + x`), and no `-` or `/`.
+- The ten operators (`+`, `-`, `*`, `/`, `**`, unary minus, `<`, `>`, `<=`,
+  `>=`) are fixed in Rust. There are no reflected operators (`1 + x`).
   `set_operator` can be called once for each kind and operator.
+- There are no numbers other than the constant `-1` (`NegativeOne`). A
+  Python `int` is not converted to an expression, so `x + 1` is a
+  `TypeError`.
 - A kind is only a name and its operators (and, for a function kind, its
   inputs and output). It cannot have methods or attributes of its own, and
   there are no kinds of kinds.

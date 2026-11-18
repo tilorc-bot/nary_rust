@@ -147,8 +147,8 @@ def test_set_operator_once_for_each_kind_and_operator():
         set_operator(NumberKind, "+", nr.Add)
     with pytest.raises(ValueError, match=r"^the \+ operator is already set for SetKind$"):
         set_operator(SetKind, "+", Union)
-    with pytest.raises(ValueError, match='^unknown operator "-"$'):
-        set_operator(NumberKind, "-", nr.Add)
+    with pytest.raises(ValueError, match='^unknown operator "%"$'):
+        set_operator(NumberKind, "%", nr.Add)
     with pytest.raises(TypeError):
         set_operator(NumberKind, "*", "Mul")
 

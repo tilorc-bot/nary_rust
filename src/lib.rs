@@ -18,7 +18,7 @@
 //! No other kind and no particular function is defined in this file. The
 //! kinds (NumberKind, BoolKind), the functions (Add, Mul, Eq and the rest)
 //! and Lambda are declared in Python, in the package `nary`, and each kind is
-//! told which function an operator builds with `set_operator`.
+//! told what an operator builds with `set_operator`.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -44,9 +44,9 @@ struct KindData {
     name: String,
     /// The Python object for this kind. Set when the kind is made.
     object: PyOnceLock<Py<Kind>>,
-    /// The function each operator builds for this kind, indexed by
+    /// The function each operator calls for this kind, indexed by
     /// `Operator`. Filled in from Python with `set_operator`.
-    operators: [PyOnceLock<Py<Expr>>; Operator::COUNT],
+    operators: [PyOnceLock<Py<PyAny>>; Operator::COUNT],
     /// The family this kind is an instance of, or None for a kind declared
     /// with `declare_kind(name)` and for a function kind.
     family: Option<Py<KindFamily>>,
@@ -642,13 +642,16 @@ fn apply<'py>(head: &Bound<'py, Expr>, args: &Bound<'py, PyTuple>) -> PyResult<B
     )
 }
 
-/// The operators. For each kind, each builds whichever function was
-/// registered for it with `set_operator`.
+/// The operators. For each kind, each builds whatever was registered for it
+/// with `set_operator`. `Neg` is unary minus, spelled "neg".
 #[derive(Clone, Copy)]
 enum Operator {
     Add,
+    Sub,
     Mul,
+    Div,
     Pow,
+    Neg,
     Lt,
     Gt,
     Le,
@@ -656,11 +659,14 @@ enum Operator {
 }
 
 impl Operator {
-    const COUNT: usize = 7;
+    const COUNT: usize = 10;
     const ALL: [Operator; Operator::COUNT] = [
         Operator::Add,
+        Operator::Sub,
         Operator::Mul,
+        Operator::Div,
         Operator::Pow,
+        Operator::Neg,
         Operator::Lt,
         Operator::Gt,
         Operator::Le,
@@ -670,8 +676,11 @@ impl Operator {
     fn symbol(self) -> &'static str {
         match self {
             Operator::Add => "+",
+            Operator::Sub => "-",
             Operator::Mul => "*",
+            Operator::Div => "/",
             Operator::Pow => "**",
+            Operator::Neg => "neg",
             Operator::Lt => "<",
             Operator::Gt => ">",
             Operator::Le => "<=",
@@ -680,20 +689,40 @@ impl Operator {
     }
 }
 
-/// The function registered for `operator` on the kind of `slf`, applied to
-/// `slf` and `other`. If the kind has none, the result is NotImplemented, as
-/// for any Python object that does not support an operator.
+/// Call `function`, given to `set_operator` for `operator` on `kind`, with
+/// `operands`. The result must be an expression.
+fn operate<'py>(
+    py: Python<'py>,
+    function: &Py<PyAny>,
+    kind: KindRef,
+    operator: Operator,
+    operands: &[&Bound<'py, PyAny>],
+) -> PyResult<Bound<'py, PyAny>> {
+    let result = function.bind(py).call1(PyTuple::new(py, operands)?)?;
+    if result.cast_exact::<Expr>().is_err() {
+        return Err(PyTypeError::new_err(format!(
+            "the {} operator for {} must return an expression, got {}: {}",
+            operator.symbol(),
+            kind.name,
+            result.get_type().name()?,
+            describe(&result)
+        )));
+    }
+    Ok(result)
+}
+
+/// What `operator` builds for the kind of `left`, from `left` and `right`.
+/// If the kind has nothing for the operator, the result is NotImplemented,
+/// as for any Python object that does not support an operator.
 fn binary<'py>(
-    slf: &Bound<'py, Expr>,
-    other: &Bound<'py, PyAny>,
+    left: &Bound<'py, Expr>,
+    right: &Bound<'py, PyAny>,
     operator: Operator,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let py = slf.py();
-    match slf.get().kind.operators[operator as usize].get(py) {
-        Some(function) => {
-            let args = PyTuple::new(py, [slf.as_any(), other])?;
-            Ok(apply(function.bind(py), &args)?.into_any())
-        }
+    let py = left.py();
+    let kind = left.get().kind;
+    match kind.operators[operator as usize].get(py) {
+        Some(function) => operate(py, function, kind, operator, &[left.as_any(), right]),
         None => Ok(py.NotImplemented().into_bound(py)),
     }
 }
@@ -796,8 +825,16 @@ impl Expr {
         binary(slf, other, Operator::Add)
     }
 
+    fn __sub__<'py>(slf: &Bound<'py, Self>, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+        binary(slf, other, Operator::Sub)
+    }
+
     fn __mul__<'py>(slf: &Bound<'py, Self>, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
         binary(slf, other, Operator::Mul)
+    }
+
+    fn __truediv__<'py>(slf: &Bound<'py, Self>, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+        binary(slf, other, Operator::Div)
     }
 
     fn __pow__<'py>(
@@ -809,6 +846,19 @@ impl Expr {
             return Err(PyTypeError::new_err("pow() with a modulus is not supported"));
         }
         binary(slf, other, Operator::Pow)
+    }
+
+    /// Unary minus, `-x`: what the "neg" operator builds for the kind.
+    fn __neg__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let kind = slf.get().kind;
+        match kind.operators[Operator::Neg as usize].get(py) {
+            Some(function) => operate(py, function, kind, Operator::Neg, &[slf.as_any()]),
+            None => Err(PyTypeError::new_err(format!(
+                "bad operand type for unary -: an expression of kind {}",
+                kind.name
+            ))),
+        }
     }
 
     fn __richcmp__<'py>(
@@ -910,11 +960,13 @@ fn declare_function<'py>(
     Bound::new(py, Expr { kind, form: Form::Declared { name, names, symbols } })
 }
 
-/// Say which function an operator builds for a kind:
-/// `set_operator(NumberKind, "+", Add)`. The operators are "+", "*", "**",
-/// "<", ">", "<=" and ">=". The function is any expression of a function
-/// kind. Each operator can be set once for each kind. A kind with no
-/// function for an operator does not support that operator.
+/// Say what an operator builds for a kind:
+/// `set_operator(NumberKind, "+", Add)`. The operators are "+", "-", "*",
+/// "/", "**", "neg" (unary minus), "<", ">", "<=" and ">=".
+///
+/// The operator calls `function` with the operands, and the result must be
+/// an expression. Each operator can be set once for each kind. A kind with
+/// nothing set for an operator does not support it.
 #[pyfunction]
 fn set_operator(
     py: Python<'_>,
@@ -926,16 +978,19 @@ fn set_operator(
     let Some(operator) = Operator::ALL.into_iter().find(|op| op.symbol() == symbol) else {
         return Err(PyValueError::new_err(format!("unknown operator {symbol:?}")));
     };
-    let function = match function.cast_exact::<Expr>() {
-        Ok(expr) if expr.get().kind.signature.is_some() => expr.clone().unbind(),
-        _ => {
-            return Err(PyTypeError::new_err(format!(
-                "set_operator expects an expression of a function kind, got {}",
-                describe(function)
-            )));
-        }
-    };
-    kind.operators[operator as usize].set(py, function).map_err(|_| {
+    if function.cast_exact::<Expr>().is_ok_and(|expr| expr.get().kind.signature.is_none()) {
+        return Err(PyTypeError::new_err(format!(
+            "set_operator expects an expression of a function kind, got {}",
+            describe(function)
+        )));
+    }
+    if !function.is_callable() {
+        return Err(PyTypeError::new_err(format!(
+            "set_operator expects a callable, got {}",
+            describe(function)
+        )));
+    }
+    kind.operators[operator as usize].set(py, function.clone().unbind()).map_err(|_| {
         PyValueError::new_err(format!(
             "the {symbol} operator is already set for {}",
             kind.name
