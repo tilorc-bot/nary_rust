@@ -34,9 +34,9 @@ def test_subtraction_division_and_negation_are_built_from_add_mul_and_pow():
     assert (x - y).kind is (x / y).kind is (-x).kind is nr.NumberKind
 
 
-def test_negative_one_is_a_constant():
-    assert repr(nr.NegativeOne) == "-1" and nr.NegativeOne.args == ()
-    assert nr.NegativeOne.head.name == "-1" and nr.NegativeOne.kind is nr.NumberKind
+def test_negative_one_is_a_literal():
+    assert nr.NegativeOne == nr.NumberKind(-1) and nr.NegativeOne.is_literal
+    assert repr(nr.NegativeOne) == "-1" and nr.NegativeOne.kind is nr.NumberKind
 
 
 def test_a_kind_without_minus_or_divide_does_not_support_them():

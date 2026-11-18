@@ -166,6 +166,6 @@ def test_only_a_kind_is_accepted_where_a_kind_is_expected():
 
 
 def test_an_argument_must_be_an_expression():
-    for value, text in ((1, "int: 1"), ("x", "str: 'x'"), (NumberKind, "Kind: NumberKind"), (None, "NoneType: None")):
+    for value, text in ((1.5, "float: 1.5"), ("x", "str: 'x'"), (NumberKind, "Kind: NumberKind"), (None, "NoneType: None")):
         with pytest.raises(TypeError, match=f"^sin expects NumberKind, got {text}$"):
             nr.sin(value)

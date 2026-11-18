@@ -15,7 +15,7 @@ TupleKind = declare_kind_family("TupleKind")              # one or more paramete
 MatrixKind = declare_kind_family("MatrixKind", params=1)  # exactly one parameter
 
 Pair = TupleKind(NumberKind, BoolKind)
-Piece = declare_function("Piece", NumberKind, BoolKind, returns=Pair, names=("value", "condition"))
+Piece = declare_function("Piece", NumberKind, BoolKind, returns=Pair, names=("expr", "condition"))
 
 x, y = NumberKind("x"), NumberKind("y")
 
@@ -106,7 +106,7 @@ def test_an_instantiated_kind_in_signatures():
     p = Piece(x, x < y)
     assert p.kind is Pair
     assert repr(p) == "Piece(x, Lt(x, y))"
-    assert (p.value, p.condition) == (x, x < y)
+    assert (p.expr, p.condition) == (x, x < y)
     Matrix = MatrixKind(NumberKind)
     MatAdd = declare_function("MatAdd", rest=Matrix, returns=Matrix)
     Trace = declare_function("Trace", Matrix, returns=NumberKind)
@@ -128,7 +128,7 @@ def test_a_function_shows_what_was_declared():
     assert MatAdd.kind.rest is Matrix and MatAdd.kind.output is Matrix
     assert MatAdd.names == ()
     assert Piece.kind.inputs == (NumberKind, BoolKind) and Piece.kind.rest is None
-    assert Piece.kind.output is Pair and Piece.names == ("value", "condition")
+    assert Piece.kind.output is Pair and Piece.names == ("expr", "condition")
     assert nr.Add.kind.inputs == () and nr.Add.kind.rest is NumberKind
     with pytest.raises(AttributeError):
         Piece.names = ()

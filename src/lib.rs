@@ -1,11 +1,11 @@
 //! Typed, inert expression trees for Python, written in Rust.
 //!
 //! `Expr` is the only class of expression, and every expression is one of
-//! three forms: a symbol, a declared function, or an application of a head
-//! expression to arguments. Each expression has a kind. A kind is an object
-//! declared from Python with `declare_kind(name)`, or made by instantiating
-//! a kind family declared with `declare_kind_family(name)`:
-//! `TupleKind(NumberKind, BoolKind)`.
+//! four forms: a symbol, a literal (a Python value held as it is), a declared
+//! function, or an application of a head expression to arguments. Each
+//! expression has a kind. A kind is an object declared from Python with
+//! `declare_kind(name, literals=...)`, or made by instantiating a kind family
+//! declared with `declare_kind_family(name)`: `TupleKind(NumberKind, BoolKind)`.
 //!
 //! The one kind defined here is the function kind,
 //! `FunctionKind(inputs, output, rest=None)`, because application is checked
@@ -18,7 +18,9 @@
 //! No other kind and no particular function is defined in this file. The
 //! kinds (NumberKind, BoolKind), the functions (Add, Mul, Eq and the rest)
 //! and Lambda are declared in Python, in the package `nary`, and each kind is
-//! told what an operator builds with `set_operator`.
+//! told what an operator builds with `set_operator`. Which Python values a
+//! kind accepts as literals is also declared in Python; this file knows no
+//! particular type of value.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -28,7 +30,7 @@ use pyo3::exceptions::{PyAttributeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::pyclass::CompareOp;
 use pyo3::sync::{MutexExt, PyOnceLock};
-use pyo3::types::{PyString, PyTuple};
+use pyo3::types::{PyString, PyTuple, PyType};
 
 /// What is known about a kind.
 ///
@@ -56,6 +58,10 @@ struct KindData {
     /// For a function kind, what it accepts and returns. None for any
     /// other kind.
     signature: Option<Signature>,
+    /// The Python types whose values are literals of this kind, matched by
+    /// exact type. Declared with `declare_kind(name, literals=...)`; empty
+    /// for any other kind.
+    literals: Box<[Py<PyType>]>,
 }
 
 /// The inputs, further arguments and output of a function kind.
@@ -80,6 +86,7 @@ fn new_kind_data(
     family: Option<Py<KindFamily>>,
     params: Box<[KindRef]>,
     signature: Option<Signature>,
+    literals: Box<[Py<PyType>]>,
 ) -> KindRef {
     Box::leak(Box::new(KindData {
         id: KIND_COUNT.fetch_add(1, Ordering::Relaxed),
@@ -89,7 +96,23 @@ fn new_kind_data(
         family,
         params,
         signature,
+        literals,
     }))
+}
+
+impl KindData {
+    /// Whether `value` is a literal of this kind: its exact type is one of
+    /// the kind's literal types. A subclass does not count, so a `bool` is
+    /// not accepted where `int` is.
+    fn accepts(&self, value: &Bound<'_, PyAny>) -> bool {
+        let value_type = value.get_type();
+        self.literals.iter().any(|t| value_type.is(t.bind(value.py())))
+    }
+}
+
+/// A literal of `kind` holding `value`, which the kind accepts.
+fn literal<'py>(kind: KindRef, value: &Bound<'py, PyAny>) -> PyResult<Bound<'py, Expr>> {
+    Bound::new(value.py(), Expr { kind, form: Form::Literal { value: value.clone().unbind() } })
 }
 
 /// The Python object of a kind, made the first time it is asked for.
@@ -112,6 +135,8 @@ fn kind_tuple<'py>(py: Python<'py>, kinds: &[KindRef]) -> PyResult<Bound<'py, Py
 /// `FunctionKind((NumberKind,), NumberKind)`.
 ///
 /// Calling a kind with a name makes a symbol of that kind: `NumberKind("x")`.
+/// Calling it with a value of one of its literal types makes a literal:
+/// `NumberKind(3)`.
 #[pyclass(frozen, module = "nary")]
 struct Kind {
     data: KindRef,
@@ -119,17 +144,18 @@ struct Kind {
 
 #[pymethods]
 impl Kind {
-    /// `NumberKind("x")` is a symbol named x of this kind. The name is the
-    /// only argument accepted: any other is a TypeError. A node with
-    /// arguments is built only by calling an expression of a function kind,
-    /// so every argument of every node has passed a kind check.
+    /// `NumberKind("x")` is a symbol named x of this kind, and `NumberKind(3)`
+    /// a literal holding 3 if the kind accepts an `int`. Any other argument
+    /// is a TypeError. A node with arguments is built only by calling an
+    /// expression of a function kind, so every argument of every node has
+    /// passed a kind check.
     #[pyo3(signature = (head, *extra))]
-    fn __call__(
+    fn __call__<'py>(
         &self,
-        py: Python<'_>,
-        head: Py<PyString>,
-        extra: &Bound<'_, PyTuple>,
-    ) -> PyResult<Py<Expr>> {
+        head: &Bound<'py, PyAny>,
+        extra: &Bound<'py, PyTuple>,
+    ) -> PyResult<Bound<'py, Expr>> {
+        let py = head.py();
         if !extra.is_empty() {
             return Err(PyTypeError::new_err(format!(
                 "{} takes 1 argument, the name of a leaf, got {}; \
@@ -138,7 +164,29 @@ impl Kind {
                 extra.len() + 1
             )));
         }
-        Py::new(py, Expr { kind: self.data, form: Form::Symbol { name: head } })
+        if let Ok(name) = head.cast::<PyString>() {
+            return Bound::new(
+                py,
+                Expr { kind: self.data, form: Form::Symbol { name: name.clone().unbind() } },
+            );
+        }
+        if self.data.accepts(head) {
+            return literal(self.data, head);
+        }
+        let types = literal_type_names(py, &self.data.literals)?;
+        let (expected, note) = if types.is_empty() {
+            ("a name (a str)".to_string(), "; it accepts no literals")
+        } else {
+            (format!("a name (a str) or a literal of type {}", types.join(" or ")), "")
+        };
+        Err(PyTypeError::new_err(format!(
+            "{} takes {}, got {}: {}{}",
+            self.data.name,
+            expected,
+            head.get_type().name()?,
+            describe(head),
+            note
+        )))
     }
 
     #[getter]
@@ -186,16 +234,67 @@ impl Kind {
     fn output(&self, py: Python<'_>) -> PyResult<Option<Py<Kind>>> {
         self.data.signature.as_ref().map(|sig| kind_object(py, sig.output)).transpose()
     }
+
+    /// The Python types whose values are literals of this kind, as a tuple:
+    /// `NumberKind.literals` is `(int,)`. Empty if it accepts none.
+    #[getter]
+    fn literals<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
+        PyTuple::new(py, self.data.literals.iter().map(|t| t.clone_ref(py)))
+    }
 }
 
-/// Declare a kind: `NumberKind = declare_kind("NumberKind")`.
+fn literal_type_names(py: Python<'_>, types: &[Py<PyType>]) -> PyResult<Vec<String>> {
+    types.iter().map(|t| Ok(t.bind(py).name()?.to_string())).collect()
+}
+
+/// The literal types given to `declare_kind`: None, a type, or a tuple of
+/// types. A str cannot be one, since calling a kind with a str makes a
+/// symbol.
+fn literal_types(name: &str, literals: Option<&Bound<'_, PyAny>>) -> PyResult<Box<[Py<PyType>]>> {
+    let Some(literals) = literals.filter(|literals| !literals.is_none()) else {
+        return Ok(Box::new([]));
+    };
+    let items: Vec<Bound<'_, PyAny>> = match literals.cast::<PyTuple>() {
+        Ok(tuple) => tuple.iter().collect(),
+        Err(_) => vec![literals.clone()],
+    };
+    let mut types = Vec::with_capacity(items.len());
+    for item in items {
+        let Ok(t) = item.cast::<PyType>() else {
+            return Err(PyTypeError::new_err(format!(
+                "{name}: literals must be a type or a tuple of types, got {}",
+                describe(literals)
+            )));
+        };
+        if t.is_subclass_of::<PyString>()? {
+            return Err(PyValueError::new_err(format!(
+                "{name}: str cannot be a literal type, since a str names a symbol"
+            )));
+        }
+        types.push(t.clone().unbind());
+    }
+    Ok(types.into_boxed_slice())
+}
+
+/// Declare a kind: `NumberKind = declare_kind("NumberKind", literals=int)`.
+///
+/// `literals` is a type or a tuple of types, by default none: a value whose
+/// exact type is one of them is a literal of the kind. It is made by calling
+/// the kind, `NumberKind(3)`, or by passing the value where the kind is
+/// expected, `sin(3)`.
 ///
 /// Every call makes a new kind, different from every other, and a kind
 /// lasts for the life of the process. Declare each kind once, when a module
 /// is imported.
 #[pyfunction]
-fn declare_kind(py: Python<'_>, name: String) -> PyResult<Py<Kind>> {
-    kind_object(py, new_kind_data(name, None, Box::new([]), None))
+#[pyo3(signature = (name, literals=None))]
+fn declare_kind(
+    py: Python<'_>,
+    name: String,
+    literals: Option<&Bound<'_, PyAny>>,
+) -> PyResult<Py<Kind>> {
+    let literals = literal_types(&name, literals)?;
+    kind_object(py, new_kind_data(name, None, Box::new([]), None, literals))
 }
 
 /// The function kinds made so far. The key is the id of the output, the id
@@ -241,6 +340,7 @@ fn function_kind(
                     None,
                     Box::new([]),
                     Some(Signature { inputs: inputs.into(), rest, output }),
+                    Box::new([]),
                 );
                 table.insert(key.into_boxed_slice(), data);
                 data
@@ -345,6 +445,7 @@ impl KindFamily {
                     Some(slf.clone().unbind()),
                     kinds.into_boxed_slice(),
                     None,
+                    Box::new([]),
                 )
             })
         };
@@ -435,10 +536,11 @@ impl SymbolMarker {
 
 /// An expression, of some kind.
 ///
-/// A symbol is made by calling a kind and a declared function by
-/// `declare_function`. An application is made only by `apply`, which checks
-/// that each argument is an `Expr` of the kind the head's function kind
-/// expects.
+/// A symbol or a literal is made by calling a kind (a literal also by
+/// `apply`, from a value passed where its kind is expected), and a declared
+/// function by `declare_function`. An application is made only by `apply`,
+/// which checks that each argument is an `Expr` of the kind the head's
+/// function kind expects.
 /// Nothing else makes an `Expr`.
 #[pyclass(frozen, module = "nary")]
 struct Expr {
@@ -449,6 +551,9 @@ struct Expr {
 enum Form {
     /// `NumberKind("x")`.
     Symbol { name: Py<PyString> },
+    /// `NumberKind(3)`: a Python value, held as it is, of a type the kind
+    /// accepts. Nothing is computed with it.
+    Literal { value: Py<PyAny> },
     /// An opaque named constant of a function kind, made by
     /// `declare_function`. Equal only to itself.
     Declared {
@@ -493,6 +598,12 @@ fn structural_eq(py: Python<'_>, a: &Expr, b: &Expr) -> PyResult<bool> {
         (Form::Symbol { name: x }, Form::Symbol { name: y }) => {
             x.bind(py).as_any().eq(y.bind(py))?
         }
+        // Equal values of different types, such as 1 and 1.0, are different
+        // literals.
+        (Form::Literal { value: x }, Form::Literal { value: y }) => {
+            let (x, y) = (x.bind(py), y.bind(py));
+            x.get_type().is(&y.get_type()) && x.eq(y)?
+        }
         (Form::Apply { head: h1, args: a1 }, Form::Apply { head: h2, args: a2 }) => {
             structural_eq(py, h1.get(), h2.get())? && a1.bind(py).as_any().eq(a2.bind(py))?
         }
@@ -536,6 +647,7 @@ fn expr_hash(py: Python<'_>, e: &Expr) -> PyResult<isize> {
         Form::Apply { head, args } => {
             [2, expr_hash(py, head.get())? as usize, args.bind(py).hash()? as usize]
         }
+        Form::Literal { value } => [3, e.kind.id, value.bind(py).hash()? as usize],
     };
     Ok(combine_hashes(parts))
 }
@@ -618,26 +730,43 @@ fn apply<'py>(head: &Bound<'py, Expr>, args: &Bound<'py, PyTuple>) -> PyResult<B
             given
         )));
     }
+    // The arguments with each Python value converted to a literal. Made only
+    // when there is a value to convert.
+    let mut converted: Option<Vec<Bound<'py, PyAny>>> = None;
     for (position, arg) in args.iter_borrowed().enumerate() {
         let expected = match sig.inputs.get(position) {
             Some(&kind) => kind,
             None => sig.rest.unwrap(),
         };
-        let matches = arg
-            .cast_exact::<Expr>()
-            .is_ok_and(|arg| same_kind(arg.get().kind, expected));
-        if !matches {
-            return Err(wrong_kind(py, expr, expected, &arg));
+        match arg.cast_exact::<Expr>() {
+            Ok(expr_arg) if same_kind(expr_arg.get().kind, expected) => {
+                if let Some(converted) = converted.as_mut() {
+                    converted.push(arg.to_owned());
+                }
+            }
+            // A value that is not an expression takes the kind of its
+            // position, if that kind accepts its type.
+            Err(_) if expected.accepts(&arg) => {
+                let node = literal(expected, &arg)?.into_any();
+                converted
+                    .get_or_insert_with(|| args.iter().take(position).collect())
+                    .push(node);
+            }
+            _ => return Err(wrong_kind(py, expr, expected, &arg)),
         }
     }
+    let args = match converted {
+        Some(converted) => PyTuple::new(py, converted)?,
+        None => args.clone(),
+    };
     if let Form::Declared { symbols: Some(symbols), .. } = &expr.form {
-        check_symbols(py, expr, &sig.inputs, symbols, args)?;
+        check_symbols(py, expr, &sig.inputs, symbols, &args)?;
     }
     Bound::new(
         py,
         Expr {
             kind: sig.output,
-            form: Form::Apply { head: head.clone().unbind(), args: args.clone().unbind() },
+            form: Form::Apply { head: head.clone().unbind(), args: args.unbind() },
         },
     )
 }
@@ -727,6 +856,33 @@ fn binary<'py>(
     }
 }
 
+/// A reflected operator, for `1 + x`: Python calls it on `x` because `left`
+/// does not support the operator with `x`. If the kind of `x` accepts the
+/// type of `left`, `left` becomes a literal of that kind and the operator
+/// proceeds as if that literal had been on the left. Otherwise the result
+/// is NotImplemented.
+fn reflected<'py>(
+    right: &Bound<'py, Expr>,
+    left: &Bound<'py, PyAny>,
+    operator: Operator,
+) -> PyResult<Bound<'py, PyAny>> {
+    let kind = right.get().kind;
+    if left.cast_exact::<Expr>().is_err() && kind.accepts(left) {
+        binary(&literal(kind, left)?, right.as_any(), operator)
+    } else {
+        Ok(right.py().NotImplemented().into_bound(right.py()))
+    }
+}
+
+/// `pow(a, b, m)` with a modulus is not supported.
+fn check_no_modulus(modulo: &Bound<'_, PyAny>) -> PyResult<()> {
+    if modulo.is_none() {
+        Ok(())
+    } else {
+        Err(PyTypeError::new_err("pow() with a modulus is not supported"))
+    }
+}
+
 #[pymethods]
 impl Expr {
     /// Apply this expression, which must be of a function kind, to
@@ -800,9 +956,24 @@ impl Expr {
         matches!(self.form, Form::Symbol { .. })
     }
 
+    #[getter]
+    fn is_literal(&self) -> bool {
+        matches!(self.form, Form::Literal { .. })
+    }
+
+    /// The Python value held by a literal, or None.
+    #[getter]
+    fn value(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        match &self.form {
+            Form::Literal { value } => Some(value.clone_ref(py)),
+            _ => None,
+        }
+    }
+
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
         match &self.form {
             Form::Symbol { name } | Form::Declared { name, .. } => Ok(name.bind(py).to_string()),
+            Form::Literal { value } => Ok(value.bind(py).repr()?.to_string()),
             Form::Apply { head, args } => {
                 let head = head.get();
                 let args = args.bind(py);
@@ -825,16 +996,32 @@ impl Expr {
         binary(slf, other, Operator::Add)
     }
 
+    fn __radd__<'py>(slf: &Bound<'py, Self>, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+        reflected(slf, other, Operator::Add)
+    }
+
     fn __sub__<'py>(slf: &Bound<'py, Self>, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
         binary(slf, other, Operator::Sub)
+    }
+
+    fn __rsub__<'py>(slf: &Bound<'py, Self>, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+        reflected(slf, other, Operator::Sub)
     }
 
     fn __mul__<'py>(slf: &Bound<'py, Self>, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
         binary(slf, other, Operator::Mul)
     }
 
+    fn __rmul__<'py>(slf: &Bound<'py, Self>, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+        reflected(slf, other, Operator::Mul)
+    }
+
     fn __truediv__<'py>(slf: &Bound<'py, Self>, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
         binary(slf, other, Operator::Div)
+    }
+
+    fn __rtruediv__<'py>(slf: &Bound<'py, Self>, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+        reflected(slf, other, Operator::Div)
     }
 
     fn __pow__<'py>(
@@ -842,10 +1029,17 @@ impl Expr {
         other: &Bound<'py, PyAny>,
         modulo: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        if !modulo.is_none() {
-            return Err(PyTypeError::new_err("pow() with a modulus is not supported"));
-        }
+        check_no_modulus(modulo)?;
         binary(slf, other, Operator::Pow)
+    }
+
+    fn __rpow__<'py>(
+        slf: &Bound<'py, Self>,
+        other: &Bound<'py, PyAny>,
+        modulo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        check_no_modulus(modulo)?;
+        reflected(slf, other, Operator::Pow)
     }
 
     /// Unary minus, `-x`: what the "neg" operator builds for the kind.
@@ -873,6 +1067,8 @@ impl Expr {
             CompareOp::Ge => Operator::Ge,
             CompareOp::Eq | CompareOp::Ne => return compare(slf.get(), other, op),
         };
+        // `1 < x` reaches here as `x > 1`: Python swaps the operands of a
+        // comparison itself, so there is no reflected comparison.
         Ok(binary(slf, other, operator)?.unbind())
     }
 
