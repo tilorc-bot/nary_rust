@@ -34,6 +34,9 @@ jobs:
           lake-package-directory: lean
           auto-config: false
           build: true
+          # --wfail turns warnings into errors, so a proof left as `sorry`
+          # (which Lean only warns about) fails the build.
+          build-args: "--wfail"
           use-mathlib-cache: true
       # check_printer.py needs the nary package and the built Lean project.
       - uses: astral-sh/setup-uv@v10.3.3
