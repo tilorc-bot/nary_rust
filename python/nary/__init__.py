@@ -1,8 +1,8 @@
 """Typed, inert expression trees.
 
 The compiled module ``nary._core`` provides ``Expr``, ``declare_kind``,
-``declare_kind_family``, ``FunctionKind``, ``declare_function``, ``Symbol``
-and ``set_operator``, and knows nothing about any particular kind or function
+``declare_kind_family``, ``FunctionKind``, ``declare_function``, ``Symbol``,
+``set_operator``, ``Integer`` and ``set_integer_kind``, and knows nothing about any particular kind or function
 other than function kinds. The kinds are declared in ``nary.kinds``,
 and each function is declared in one of the other modules of this package
 with a ``declare_function(...)`` call, which makes an expression of a
@@ -20,12 +20,14 @@ from . import arithmetic, elementary, functions, kinds, relational
 from ._core import (
     Expr,
     FunctionKind,
+    Integer,
     Kind,
     KindFamily,
     Symbol,
     declare_function,
     declare_kind,
     declare_kind_family,
+    set_integer_kind,
     set_operator,
 )
 from .arithmetic import *  # noqa: F403
@@ -36,8 +38,9 @@ from .relational import *  # noqa: F403
 
 __all__ = [
     # the declaration machinery, from the compiled module
-    "Expr", "FunctionKind", "Kind", "KindFamily", "Symbol",
-    "declare_function", "declare_kind", "declare_kind_family", "set_operator",
+    "Expr", "FunctionKind", "Integer", "Kind", "KindFamily", "Symbol",
+    "declare_function", "declare_kind", "declare_kind_family",
+    "set_integer_kind", "set_operator",
     # the kinds and functions declared in the modules of this package
     *kinds.__all__,
     *arithmetic.__all__,

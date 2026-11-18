@@ -1,8 +1,8 @@
 //! Typed, inert expression trees for Python, written in Rust.
 //!
 //! `Expr` is the only class of expression, and every expression is one of
-//! three forms: a symbol, a declared function, or an application of a head
-//! expression to arguments. Each expression has a kind. A kind is an object
+//! four forms: a symbol, an integer, a declared function, or an application
+//! of a head expression to arguments. Each expression has a kind. A kind is an object
 //! declared from Python with `declare_kind(name)`, or made by instantiating
 //! a kind family declared with `declare_kind_family(name)`:
 //! `TupleKind(NumberKind, BoolKind)`.
@@ -17,18 +17,21 @@
 //!
 //! No other kind and no particular function is defined in this file. The
 //! kinds (NumberKind, BoolKind), the functions (Add, Mul, Eq and the rest)
-//! and Lambda are declared in Python, in the package `nary`, and each kind is
-//! told which function an operator builds with `set_operator`.
+//! and Lambda are declared in Python, in the package `nary`. Python says
+//! which kind integers are with `set_integer_kind`, and what each operator
+//! builds for a kind with `set_operator`: a function, or a Python function
+//! that builds the expression.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{LazyLock, Mutex, PoisonError};
 
 use pyo3::exceptions::{PyAttributeError, PyTypeError, PyValueError};
+use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::pyclass::CompareOp;
 use pyo3::sync::{MutexExt, PyOnceLock};
-use pyo3::types::{PyString, PyTuple};
+use pyo3::types::{PyInt, PyString, PyTuple};
 
 /// What is known about a kind.
 ///
@@ -44,9 +47,9 @@ struct KindData {
     name: String,
     /// The Python object for this kind. Set when the kind is made.
     object: PyOnceLock<Py<Kind>>,
-    /// The function each operator builds for this kind, indexed by
-    /// `Operator`. Filled in from Python with `set_operator`.
-    operators: [PyOnceLock<Py<Expr>>; Operator::COUNT],
+    /// What each operator builds for this kind, indexed by `Operator`.
+    /// Filled in from Python with `set_operator`.
+    operators: [PyOnceLock<Operation>; Operator::COUNT],
     /// The family this kind is an instance of, or None for a kind declared
     /// with `declare_kind(name)` and for a function kind.
     family: Option<Py<KindFamily>>,
@@ -407,6 +410,56 @@ fn expect_kind(obj: &Bound<'_, PyAny>) -> PyResult<KindRef> {
     }
 }
 
+/// The kind of integers, declared once from Python with `set_integer_kind`.
+static INTEGER_KIND: PyOnceLock<KindRef> = PyOnceLock::new();
+
+const NO_INTEGER_KIND: &str =
+    "no kind has been declared for integers: call set_integer_kind(kind) first";
+
+/// An integer node holding `value`, of the kind declared for integers.
+fn integer_node<'py>(value: &Bound<'py, PyInt>) -> PyResult<Bound<'py, Expr>> {
+    let py = value.py();
+    let Some(&kind) = INTEGER_KIND.get(py) else {
+        return Err(PyTypeError::new_err(format!(
+            "cannot make the integer {value}: {NO_INTEGER_KIND}"
+        )));
+    };
+    Bound::new(py, Expr { kind, form: Form::Integer { value: value.clone().unbind() } })
+}
+
+/// `Integer(3)`: an integer of any size, of the kind declared with
+/// `set_integer_kind`. Only an exact `int` is accepted, not a `bool` or a
+/// `float`.
+#[pyfunction(name = "Integer")]
+fn integer<'py>(value: &Bound<'py, PyAny>) -> PyResult<Bound<'py, Expr>> {
+    match value.cast_exact::<PyInt>() {
+        Ok(value) => integer_node(value),
+        Err(_) => Err(PyTypeError::new_err(format!(
+            "Integer expects an int, got {}: {}",
+            value.get_type().name()?,
+            describe(value)
+        ))),
+    }
+}
+
+/// Say which kind integers are: `set_integer_kind(NumberKind)`. It can be
+/// said once. After it, `Integer(n)` makes an integer of that kind, and a
+/// Python `int` given where that kind is expected is converted to one.
+#[pyfunction]
+fn set_integer_kind(py: Python<'_>, kind: &Bound<'_, PyAny>) -> PyResult<()> {
+    let kind = expect_kind(kind)?;
+    if kind.signature.is_some() {
+        return Err(PyValueError::new_err(format!(
+            "integers cannot be of the function kind {}",
+            kind.name
+        )));
+    }
+    INTEGER_KIND.set(py, kind).map_err(|_| {
+        let current = INTEGER_KIND.get(py).map_or("a kind", |kind| kind.name.as_str());
+        PyValueError::new_err(format!("integers are already declared to be {current}"))
+    })
+}
+
 /// In a declaration, `Symbol(NumberKind)` is a leading position of kind
 /// NumberKind that accepts only a symbol, not any expression of that kind.
 /// It is a marker, not a kind: the function kind is built from the plain
@@ -435,10 +488,10 @@ impl SymbolMarker {
 
 /// An expression, of some kind.
 ///
-/// A symbol is made by calling a kind and a declared function by
-/// `declare_function`. An application is made only by `apply`, which checks
-/// that each argument is an `Expr` of the kind the head's function kind
-/// expects.
+/// A symbol is made by calling a kind, an integer by `Integer(n)` or by
+/// converting a Python `int`, and a declared function by `declare_function`.
+/// An application is made only by `apply`, which checks that each argument
+/// is an `Expr` of the kind the head's function kind expects.
 /// Nothing else makes an `Expr`.
 #[pyclass(frozen, module = "nary")]
 struct Expr {
@@ -449,6 +502,9 @@ struct Expr {
 enum Form {
     /// `NumberKind("x")`.
     Symbol { name: Py<PyString> },
+    /// `Integer(3)`: an integer of any size, of the kind declared with
+    /// `set_integer_kind`.
+    Integer { value: Py<PyInt> },
     /// An opaque named constant of a function kind, made by
     /// `declare_function`. Equal only to itself.
     Declared {
@@ -473,6 +529,20 @@ impl Expr {
         }
     }
 
+    /// The argument of an application that its head names `name`, if any.
+    fn named_argument(&self, py: Python<'_>, name: &Bound<'_, PyString>) -> PyResult<Option<Py<PyAny>>> {
+        if let Form::Apply { head, args } = &self.form {
+            if let Form::Declared { names: Some(names), .. } = &head.get().form {
+                for (index, declared) in names.bind(py).iter().enumerate() {
+                    if declared.eq(name)? {
+                        return Ok(Some(args.bind(py).get_item(index)?.unbind()));
+                    }
+                }
+            }
+        }
+        Ok(None)
+    }
+
     /// How a head is named in an error: its name, or else its repr.
     fn label(&self, py: Python<'_>) -> PyResult<String> {
         match self.plain_name() {
@@ -491,6 +561,9 @@ fn structural_eq(py: Python<'_>, a: &Expr, b: &Expr) -> PyResult<bool> {
     }
     Ok(match (&a.form, &b.form) {
         (Form::Symbol { name: x }, Form::Symbol { name: y }) => {
+            x.bind(py).as_any().eq(y.bind(py))?
+        }
+        (Form::Integer { value: x }, Form::Integer { value: y }) => {
             x.bind(py).as_any().eq(y.bind(py))?
         }
         (Form::Apply { head: h1, args: a1 }, Form::Apply { head: h2, args: a2 }) => {
@@ -536,6 +609,7 @@ fn expr_hash(py: Python<'_>, e: &Expr) -> PyResult<isize> {
         Form::Apply { head, args } => {
             [2, expr_hash(py, head.get())? as usize, args.bind(py).hash()? as usize]
         }
+        Form::Integer { value } => [3, e.kind.id, value.bind(py).hash()? as usize],
     };
     Ok(combine_hashes(parts))
 }
@@ -618,6 +692,9 @@ fn apply<'py>(head: &Bound<'py, Expr>, args: &Bound<'py, PyTuple>) -> PyResult<B
             given
         )));
     }
+    // The arguments with each Python int converted to an integer node. Made
+    // only when there is an int to convert.
+    let mut converted: Option<Vec<Bound<'py, PyAny>>> = None;
     for (position, arg) in args.iter_borrowed().enumerate() {
         let expected = match sig.inputs.get(position) {
             Some(&kind) => kind,
@@ -626,29 +703,59 @@ fn apply<'py>(head: &Bound<'py, Expr>, args: &Bound<'py, PyTuple>) -> PyResult<B
         let matches = arg
             .cast_exact::<Expr>()
             .is_ok_and(|arg| same_kind(arg.get().kind, expected));
-        if !matches {
-            return Err(wrong_kind(py, expr, expected, &arg));
+        if matches {
+            if let Some(converted) = converted.as_mut() {
+                converted.push(arg.to_owned());
+            }
+            continue;
         }
+        // Not an expression of the expected kind. An exact Python int is
+        // converted where the kind of integers is expected.
+        let Ok(value) = arg.cast_exact::<PyInt>().map(|value| value.to_owned()) else {
+            return Err(wrong_kind(py, expr, expected, &arg));
+        };
+        match INTEGER_KIND.get(py) {
+            Some(&kind) if same_kind(kind, expected) => {}
+            Some(_) => return Err(wrong_kind(py, expr, expected, &arg)),
+            None => {
+                return Err(PyTypeError::new_err(format!(
+                    "{} was given the int {}, but {NO_INTEGER_KIND}",
+                    expr.label(py)?,
+                    value
+                )));
+            }
+        }
+        let node = integer_node(&value)?.into_any();
+        converted
+            .get_or_insert_with(|| args.iter().take(position).collect())
+            .push(node);
     }
+    let args = match converted {
+        Some(converted) => PyTuple::new(py, converted)?,
+        None => args.clone(),
+    };
     if let Form::Declared { symbols: Some(symbols), .. } = &expr.form {
-        check_symbols(py, expr, &sig.inputs, symbols, args)?;
+        check_symbols(py, expr, &sig.inputs, symbols, &args)?;
     }
     Bound::new(
         py,
         Expr {
             kind: sig.output,
-            form: Form::Apply { head: head.clone().unbind(), args: args.clone().unbind() },
+            form: Form::Apply { head: head.clone().unbind(), args: args.unbind() },
         },
     )
 }
 
-/// The operators. For each kind, each builds whichever function was
-/// registered for it with `set_operator`.
+/// The operators. For each kind, each builds whatever was registered for it
+/// with `set_operator`. `Neg` is unary minus, spelled "neg".
 #[derive(Clone, Copy)]
 enum Operator {
     Add,
+    Sub,
     Mul,
+    Div,
     Pow,
+    Neg,
     Lt,
     Gt,
     Le,
@@ -656,11 +763,14 @@ enum Operator {
 }
 
 impl Operator {
-    const COUNT: usize = 7;
+    const COUNT: usize = 10;
     const ALL: [Operator; Operator::COUNT] = [
         Operator::Add,
+        Operator::Sub,
         Operator::Mul,
+        Operator::Div,
         Operator::Pow,
+        Operator::Neg,
         Operator::Lt,
         Operator::Gt,
         Operator::Le,
@@ -670,8 +780,11 @@ impl Operator {
     fn symbol(self) -> &'static str {
         match self {
             Operator::Add => "+",
+            Operator::Sub => "-",
             Operator::Mul => "*",
+            Operator::Div => "/",
             Operator::Pow => "**",
+            Operator::Neg => "neg",
             Operator::Lt => "<",
             Operator::Gt => ">",
             Operator::Le => "<=",
@@ -680,21 +793,92 @@ impl Operator {
     }
 }
 
-/// The function registered for `operator` on the kind of `slf`, applied to
-/// `slf` and `other`. If the kind has none, the result is NotImplemented, as
-/// for any Python object that does not support an operator.
-fn binary<'py>(
-    slf: &Bound<'py, Expr>,
-    other: &Bound<'py, PyAny>,
+/// What an operator builds for a kind, given to `set_operator`.
+enum Operation {
+    /// An expression of a function kind, applied to the operands.
+    Function(Py<Expr>),
+    /// A Python function, called with the operands, that returns an
+    /// expression.
+    Python(Py<PyAny>),
+}
+
+/// Build what `operation` builds from `operands`. A function is applied to
+/// them, so an int is converted by `apply` where it is expected. A Python
+/// function is called with each int already converted to an integer node,
+/// and must return an expression.
+fn operate<'py>(
+    py: Python<'py>,
+    operation: &Operation,
+    kind: KindRef,
     operator: Operator,
+    operands: &[&Bound<'py, PyAny>],
 ) -> PyResult<Bound<'py, PyAny>> {
-    let py = slf.py();
-    match slf.get().kind.operators[operator as usize].get(py) {
-        Some(function) => {
-            let args = PyTuple::new(py, [slf.as_any(), other])?;
+    match operation {
+        Operation::Function(function) => {
+            let args = PyTuple::new(py, operands)?;
             Ok(apply(function.bind(py), &args)?.into_any())
         }
+        Operation::Python(function) => {
+            let mut args = Vec::with_capacity(operands.len());
+            for &operand in operands {
+                args.push(match operand.cast_exact::<PyInt>() {
+                    Ok(value) => integer_node(value)?.into_any(),
+                    Err(_) => operand.clone(),
+                });
+            }
+            let result = function.bind(py).call1(PyTuple::new(py, args)?)?;
+            if result.cast_exact::<Expr>().is_err() {
+                return Err(PyTypeError::new_err(format!(
+                    "the {} operator for {} must build an expression, got {}: {}",
+                    operator.symbol(),
+                    kind.name,
+                    result.get_type().name()?,
+                    describe(&result)
+                )));
+            }
+            Ok(result)
+        }
+    }
+}
+
+/// What `operator` builds for the kind of `left`, from `left` and `right`.
+/// If the kind has nothing for the operator, the result is NotImplemented,
+/// as for any Python object that does not support an operator.
+fn binary<'py>(
+    left: &Bound<'py, Expr>,
+    right: &Bound<'py, PyAny>,
+    operator: Operator,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = left.py();
+    let kind = left.get().kind;
+    match kind.operators[operator as usize].get(py) {
+        Some(operation) => operate(py, operation, kind, operator, &[left.as_any(), right]),
         None => Ok(py.NotImplemented().into_bound(py)),
+    }
+}
+
+/// A reflected operator, for `1 + x`: Python calls it on `x` because the
+/// left operand, `left`, does not support the operator with `x`. An int on
+/// the left is converted to an integer node, and the operator then proceeds
+/// as if it had been written with that node on the left. Anything else is
+/// not supported.
+fn reflected<'py>(
+    right: &Bound<'py, Expr>,
+    left: &Bound<'py, PyAny>,
+    operator: Operator,
+) -> PyResult<Bound<'py, PyAny>> {
+    match left.cast_exact::<PyInt>() {
+        Ok(value) => binary(&integer_node(value)?, right.as_any(), operator),
+        Err(_) => Ok(right.py().NotImplemented().into_bound(right.py())),
+    }
+}
+
+/// `pow(a, b, m)` with a modulus is not supported.
+fn check_no_modulus(modulo: &Bound<'_, PyAny>) -> PyResult<()> {
+    if modulo.is_none() {
+        Ok(())
+    } else {
+        Err(PyTypeError::new_err("pow() with a modulus is not supported"))
     }
 }
 
@@ -771,9 +955,26 @@ impl Expr {
         matches!(self.form, Form::Symbol { .. })
     }
 
+    #[getter]
+    fn is_integer(&self) -> bool {
+        matches!(self.form, Form::Integer { .. })
+    }
+
+    /// The Python int held by an integer. For any other expression, the
+    /// argument named `value` if its head declares one, so that name stays
+    /// usable in `names=(...)`, and otherwise None.
+    #[getter]
+    fn value(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
+        match &self.form {
+            Form::Integer { value } => Ok(Some(value.clone_ref(py).into_any())),
+            _ => self.named_argument(py, intern!(py, "value")),
+        }
+    }
+
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
         match &self.form {
             Form::Symbol { name } | Form::Declared { name, .. } => Ok(name.bind(py).to_string()),
+            Form::Integer { value } => Ok(value.bind(py).to_string()),
             Form::Apply { head, args } => {
                 let head = head.get();
                 let args = args.bind(py);
@@ -796,8 +997,32 @@ impl Expr {
         binary(slf, other, Operator::Add)
     }
 
+    fn __radd__<'py>(slf: &Bound<'py, Self>, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+        reflected(slf, other, Operator::Add)
+    }
+
+    fn __sub__<'py>(slf: &Bound<'py, Self>, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+        binary(slf, other, Operator::Sub)
+    }
+
+    fn __rsub__<'py>(slf: &Bound<'py, Self>, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+        reflected(slf, other, Operator::Sub)
+    }
+
     fn __mul__<'py>(slf: &Bound<'py, Self>, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
         binary(slf, other, Operator::Mul)
+    }
+
+    fn __rmul__<'py>(slf: &Bound<'py, Self>, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+        reflected(slf, other, Operator::Mul)
+    }
+
+    fn __truediv__<'py>(slf: &Bound<'py, Self>, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+        binary(slf, other, Operator::Div)
+    }
+
+    fn __rtruediv__<'py>(slf: &Bound<'py, Self>, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+        reflected(slf, other, Operator::Div)
     }
 
     fn __pow__<'py>(
@@ -805,10 +1030,30 @@ impl Expr {
         other: &Bound<'py, PyAny>,
         modulo: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        if !modulo.is_none() {
-            return Err(PyTypeError::new_err("pow() with a modulus is not supported"));
-        }
+        check_no_modulus(modulo)?;
         binary(slf, other, Operator::Pow)
+    }
+
+    fn __rpow__<'py>(
+        slf: &Bound<'py, Self>,
+        other: &Bound<'py, PyAny>,
+        modulo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        check_no_modulus(modulo)?;
+        reflected(slf, other, Operator::Pow)
+    }
+
+    /// Unary minus, `-x`: what the "neg" operator builds for the kind.
+    fn __neg__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let kind = slf.get().kind;
+        match kind.operators[Operator::Neg as usize].get(py) {
+            Some(operation) => operate(py, operation, kind, Operator::Neg, &[slf.as_any()]),
+            None => Err(PyTypeError::new_err(format!(
+                "bad operand type for unary -: an expression of kind {}",
+                kind.name
+            ))),
+        }
     }
 
     fn __richcmp__<'py>(
@@ -823,6 +1068,8 @@ impl Expr {
             CompareOp::Ge => Operator::Ge,
             CompareOp::Eq | CompareOp::Ne => return compare(slf.get(), other, op),
         };
+        // `1 < x` reaches here as `x > 1`: Python swaps the operands of a
+        // comparison itself, so there is no reflected comparison.
         Ok(binary(slf, other, operator)?.unbind())
     }
 
@@ -833,18 +1080,12 @@ impl Expr {
     /// Named arguments such as `eq.lhs`, declared with `names=(...)` on the
     /// head of an application.
     fn __getattr__(&self, py: Python<'_>, name: &Bound<'_, PyString>) -> PyResult<Py<PyAny>> {
-        if let Form::Apply { head, args } = &self.form {
-            if let Form::Declared { names: Some(names), .. } = &head.get().form {
-                for (index, declared) in names.bind(py).iter().enumerate() {
-                    if declared.eq(name)? {
-                        return Ok(args.bind(py).get_item(index)?.unbind());
-                    }
-                }
-            }
+        match self.named_argument(py, name)? {
+            Some(arg) => Ok(arg),
+            None => Err(PyAttributeError::new_err(format!(
+                "'Expr' object has no attribute '{name}'"
+            ))),
         }
-        Err(PyAttributeError::new_err(format!(
-            "'Expr' object has no attribute '{name}'"
-        )))
     }
 }
 
@@ -910,11 +1151,15 @@ fn declare_function<'py>(
     Bound::new(py, Expr { kind, form: Form::Declared { name, names, symbols } })
 }
 
-/// Say which function an operator builds for a kind:
-/// `set_operator(NumberKind, "+", Add)`. The operators are "+", "*", "**",
-/// "<", ">", "<=" and ">=". The function is any expression of a function
-/// kind. Each operator can be set once for each kind. A kind with no
-/// function for an operator does not support that operator.
+/// Say what an operator builds for a kind:
+/// `set_operator(NumberKind, "+", Add)`. The operators are "+", "-", "*",
+/// "/", "**", "neg" (unary minus), "<", ">", "<=" and ">=".
+///
+/// `function` is either an expression of a function kind, which is applied
+/// to the operands, or a Python function, which is called with the operands
+/// (each int converted to an integer node) and must return an expression.
+/// Each operator can be set once for each kind. A kind with nothing set for
+/// an operator does not support that operator.
 #[pyfunction]
 fn set_operator(
     py: Python<'_>,
@@ -926,16 +1171,25 @@ fn set_operator(
     let Some(operator) = Operator::ALL.into_iter().find(|op| op.symbol() == symbol) else {
         return Err(PyValueError::new_err(format!("unknown operator {symbol:?}")));
     };
-    let function = match function.cast_exact::<Expr>() {
-        Ok(expr) if expr.get().kind.signature.is_some() => expr.clone().unbind(),
-        _ => {
+    let operation = match function.cast_exact::<Expr>() {
+        Ok(expr) if expr.get().kind.signature.is_some() => {
+            Operation::Function(expr.clone().unbind())
+        }
+        Ok(_) => {
             return Err(PyTypeError::new_err(format!(
                 "set_operator expects an expression of a function kind, got {}",
                 describe(function)
             )));
         }
+        Err(_) if function.is_callable() => Operation::Python(function.clone().unbind()),
+        Err(_) => {
+            return Err(PyTypeError::new_err(format!(
+                "set_operator expects an expression of a function kind or a Python function, got {}",
+                describe(function)
+            )));
+        }
     };
-    kind.operators[operator as usize].set(py, function).map_err(|_| {
+    kind.operators[operator as usize].set(py, operation).map_err(|_| {
         PyValueError::new_err(format!(
             "the {symbol} operator is already set for {}",
             kind.name
@@ -954,5 +1208,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(function_kind_py, m)?)?;
     m.add_function(wrap_pyfunction!(declare_function, m)?)?;
     m.add_function(wrap_pyfunction!(set_operator, m)?)?;
+    m.add_function(wrap_pyfunction!(integer, m)?)?;
+    m.add_function(wrap_pyfunction!(set_integer_kind, m)?)?;
     Ok(())
 }

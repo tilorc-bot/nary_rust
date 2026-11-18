@@ -19,8 +19,9 @@ x, y = NumberKind("x"), NumberKind("y")
 def test_the_compiled_module_defines_no_kind_and_no_function():
     public = {name for name in dir(_core) if not name.startswith("_")}
     assert public == {
-        "Expr", "FunctionKind", "Kind", "KindFamily", "Symbol",
-        "declare_function", "declare_kind", "declare_kind_family", "set_operator",
+        "Expr", "FunctionKind", "Integer", "Kind", "KindFamily", "Symbol",
+        "declare_function", "declare_kind", "declare_kind_family",
+        "set_integer_kind", "set_operator",
     }
 
 
@@ -147,8 +148,8 @@ def test_set_operator_once_for_each_kind_and_operator():
         set_operator(NumberKind, "+", nr.Add)
     with pytest.raises(ValueError, match=r"^the \+ operator is already set for SetKind$"):
         set_operator(SetKind, "+", Union)
-    with pytest.raises(ValueError, match='^unknown operator "-"$'):
-        set_operator(NumberKind, "-", nr.Add)
+    with pytest.raises(ValueError, match='^unknown operator "%"$'):
+        set_operator(NumberKind, "%", nr.Add)
     with pytest.raises(TypeError):
         set_operator(NumberKind, "*", "Mul")
 
@@ -166,6 +167,6 @@ def test_only_a_kind_is_accepted_where_a_kind_is_expected():
 
 
 def test_an_argument_must_be_an_expression():
-    for value, text in ((1, "int: 1"), ("x", "str: 'x'"), (NumberKind, "Kind: NumberKind"), (None, "NoneType: None")):
+    for value, text in ((1.5, "float: 1.5"), ("x", "str: 'x'"), (NumberKind, "Kind: NumberKind"), (None, "NoneType: None")):
         with pytest.raises(TypeError, match=f"^sin expects NumberKind, got {text}$"):
             nr.sin(value)

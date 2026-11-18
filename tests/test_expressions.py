@@ -38,8 +38,8 @@ def test_head_args_and_named_arguments():
 def test_wrong_kind_and_wrong_count():
     with pytest.raises(TypeError, match=r"^sin expects NumberKind, got BoolKind: Lt\(x, y\)$"):
         nr.sin(x < y)
-    with pytest.raises(TypeError, match=r"^Add expects NumberKind, got int: 1$"):
-        nr.Add(x, 1)
+    with pytest.raises(TypeError, match=r"^Add expects NumberKind, got float: 1.5$"):
+        nr.Add(x, 1.5)
     with pytest.raises(TypeError, match=r"^Pow takes 2 arguments, got 3$"):
         nr.Pow(x, y, z)
     with pytest.raises(TypeError, match=r"^sin takes 1 arguments, got 0$"):
@@ -84,11 +84,11 @@ def test_a_kind_with_no_operators_does_not_support_them():
 
 def test_operators_that_do_not_exist():
     with pytest.raises(TypeError):
-        x - y
+        x % y
     with pytest.raises(TypeError):
-        x > 1
+        x // y
     with pytest.raises(TypeError):
-        1 + x
+        1.5 + x
 
 
 def test_a_long_chain_can_be_built_and_freed():

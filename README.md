@@ -7,9 +7,9 @@ construction written in Rust (PyO3).
   declared in Python with `declare_kind(name)`: `NumberKind` and `BoolKind`
   here. A kind can also take other kinds as parameters,
   `TupleKind(NumberKind, BoolKind)`.
-- Every expression is one of three forms: a symbol (`NumberKind("x")`), a
-  declared function (`sin`), or an application of a head expression to
-  arguments (`sin(x)`).
+- Every expression is one of four forms: a symbol (`NumberKind("x")`), an
+  integer (`Integer(3)`), a declared function (`sin`), or an application of
+  a head expression to arguments (`sin(x)`).
 - A function is an expression whose kind is a function kind,
   `FunctionKind(inputs, output)`. Calling it checks the kinds of the
   arguments and builds an application of the output kind; nothing is
@@ -25,11 +25,11 @@ construction written in Rust (PyO3).
 
 | Path | What it is |
 |---|---|
-| `src/lib.rs` | The compiled module `nary._core`: `Expr`, `Kind`, `declare_kind`, `KindFamily`, `declare_kind_family`, `FunctionKind`, `declare_function`, `Symbol`, `set_operator`. It defines no kind other than the function kinds, and no particular function. |
+| `src/lib.rs` | The compiled module `nary._core`: `Expr`, `Kind`, `declare_kind`, `KindFamily`, `declare_kind_family`, `FunctionKind`, `declare_function`, `Symbol`, `set_operator`, `Integer`, `set_integer_kind`. It defines no kind other than the function kinds, and no particular function. |
 | `python/nary/` | The package `nary`, the one to import. |
 | `python/nary/__init__.py` | Re-exports the names of `nary._core` and everything listed in the `__all__` of the modules below, so a name added to one of those lists is `nary.<name>` with no change here. |
-| `python/nary/kinds.py` | Declares the kinds `NumberKind` and `BoolKind` with `declare_kind(...)`. |
-| `python/nary/arithmetic.py` | Declares `Add`, `Mul` and `Pow` with `declare_function(...)`, and sets what `+`, `*` and `**` build for a `NumberKind`. |
+| `python/nary/kinds.py` | Declares the kinds `NumberKind` and `BoolKind` with `declare_kind(...)`, and that integers are `NumberKind`s. |
+| `python/nary/arithmetic.py` | Declares `Add`, `Mul` and `Pow` with `declare_function(...)`, and sets what `+`, `-`, `*`, `/`, `**` and unary minus build for a `NumberKind`. |
 | `python/nary/elementary.py` | Declares `sin`. |
 | `python/nary/functions.py` | Defines `Lambda` and `is_lambda`, with `declare_function(...)` and `Symbol(kind)`. |
 | `python/nary/relational.py` | Declares `Lt`, `Gt`, `Le`, `Ge` and `Eq`, and sets what `<`, `>`, `<=` and `>=` build for a `NumberKind`. |
@@ -67,12 +67,14 @@ with the compiled module in it.
 Add(x, y, z)
 >>> x + y + z                        # operators build two-argument nodes
 Add(Add(x, y), z)
->>> nr.sin(x) * y < z                # a comparison is a BoolKind
-Lt(Mul(sin(x), y), z)
->>> (x + y).kind, (x < y).kind
+>>> 2 * nr.sin(x) + 1 < z            # a comparison is a BoolKind
+Lt(Add(Mul(2, sin(x)), 1), z)
+>>> (x + 1).kind, (x < 1).kind
 (NumberKind, BoolKind)
->>> x ** y >= z                      # also >, <=
-Ge(Pow(x, y), z)
+>>> x ** 2 >= z                      # also >, <=
+Ge(Pow(x, 2), z)
+>>> x - y, x / 2, -x                 # stored with Add, Mul and Pow
+(Add(x, Mul(-1, y)), Mul(x, Pow(2, -1)), Mul(-1, x))
 
 >>> eq = nr.Eq(x + y, z)             # named arguments
 >>> eq.lhs, eq.rhs
@@ -86,6 +88,78 @@ TypeError: sin expects NumberKind, got BoolKind: Lt(x, y)
 Traceback (most recent call last):
     ...
 TypeError: Pow takes 2 arguments, got 3
+
+```
+
+## Integers
+
+`Integer(n)` is an integer of any size, made from a Python `int`. It is a
+leaf, like a symbol: `e.is_integer` is true for it, and `e.value` is the
+`int`. Its kind is declared once, in Python:
+`set_integer_kind(NumberKind)` in `nary/kinds.py`. Where a function expects
+that kind, a Python `int` is converted to an `Integer`, whether the function
+is called directly or through an operator; anywhere else it is rejected.
+
+```python
+>>> from nary import Integer
+
+>>> Integer(3), Integer(3).kind, Integer(10**30).value
+(3, NumberKind, 1000000000000000000000000000000)
+>>> nr.sin(1), 1 + x, 2 ** x
+(sin(1), Add(1, x), Pow(2, x))
+>>> (x + 1).args[1] == Integer(1), Integer(1) == 1
+(True, False)
+>>> nr.sin(1.5)
+Traceback (most recent call last):
+    ...
+TypeError: sin expects NumberKind, got float: 1.5
+>>> Integer(True)
+Traceback (most recent call last):
+    ...
+TypeError: Integer expects an int, got bool: True
+
+```
+
+- Two integers are equal when their values are equal, and hash alike. An
+  integer is never equal to a Python `int` or to a symbol.
+- An integer is not a symbol, so it is rejected in a `Symbol(kind)`
+  position, and it is not of a function kind, so it cannot be called.
+- A `bool` or a `float` is never converted.
+- With an `int` on the left of `+`, `-`, `*`, `/` or `**`, the `int` is
+  converted to an `Integer` and the operator proceeds as if that had been
+  written on the left. For a comparison Python swaps the operands itself,
+  so `1 < x` builds `Gt(x, 1)`.
+
+## Operators defined in Python
+
+`set_operator(kind, symbol, function)` takes either an expression of a
+function kind, which the operator applies to the operands, or a Python
+function, which the operator calls with the operands (an `int` operand
+already converted to an `Integer`) and which must return an expression.
+There are no `Sub`, `Div` or `Neg` functions: as in SymPy, `nary/arithmetic.py`
+defines `-`, `/` and unary minus (spelled `"neg"`) in terms of `Add`, `Mul`
+and `Pow`:
+
+```python
+def _subtract(a, b):        # x - y
+    return Add(a, Mul(Integer(-1), b))
+
+def _divide(a, b):          # x / y
+    return Mul(a, Pow(b, Integer(-1)))
+
+def _negate(a):             # -x
+    return Mul(Integer(-1), a)
+
+set_operator(NumberKind, "-", _subtract)
+set_operator(NumberKind, "/", _divide)
+set_operator(NumberKind, "neg", _negate)
+```
+
+```python
+>>> x - y == nr.Add(x, nr.Mul(Integer(-1), y))
+True
+>>> 1 - x, 1 / x
+(Add(1, Mul(-1, x)), Mul(1, Pow(x, -1)))
 
 ```
 
@@ -209,7 +283,8 @@ names; a repeated name, whatever the kinds, is a `ValueError`.
 - `e.head` is the head expression of an application and `None` otherwise;
   `e.args` is the arguments of an application and `()` otherwise; `e.name`
   is the name of a symbol or declared function and `None` otherwise.
-  `e.is_symbol` is true for a symbol. `e.params` is what a declared function
+  `e.is_symbol` is true for a symbol, and `e.is_integer` for an integer,
+  whose `int` is `e.value`. `e.params` is what a declared function
   was declared with, and `None` for any other expression.
 - Named arguments such as `eq.lhs` are looked up through the `names` of
   the head of an application.
@@ -267,8 +342,10 @@ TypeError: SetKind takes 1 argument, the name of a leaf, got 3; a node is built 
   used. Declare each kind once, when a module is imported.
 - `set_operator(kind, symbol, function)` says what an operator builds when its
   left operand is of that kind. The function is any expression of a
-  function kind. A kind with no function for an operator does
-  not support it: `p + q` on two `BoolKind`s is a `TypeError`.
+  function kind, or a Python function that returns an expression. The
+  operators are `+`, `-`, `*`, `/`, `**`, `"neg"` (unary minus), `<`, `>`,
+  `<=` and `>=`. A kind with nothing set for an operator does not support
+  it: `p + q` on two `BoolKind`s is a `TypeError`.
 
 ## Parametrised kinds
 
@@ -332,9 +409,19 @@ TypeError: MatrixKind takes 1 parameter, got 2
 
 ## Limitations
 
-- The seven operators (`+`, `*`, `**`, `<`, `>`, `<=`, `>=`) are fixed in
-  Rust. There are no reflected operators (`1 + x`), and no `-` or `/`.
-  `set_operator` can be called once for each kind and operator.
+- The ten operators (`+`, `-`, `*`, `/`, `**`, unary minus, `<`, `>`,
+  `<=`, `>=`) are fixed in Rust. `set_operator` can be called once for each
+  kind and operator.
+- The only numbers are integers: there are no rationals and no floats, and
+  nothing is computed with the values of integers. `x / 2` is
+  `Mul(x, Pow(2, -1))`, not a half.
+- `x - y` is stored as `Add(x, Mul(-1, y))` and prints that way; likewise
+  `x / y` as `Mul(x, Pow(y, -1))` and `-x` as `Mul(-1, x)`.
+- Only an `int` on the left of an operator is converted. Comparisons are
+  not reflected by this package: Python swaps them, so `1 < x` builds
+  `Gt(x, 1)`, not `Lt(1, x)`.
+- `e.value` is the `int` of an integer. On an application whose head names
+  an argument `value`, it is that argument instead.
 - A kind is only a name and its operators (and, for a function kind, its
   inputs and output). It cannot have methods or attributes of its own, and
   there are no kinds of kinds.
