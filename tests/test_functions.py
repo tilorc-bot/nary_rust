@@ -1,8 +1,18 @@
-"""Functions are expressions of function kinds, and Lambda is the binder."""
+"""Functions are expressions of function kinds, Symbol(kind) positions, and
+Lambda, defined in nary.functions."""
 
 import nary as nr
 import pytest
-from nary import BoolKind, Expr, FunctionKind, Lambda, NumberKind, function
+from nary import (
+    BoolKind,
+    Expr,
+    FunctionKind,
+    Lambda,
+    NumberKind,
+    Symbol,
+    function,
+    is_lambda,
+)
 
 x, y = NumberKind("x"), NumberKind("y")
 p = BoolKind("p")
@@ -10,6 +20,8 @@ NumToNum = FunctionKind((NumberKind,), NumberKind)
 f = NumToNum("f")
 # A function that takes a function.
 Apply = function("Apply", NumToNum, NumberKind, returns=NumberKind, names=("fn", "point"))
+# A function whose second position accepts only a symbol.
+Derivative = function("Derivative", NumberKind, Symbol(NumberKind), returns=NumberKind)
 
 
 def test_a_declared_function_is_an_expression_of_a_function_kind():
@@ -77,28 +89,50 @@ def test_two_declarations_with_the_same_name_are_different():
     assert repr(a(x)) == repr(b(x)) == "a(x)"
 
 
-def test_lambda_kinds():
+def test_symbol_positions():
+    assert Derivative.kind is FunctionKind((NumberKind, NumberKind), NumberKind)
+    assert Derivative.kind.inputs == (NumberKind, NumberKind)
+    assert repr(Derivative.params) == "(NumberKind, Symbol(NumberKind))"
+    assert Derivative.params[1].kind is NumberKind
+    assert nr.sin.params == (NumberKind,) and x.params is None
+    assert repr(Derivative(nr.sin(x), x)) == "Derivative(sin(x), x)"
+    with pytest.raises(TypeError, match=r"^Derivative expects a NumberKind symbol, got NumberKind: sin\(x\)$"):
+        Derivative(x, nr.sin(x))
+    with pytest.raises(TypeError, match=r"^Derivative expects NumberKind, got BoolKind: p$"):
+        Derivative(x, p)
+    # An unknown function of the same kind has no Symbol(kind) positions.
+    unknown = Derivative.kind("unknown")
+    assert repr(unknown(x, nr.sin(x))) == "unknown(x, sin(x))"
+
+
+def test_lambda_is_an_application_of_a_function_named_lambda():
     one = Lambda(x, nr.sin(x))
-    assert one.is_lambda and one.kind is NumToNum
-    assert one.variables == (x,) and one.body == nr.sin(x)
+    assert is_lambda(one) and one.kind is NumToNum
+    assert one.args == (x, nr.sin(x)) and one.head.name == "Lambda"
+    assert repr(one.head.params) == "(Symbol(NumberKind), NumberKind)"
     assert repr(one) == "Lambda(x, sin(x))"
     two = Lambda((x, y), x < y)
     assert two.kind is FunctionKind((NumberKind, NumberKind), BoolKind)
-    assert repr(two) == "Lambda((x, y), Lt(x, y))"
+    assert repr(two) == "Lambda(x, y, Lt(x, y))"
+    # The function for a combination of kinds is declared once.
+    assert Lambda(y, nr.cos(y)).head is one.head
     assert Lambda((x,), x) == Lambda(x, x)
+    assert not is_lambda(nr.sin(x)) and not is_lambda(x) and not is_lambda(1)
     assert repr(Apply(Lambda(x, x * x), y)) == "Apply(Lambda(x, Mul(x, x)), y)"
 
 
 def test_lambda_errors():
-    with pytest.raises(TypeError, match=r"^Lambda variables must be symbols, got application Add\(x, y\)$"):
+    with pytest.raises(TypeError, match=r"^Lambda expects a NumberKind symbol, got NumberKind: Add\(x, y\)$"):
         Lambda(x + y, x)
-    with pytest.raises(TypeError, match=r"^Lambda variables must be symbols, got declared function sin$"):
+    with pytest.raises(TypeError, match=r"^Lambda expects a FunctionKind\(\(NumberKind,\), NumberKind\) symbol, "):
         Lambda(nr.sin, x)
-    with pytest.raises(ValueError, match=r"^Lambda variables must be different, got x more than once$"):
+    with pytest.raises(ValueError, match=r"^Lambda variables must have different names, got x more than once$"):
         Lambda((x, y, NumberKind("x")), x)
+    with pytest.raises(ValueError, match=r"^Lambda variables must have different names"):
+        Lambda((x, BoolKind("x")), x)
     with pytest.raises(TypeError, match=r"^Lambda takes at least one variable"):
         Lambda((), x)
-    with pytest.raises(TypeError, match=r"^the body of a Lambda must be an expression, got int 1$"):
+    with pytest.raises(TypeError, match=r"^the body of a Lambda must be an expression, got 1$"):
         Lambda(x, 1)
 
 
@@ -106,7 +140,7 @@ def test_applying_a_lambda_is_inert():
     square = Lambda(x, x * x)
     applied = square(y)
     assert applied.head is square and applied.args == (y,)
-    assert applied.kind is NumberKind
+    assert applied.kind is NumberKind and not is_lambda(applied)
     assert repr(applied) == "Lambda(x, Mul(x, x))(y)"
     assert applied != y * y
     with pytest.raises(TypeError, match=r"^Lambda\(x, Mul\(x, x\)\) expects NumberKind, got BoolKind: p$"):

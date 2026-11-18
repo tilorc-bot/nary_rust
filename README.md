@@ -7,14 +7,17 @@ construction written in Rust (PyO3).
   declared in Python with `kind(name)`: `NumberKind` and `BoolKind` here. A
   kind can also take other kinds as parameters,
   `TupleKind(NumberKind, BoolKind)`.
-- Every expression is one of four forms: a symbol (`NumberKind("x")`), a
-  declared function (`sin`), an application of a head expression to
-  arguments (`sin(x)`), or a lambda (`Lambda(x, sin(x))`).
+- Every expression is one of three forms: a symbol (`NumberKind("x")`), a
+  declared function (`sin`), or an application of a head expression to
+  arguments (`sin(x)`).
 - A function is an expression whose kind is a function kind,
   `FunctionKind(inputs, output)`. Calling it checks the kinds of the
   arguments and builds an application of the output kind; nothing is
   inferred from the arguments.
-- A function can take any number of arguments of one kind (`rest=`).
+- A function can take any number of arguments of one kind (`rest=`), and a
+  leading position can accept only a symbol (`Symbol(kind)`).
+- `Lambda` is defined in Python, in `nary/functions.py`, as an ordinary
+  application built with those mechanisms.
 - Expressions are inert: nothing is flattened, reordered or evaluated when an
   expression is built.
 
@@ -22,12 +25,13 @@ construction written in Rust (PyO3).
 
 | Path | What it is |
 |---|---|
-| `src/lib.rs` | The compiled module `nary._core`: `Expr`, `Kind`, `kind`, `KindFamily`, `kind_family`, `FunctionKind`, `function`, `Lambda`, `set_operator`. It defines no kind other than the function kinds, and no particular function. |
+| `src/lib.rs` | The compiled module `nary._core`: `Expr`, `Kind`, `kind`, `KindFamily`, `kind_family`, `FunctionKind`, `function`, `Symbol`, `set_operator`. It defines no kind other than the function kinds, and no particular function. |
 | `python/nary/` | The package `nary`, the one to import. |
 | `python/nary/__init__.py` | Re-exports the names of `nary._core` and everything listed in the `__all__` of the modules below, so a name added to one of those lists is `nary.<name>` with no change here. |
 | `python/nary/kinds.py` | Declares the kinds `NumberKind` and `BoolKind` with `kind(...)`. |
 | `python/nary/arithmetic.py` | Declares `Add`, `Mul` and `Pow` with `function(...)`, and sets what `+`, `*` and `**` build for a `NumberKind`. |
 | `python/nary/elementary.py` | Declares `sin`. |
+| `python/nary/functions.py` | Defines `Lambda` and `is_lambda`, with `function(...)` and `Symbol(kind)`. |
 | `python/nary/relational.py` | Declares `Lt`, `Gt`, `Le`, `Ge` and `Eq`, and sets what `<`, `>`, `<=` and `>=` build for a `NumberKind`. |
 | `tests/` | The tests. |
 | `bench/` | `bench_construct.py` times building, comparing and hashing expressions. `compare.py` runs it on several versions and prints their ratios. |
@@ -135,35 +139,77 @@ TypeError: x is of kind NumberKind, which is not a function kind, so it cannot b
 
 ```
 
-`Lambda(variables, body)` is the one binder. `variables` is a symbol or a
-tuple of different symbols, and the kind of the lambda is the function kind
-from their kinds to the kind of the body. Applying a lambda builds an
-application like any other; nothing is substituted.
+### Positions that accept only a symbol
+
+`Symbol(kind)` in a leading position of a declaration means that the
+position has that kind and accepts only a symbol of it. It is a marker, not
+a kind: the function kind is built from the plain kinds, and the declared
+function shows the markers in `params`.
 
 ```python
->>> from nary import Lambda
+>>> from nary import Symbol
+
+>>> Derivative = function("Derivative", NumberKind, Symbol(NumberKind), returns=NumberKind)
+>>> Derivative.kind
+FunctionKind((NumberKind, NumberKind), NumberKind)
+>>> Derivative.params, Derivative.kind.inputs
+((NumberKind, Symbol(NumberKind)), (NumberKind, NumberKind))
+>>> Derivative(cos(x), x)
+Derivative(cos(x), x)
+>>> Derivative(x, cos(x))
+Traceback (most recent call last):
+    ...
+TypeError: Derivative expects a NumberKind symbol, got NumberKind: cos(x)
+
+```
+
+The check belongs to the declared function. An unknown function of the same
+kind, `Derivative.kind("D")`, accepts any `NumberKind` in both positions.
+`rest=` takes a kind, not a marker.
+
+### Lambda
+
+`Lambda(variables, body)` is not built into the compiled module. It is
+defined in Python, in `nary/functions.py`, with `function(...)` and
+`Symbol(kind)`: for each combination of kinds it declares, once, a function
+named `Lambda` that takes the variables, each declared `Symbol(kind)`, then
+the body, and returns the function kind from the kinds of the variables to
+the kind of the body. A lambda is an application of that function. So it
+prints as `Lambda(x, y, body)`, its `head` is that function, and its `args`
+are the variables followed by the body. `is_lambda(e)` tells whether `e` is
+one.
+
+```python
+>>> from nary import Lambda, is_lambda
 
 >>> square = Lambda(x, x * x)
 >>> square, square.kind
 (Lambda(x, Mul(x, x)), FunctionKind((NumberKind,), NumberKind))
->>> Lambda((x, y), x < y).kind
-FunctionKind((NumberKind, NumberKind), BoolKind)
->>> square(z), At(square, z)
-(Lambda(x, Mul(x, x))(z), At(Lambda(x, Mul(x, x)), z))
->>> square.variables, square.body
+>>> Lambda((x, y), x < y), Lambda((x, y), x < y).kind
+(Lambda(x, y, Lt(x, y)), FunctionKind((NumberKind, NumberKind), BoolKind))
+>>> is_lambda(square), square.head.params
+(True, (Symbol(NumberKind), NumberKind))
+>>> square.args[:-1], square.args[-1]
 ((x,), Mul(x, x))
->>> Lambda(cos, x)
+>>> square(z), At(square, z)               # applying a lambda is inert
+(Lambda(x, Mul(x, x))(z), At(Lambda(x, Mul(x, x)), z))
+>>> Lambda(x + y, x)
 Traceback (most recent call last):
     ...
-TypeError: Lambda variables must be symbols, got declared function cos
+TypeError: Lambda expects a NumberKind symbol, got NumberKind: Add(x, y)
 
 ```
+
+`variables` is one symbol or a tuple of one or more symbols with different
+names; a repeated name, whatever the kinds, is a `ValueError`.
+
+### Attributes and equality
 
 - `e.head` is the head expression of an application and `None` otherwise;
   `e.args` is the arguments of an application and `()` otherwise; `e.name`
   is the name of a symbol or declared function and `None` otherwise.
-  `e.is_symbol` and `e.is_lambda` tell those forms apart, and a lambda has
-  `variables` (always a tuple) and `body`.
+  `e.is_symbol` is true for a symbol. `e.params` is what a declared function
+  was declared with, and `None` for any other expression.
 - Named arguments such as `eq.lhs` are looked up through the `names` of
   the head of an application.
 - `FunctionKind(inputs, output, rest=None)` takes a tuple of kinds, possibly
@@ -173,9 +219,9 @@ TypeError: Lambda variables must be symbols, got declared function cos
   `output` are `None`.
 - Every `function(...)` call makes a new function, even with a name and
   kind already used, and a declared function is equal only to itself.
-- Symbols are equal when they have the same kind and name, applications when
-  their heads and arguments are equal, and lambdas when their variables and
-  bodies are equal. Expressions of different forms are never equal.
+- Symbols are equal when they have the same kind and name, and applications
+  (lambdas among them) when their heads and arguments are equal. Expressions
+  of different forms are never equal.
 
 ## Kinds
 

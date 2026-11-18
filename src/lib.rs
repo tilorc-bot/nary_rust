@@ -1,24 +1,23 @@
 //! Typed, inert expression trees for Python, written in Rust.
 //!
 //! `Expr` is the only class of expression, and every expression is one of
-//! four forms: a symbol, a declared function, an application of a head
-//! expression to arguments, or a lambda. Each expression has a kind. A kind
-//! is an object declared from Python with `kind(name)`, or made by
-//! instantiating a kind family declared with `kind_family(name)`:
-//! `TupleKind(NumberKind, BoolKind)`.
+//! three forms: a symbol, a declared function, or an application of a head
+//! expression to arguments. Each expression has a kind. A kind is an object
+//! declared from Python with `kind(name)`, or made by instantiating a kind
+//! family declared with `kind_family(name)`: `TupleKind(NumberKind, BoolKind)`.
 //!
 //! The one kind defined here is the function kind,
 //! `FunctionKind(inputs, output, rest=None)`, because application is checked
 //! against it: calling an expression of a function kind checks the arguments
 //! against the inputs and builds an application whose kind is the output. A
-//! declared function is a named constant of a function kind, and a lambda's
-//! kind is the function kind from the kinds of its variables to the kind of
-//! its body. The checking and node construction happen here.
+//! declared function is a named constant of a function kind, and a leading
+//! position of it can be declared `Symbol(kind)` to accept only a symbol. The
+//! checking and node construction happen here.
 //!
 //! No other kind and no particular function is defined in this file. The
-//! kinds (NumberKind, BoolKind) and the functions (Add, Mul, Eq and the rest)
-//! are declared in Python, in the package `nary`, and each kind is told which
-//! function an operator builds with `set_operator`.
+//! kinds (NumberKind, BoolKind), the functions (Add, Mul, Eq and the rest)
+//! and Lambda are declared in Python, in the package `nary`, and each kind is
+//! told which function an operator builds with `set_operator`.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -404,12 +403,38 @@ fn expect_kind(obj: &Bound<'_, PyAny>) -> PyResult<KindRef> {
     }
 }
 
+/// In a declaration, `Symbol(NumberKind)` is a leading position of kind
+/// NumberKind that accepts only a symbol, not any expression of that kind.
+/// It is a marker, not a kind: the function kind is built from the plain
+/// kinds.
+#[pyclass(frozen, module = "nary", name = "Symbol")]
+struct SymbolMarker {
+    kind: KindRef,
+}
+
+#[pymethods]
+impl SymbolMarker {
+    #[new]
+    fn new(kind: &Bound<'_, PyAny>) -> PyResult<Self> {
+        Ok(SymbolMarker { kind: expect_kind(kind)? })
+    }
+
+    #[getter]
+    fn kind(&self, py: Python<'_>) -> PyResult<Py<Kind>> {
+        kind_object(py, self.kind)
+    }
+
+    fn __repr__(&self) -> String {
+        format!("Symbol({})", self.kind.name)
+    }
+}
+
 /// An expression, of some kind.
 ///
-/// A symbol is made by calling a kind, a declared function by `function`,
-/// and a lambda by `Lambda`. An application is made only by `apply`, which
-/// checks that each argument is an `Expr` of the kind the head's function
-/// kind expects. Nothing else makes an `Expr`.
+/// A symbol is made by calling a kind and a declared function by
+/// `function`. An application is made only by `apply`, which checks that
+/// each argument is an `Expr` of the kind the head's function kind expects.
+/// Nothing else makes an `Expr`.
 #[pyclass(frozen, module = "nary")]
 struct Expr {
     kind: KindRef,
@@ -425,11 +450,13 @@ enum Form {
         name: Py<PyString>,
         /// Names for the leading arguments of its applications.
         names: Option<Py<PyTuple>>,
+        /// For each leading position, whether it was declared
+        /// `Symbol(kind)` and so accepts only a symbol. None when no
+        /// position was.
+        symbols: Option<Box<[bool]>>,
     },
     /// A head of a function kind applied to arguments.
     Apply { head: Py<Expr>, args: Py<PyTuple> },
-    /// A tuple of one or more different symbols, and a body.
-    Lambda { variables: Py<PyTuple>, body: Py<Expr> },
 }
 
 impl Expr {
@@ -448,15 +475,6 @@ impl Expr {
             None => self.__repr__(py),
         }
     }
-
-    fn form_name(&self) -> &'static str {
-        match self.form {
-            Form::Symbol { .. } => "symbol",
-            Form::Declared { .. } => "declared function",
-            Form::Apply { .. } => "application",
-            Form::Lambda { .. } => "lambda",
-        }
-    }
 }
 
 fn structural_eq(py: Python<'_>, a: &Expr, b: &Expr) -> PyResult<bool> {
@@ -473,10 +491,6 @@ fn structural_eq(py: Python<'_>, a: &Expr, b: &Expr) -> PyResult<bool> {
         (Form::Apply { head: h1, args: a1 }, Form::Apply { head: h2, args: a2 }) => {
             structural_eq(py, h1.get(), h2.get())? && a1.bind(py).as_any().eq(a2.bind(py))?
         }
-        (
-            Form::Lambda { variables: v1, body: b1 },
-            Form::Lambda { variables: v2, body: b2 },
-        ) => v1.bind(py).as_any().eq(v2.bind(py))? && structural_eq(py, b1.get(), b2.get())?,
         // Declared functions are equal only when identical, checked above,
         // and different forms are never equal.
         _ => false,
@@ -517,9 +531,6 @@ fn expr_hash(py: Python<'_>, e: &Expr) -> PyResult<isize> {
         Form::Apply { head, args } => {
             [2, expr_hash(py, head.get())? as usize, args.bind(py).hash()? as usize]
         }
-        Form::Lambda { variables, body } => {
-            [3, variables.bind(py).hash()? as usize, expr_hash(py, body.get())? as usize]
-        }
     };
     Ok(combine_hashes(parts))
 }
@@ -545,8 +556,38 @@ fn wrong_kind(py: Python<'_>, head: &Expr, expected: KindRef, arg: &Bound<'_, Py
     }
 }
 
-/// Apply `head` to `args`: check them against the head's function kind and
-/// build the application node, of the kind's output.
+/// Check that each leading argument at a position declared `Symbol(kind)` is
+/// a symbol. Called after the kind check, so every argument is an `Expr` of
+/// the right kind.
+fn check_symbols(
+    py: Python<'_>,
+    head: &Expr,
+    inputs: &[KindRef],
+    symbols: &[bool],
+    args: &Bound<'_, PyTuple>,
+) -> PyResult<()> {
+    for (position, &only_symbol) in symbols.iter().enumerate() {
+        if !only_symbol {
+            continue;
+        }
+        let arg = args.get_borrowed_item(position)?;
+        if !arg.cast_exact::<Expr>().is_ok_and(|arg| arg.get().is_symbol()) {
+            let kind = &inputs[position].name;
+            return Err(PyTypeError::new_err(format!(
+                "{} expects a {} symbol, got {}: {}",
+                head.label(py)?,
+                kind,
+                kind,
+                arg.repr()?
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Apply `head` to `args`: check them against the head's function kind (and,
+/// for a declared function, its `Symbol(kind)` positions) and build the
+/// application node, of the kind's output.
 fn apply<'py>(head: &Bound<'py, Expr>, args: &Bound<'py, PyTuple>) -> PyResult<Bound<'py, Expr>> {
     let py = args.py();
     let expr = head.get();
@@ -583,6 +624,9 @@ fn apply<'py>(head: &Bound<'py, Expr>, args: &Bound<'py, PyTuple>) -> PyResult<B
         if !matches {
             return Err(wrong_kind(py, expr, expected, &arg));
         }
+    }
+    if let Form::Declared { symbols: Some(symbols), .. } = &expr.form {
+        check_symbols(py, expr, &sig.inputs, symbols, args)?;
     }
     Bound::new(
         py,
@@ -652,7 +696,7 @@ fn binary<'py>(
 #[pymethods]
 impl Expr {
     /// Apply this expression, which must be of a function kind, to
-    /// arguments: `sin(x)`, `f(x)`, `Lambda(x, sin(x))(y)`.
+    /// arguments: `sin(x)`, `f(x)`, `g(sin)(x)`.
     #[pyo3(signature = (*args))]
     fn __call__<'py>(slf: &Bound<'py, Self>, args: &Bound<'py, PyTuple>) -> PyResult<Bound<'py, Expr>> {
         apply(slf, args)
@@ -697,32 +741,29 @@ impl Expr {
         }
     }
 
+    /// What a declared function was declared with: for each leading
+    /// position, its kind or a `Symbol(kind)` marker. None for any other
+    /// expression.
+    #[getter]
+    fn params<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyTuple>>> {
+        let (Form::Declared { symbols, .. }, Some(sig)) = (&self.form, &self.kind.signature) else {
+            return Ok(None);
+        };
+        let mut params = Vec::with_capacity(sig.inputs.len());
+        for (position, &kind) in sig.inputs.iter().enumerate() {
+            let only_symbol = symbols.as_ref().is_some_and(|symbols| symbols[position]);
+            params.push(if only_symbol {
+                Bound::new(py, SymbolMarker { kind })?.into_any()
+            } else {
+                kind_object(py, kind)?.into_bound(py).into_any()
+            });
+        }
+        PyTuple::new(py, params).map(Some)
+    }
+
     #[getter]
     fn is_symbol(&self) -> bool {
         matches!(self.form, Form::Symbol { .. })
-    }
-
-    #[getter]
-    fn is_lambda(&self) -> bool {
-        matches!(self.form, Form::Lambda { .. })
-    }
-
-    /// The variables of a lambda, always a tuple, or `()`.
-    #[getter]
-    fn variables<'py>(&self, py: Python<'py>) -> Bound<'py, PyTuple> {
-        match &self.form {
-            Form::Lambda { variables, .. } => variables.bind(py).clone(),
-            _ => PyTuple::empty(py),
-        }
-    }
-
-    /// The body of a lambda, or None.
-    #[getter]
-    fn body(&self, py: Python<'_>) -> Option<Py<Expr>> {
-        match &self.form {
-            Form::Lambda { body, .. } => Some(body.clone_ref(py)),
-            _ => None,
-        }
     }
 
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
@@ -742,15 +783,6 @@ impl Expr {
                     parts.push(arg.repr()?.to_string());
                 }
                 Ok(format!("{}({})", head, parts.join(", ")))
-            }
-            Form::Lambda { variables, body } => {
-                let variables = variables.bind(py);
-                let variables = if variables.len() == 1 {
-                    variables.get_item(0)?.repr()?.to_string()
-                } else {
-                    variables.repr()?.to_string()
-                };
-                Ok(format!("Lambda({}, {})", variables, body.get().__repr__(py)?))
             }
         }
     }
@@ -814,11 +846,14 @@ impl Expr {
 /// Declare a function: a new named constant of the function kind
 /// `FunctionKind(arg_kinds, returns, rest=rest)`.
 ///
-/// `arg_kinds` are the kinds of the leading arguments. If `rest` is given,
-/// any number of further arguments of that kind are accepted. The result is
-/// always of the kind `returns`. `names` gives attribute names for the
-/// leading arguments, so that `names=("lhs", "rhs")` makes `.lhs` and `.rhs`
-/// available on an application. Every call makes a different function.
+/// `arg_kinds` are the leading positions. Each is a kind, or `Symbol(kind)`
+/// for a position of that kind that accepts only a symbol; the function
+/// kind is built from the plain kinds, and `f.params` shows the markers. If
+/// `rest` (a kind) is given, any number of further arguments of that kind
+/// are accepted. The result is always of the kind `returns`. `names` gives
+/// attribute names for the leading arguments, so that `names=("lhs", "rhs")`
+/// makes `.lhs` and `.rhs` available on an application. Every call makes a
+/// different function.
 #[pyfunction]
 #[pyo3(signature = (name, *arg_kinds, rest=None, returns, names=None))]
 fn function<'py>(
@@ -839,9 +874,22 @@ fn function<'py>(
         }
     };
     let mut kinds = Vec::with_capacity(arg_kinds.len());
-    for kind in arg_kinds.iter() {
-        kinds.push(expect_kind(&kind)?);
+    let mut symbols = Vec::with_capacity(arg_kinds.len());
+    for param in arg_kinds.iter() {
+        match param.cast_exact::<SymbolMarker>() {
+            Ok(marker) => {
+                kinds.push(marker.get().kind);
+                symbols.push(true);
+            }
+            Err(_) => {
+                kinds.push(expect_kind(&param)?);
+                symbols.push(false);
+            }
+        }
     }
+    // A function with no Symbol(kind) position stores no flags, so applying
+    // it costs one test more than before.
+    let symbols = symbols.contains(&true).then(|| symbols.into_boxed_slice());
     let rest = rest.map(expect_kind).transpose()?;
     let names = match names {
         Some(names) if names.bind(py).len() > kinds.len() => {
@@ -854,79 +902,7 @@ fn function<'py>(
         other => other,
     };
     let kind = function_kind(py, &kinds, rest, returns)?;
-    Bound::new(py, Expr { kind, form: Form::Declared { name, names } })
-}
-
-/// An object with its form, or its type if it is not an expression, for an
-/// error message: `declared function sin`, `int 1`.
-fn describe_value(obj: &Bound<'_, PyAny>) -> String {
-    let what = match obj.cast_exact::<Expr>() {
-        Ok(expr) => expr.get().form_name().to_string(),
-        Err(_) => match obj.get_type().name() {
-            Ok(name) => name.to_string(),
-            Err(_) => "object".to_string(),
-        },
-    };
-    format!("{} {}", what, describe(obj))
-}
-
-/// `Lambda(x, body)` or `Lambda((x, y), body)`: a function of the given
-/// symbols, all different. Its kind is the function kind from the kinds of
-/// the variables to the kind of the body. Applying it builds an application
-/// and substitutes nothing.
-#[pyfunction(name = "Lambda")]
-fn lambda<'py>(variables: &Bound<'py, PyAny>, body: &Bound<'py, PyAny>) -> PyResult<Bound<'py, Expr>> {
-    let py = variables.py();
-    let variables = if let Ok(tuple) = variables.cast_exact::<PyTuple>() {
-        if tuple.is_empty() {
-            return Err(PyTypeError::new_err("Lambda takes at least one variable, got ()"));
-        }
-        tuple.clone()
-    } else if variables.cast_exact::<Expr>().is_ok() {
-        PyTuple::new(py, [variables])?
-    } else {
-        return Err(PyTypeError::new_err(format!(
-            "Lambda variables must be a symbol or a tuple of symbols, got {}",
-            describe_value(variables)
-        )));
-    };
-    let mut kinds = Vec::with_capacity(variables.len());
-    let mut seen: Vec<&Expr> = Vec::with_capacity(variables.len());
-    for variable in variables.iter_borrowed() {
-        let symbol = match variable.cast_exact::<Expr>() {
-            Ok(expr) if expr.get().is_symbol() => expr.get(),
-            _ => {
-                return Err(PyTypeError::new_err(format!(
-                    "Lambda variables must be symbols, got {}",
-                    describe_value(&variable)
-                )));
-            }
-        };
-        for &other in &seen {
-            if structural_eq(py, symbol, other)? {
-                return Err(PyValueError::new_err(format!(
-                    "Lambda variables must be different, got {} more than once",
-                    describe(&variable)
-                )));
-            }
-        }
-        seen.push(symbol);
-        kinds.push(symbol.kind);
-    }
-    let Ok(body) = body.cast_exact::<Expr>() else {
-        return Err(PyTypeError::new_err(format!(
-            "the body of a Lambda must be an expression, got {}",
-            describe_value(body)
-        )));
-    };
-    let kind = function_kind(py, &kinds, None, body.get().kind)?;
-    Bound::new(
-        py,
-        Expr {
-            kind,
-            form: Form::Lambda { variables: variables.unbind(), body: body.clone().unbind() },
-        },
-    )
+    Bound::new(py, Expr { kind, form: Form::Declared { name, names, symbols } })
 }
 
 /// Say which function an operator builds for a kind:
@@ -967,11 +943,11 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Expr>()?;
     m.add_class::<Kind>()?;
     m.add_class::<KindFamily>()?;
+    m.add_class::<SymbolMarker>()?;
     m.add_function(wrap_pyfunction!(declare_kind, m)?)?;
     m.add_function(wrap_pyfunction!(kind_family, m)?)?;
     m.add_function(wrap_pyfunction!(function_kind_py, m)?)?;
     m.add_function(wrap_pyfunction!(function, m)?)?;
-    m.add_function(wrap_pyfunction!(lambda, m)?)?;
     m.add_function(wrap_pyfunction!(set_operator, m)?)?;
     Ok(())
 }
