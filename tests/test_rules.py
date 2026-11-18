@@ -1,4 +1,4 @@
-"""Rules and the facts unordered and flat, recorded with nary.rules."""
+"""Rules and the facts unordered and flat, from nary.rules."""
 
 import doctest
 
@@ -7,7 +7,7 @@ import nary.rules
 import pytest
 from nary import Add, BoolKind, Lambda, Mul, Ne, NumberKind, Pow, declare_function
 from nary.logic import And, true
-from nary.rules import flat, is_flat, is_unordered, rule, rules, unordered
+from nary.rules import flat, is_flat, is_unordered, rule, unordered
 
 a, b = NumberKind("a"), NumberKind("b")
 
@@ -21,7 +21,6 @@ def test_docstring_examples():
 
 def test_stored_fields():
     r = rule(a * b / b, a, when=Ne(b, 0), name="example")
-    assert r in rules()
     assert (r.pattern, r.replacement, r.condition, r.name) == (
         Mul(Mul(a, b), Pow(b, -1)), a, Ne(b, 0), "example"
     )
@@ -30,7 +29,7 @@ def test_stored_fields():
 
 
 def test_arithmetic_rules():
-    [mul_zero] = [r for r in rules() if r.pattern == a * 0]
+    [mul_zero] = [r for r in nary.arithmetic_rules.rules if r.pattern == a * 0]
     assert mul_zero.replacement == NumberKind(0)
     assert mul_zero.condition is None
     assert mul_zero.erased == (a,)

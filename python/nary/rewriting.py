@@ -1,20 +1,19 @@
 """Applying rewrite rules: ``rewrite(e, rules, known=None)``.
 
-This is the engine that applies the rules recorded with ``nary.rules``. It
+This is the engine that applies rules written with ``nary.rules``. It
 uses each rule's ``pattern``, ``replacement``, ``condition`` and ``erased``,
 and the facts ``unordered`` and ``flat``. It returns a new expression; the
 expression given is never changed, because expressions are immutable.
 
-    >>> import nary.arithmetic_rules
     >>> from nary import NumberKind, log
+    >>> from nary.arithmetic_rules import rules
     >>> from nary.rewriting import rewrite
-    >>> from nary.rules import rules
     >>> x, y = NumberKind("x"), NumberKind("y")
-    >>> rewrite((x + 0) * 1 + y * 0, rules())
+    >>> rewrite((x + 0) * 1 + y * 0, rules)
     x
-    >>> rewrite(log(x) * 0, rules())             # log(0) * 0 has no value
+    >>> rewrite(log(x) * 0, rules)               # log(0) * 0 has no value
     Mul(log(x), 0)
-    >>> rewrite(x / x, rules()), rewrite(x / x, rules(), known=lambda c: True)
+    >>> rewrite(x / x, rules), rewrite(x / x, rules, known=lambda c: True)
     (Mul(x, Pow(x, -1)), 1)
 
 ``rules`` is any iterable of ``Rule``. ``known`` is a Python function that is
