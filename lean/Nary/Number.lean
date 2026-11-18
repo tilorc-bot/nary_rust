@@ -16,7 +16,7 @@ domain (`Complex.log 0 = 0`, `a / 0 = 0`). Those values never reach a result
 here: each partial function is `withDomain` (or `withDomain₂`) applied to two
 separate pieces, its domain (`logDomain`, ...) and a total function
 (`Complex.log`, ...), and gives `none` outside the domain. The domains are
-also recorded in Python with `set_domain`; they are the only part that would
+also declared in Python with `domain=`; they are the only part that would
 change if they were generated from there.
 -/
 import Mathlib.Analysis.SpecialFunctions.Complex.Log
@@ -65,7 +65,7 @@ def withDomain₂ (domain : ℂ → ℂ → Prop) (f : ℂ → ℂ → ℂ) (a b
   if domain z w then some (f z w) else none
 
 /-- Where `Pow(base, exp)` has a value: `base ≠ 0` or `re exp > 0`, as
-recorded with `set_domain` in `arithmetic.py`. So `0**0` and `0**(-1)` have
+declared with `domain=` in `arithmetic.py`. So `0**0` and `0**(-1)` have
 no value. -/
 def powDomain (base exponent : ℂ) : Prop := base ≠ 0 ∨ 0 < exponent.re
 
@@ -84,7 +84,7 @@ def sin (a : Number) : Number := a.map Complex.sin
 /-- `cos(a)`. Has a value whenever `a` does. -/
 def cos (a : Number) : Number := a.map Complex.cos
 
-/-- Where `tan(a)` has a value: `cos(a) ≠ 0`, as recorded with `set_domain`
+/-- Where `tan(a)` has a value: `cos(a) ≠ 0`, as declared with `domain=`
 in `elementary.py`. -/
 def tanDomain (z : ℂ) : Prop := Complex.cos z ≠ 0
 
@@ -95,7 +95,7 @@ def tan : Number → Number := withDomain tanDomain Complex.tan
 /-- `exp(a)`. Has a value whenever `a` does. -/
 def exp (a : Number) : Number := a.map Complex.exp
 
-/-- Where `log(a)` has a value: `a ≠ 0`, as recorded with `set_domain` in
+/-- Where `log(a)` has a value: `a ≠ 0`, as declared with `domain=` in
 `elementary.py`. -/
 def logDomain (z : ℂ) : Prop := z ≠ 0
 

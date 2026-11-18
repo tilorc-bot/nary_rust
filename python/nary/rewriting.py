@@ -71,9 +71,9 @@ How it works, in six points:
    ``0``, but ``log(x) * 0`` is left alone unless ``Ne(x, 0)`` is known.
    An application of a function declared with ``domain=None``, a lambda, a
    call of a lambda, and an application of an unknown function, such as
-   ``f(x)``, are not known to have a value. The check applies to every rule that erases a variable,
-   with or without a condition. If one way of matching fails a condition or
-   this check, the next way is tried.
+   ``f(x)``, are not known to have a value. The check applies to every
+   rule that erases a variable, with or without a condition. If one way of
+   matching fails a condition or this check, the next way is tried.
 6. Lambdas. A lambda is returned unchanged: the engine does not look inside
    it, because its variables are not the free symbols that ``known`` talks
    about. The arguments of a call of a lambda are still rewritten.
