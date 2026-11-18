@@ -197,8 +197,9 @@ passes. A rule in another list is not covered: the script reads only
 When both pass, each rule and fact as written in Python is proved, from the
 definitions here. What is trusted: the printer in `nary.lean` (that the
 printed statement says what the Python rule means), the Lean definitions
-of the functions, and that Python and Lean agree on `+` and `*` of integers. `#print axioms Nary.ArithmeticRules.proved` shows only
-Lean's standard axioms `propext`, `Classical.choice` and `Quot.sound`.
+of the functions, and that Python and Lean agree on `+` and `*` of
+integers. `#print axioms Nary.ArithmeticRules.proved` shows only Lean's
+standard axioms `propext`, `Classical.choice` and `Quot.sound`.
 
 ### Why the engine may match part of an `Add` or `Mul`
 
