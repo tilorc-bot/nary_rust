@@ -1,4 +1,4 @@
-"""Add, Mul and Pow, the constant -1, and the operators that build them.
+"""Add, Mul and Pow, the literal -1, and the operators that build them.
 
 There are no Sub, Div or Neg functions. As in SymPy, ``x - y`` is
 ``Add(x, Mul(-1, y))``, ``x / y`` is ``Mul(x, Pow(y, -1))`` and ``-x`` is
@@ -16,9 +16,8 @@ Pow = declare_function(
     "Pow", NumberKind, NumberKind, returns=NumberKind, names=("base", "exp")
 )
 
-# A constant is a function of no arguments, applied once (as true/false in
-# nary/logic.py). It prints as -1.
-NegativeOne = declare_function("-1", returns=NumberKind)()
+# An ordinary literal, used by -, / and unary minus. It prints as -1.
+NegativeOne = NumberKind(-1)
 
 
 def _subtract(a, b):

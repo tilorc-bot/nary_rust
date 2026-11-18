@@ -7,9 +7,12 @@ construction written in Rust (PyO3).
   declared in Python with `declare_kind(name)`: `NumberKind` and `BoolKind`
   here. A kind can also take other kinds as parameters,
   `TupleKind(NumberKind, BoolKind)`.
-- Every expression is one of three forms: a symbol (`NumberKind("x")`), a
-  declared function (`sin`), or an application of a head expression to
-  arguments (`sin(x)`).
+- Every expression is one of four forms: a symbol (`NumberKind("x")`), a
+  literal holding a Python value (`NumberKind(3)`), a declared function
+  (`sin`), or an application of a head expression to arguments (`sin(x)`).
+- A kind declares which Python values are its literals,
+  `declare_kind("NumberKind", literals=int)`, and such a value passed where
+  that kind is expected becomes a literal of it: `sin(1)`, `x + 1`.
 - A function is an expression whose kind is a function kind,
   `FunctionKind(inputs, output)`. Calling it checks the kinds of the
   arguments and builds an application of the output kind; nothing is
@@ -28,8 +31,8 @@ construction written in Rust (PyO3).
 | `src/lib.rs` | The compiled module `nary._core`: `Expr`, `Kind`, `declare_kind`, `KindFamily`, `declare_kind_family`, `FunctionKind`, `declare_function`, `Symbol`, `set_operator`. It defines no kind other than the function kinds, and no particular function. |
 | `python/nary/` | The package `nary`, the one to import. |
 | `python/nary/__init__.py` | Re-exports the names of `nary._core` and everything listed in the `__all__` of the modules below, so a name added to one of those lists is `nary.<name>` with no change here. |
-| `python/nary/kinds.py` | Declares the kinds `NumberKind` and `BoolKind` with `declare_kind(...)`. |
-| `python/nary/arithmetic.py` | Declares `Add`, `Mul`, `Pow` and the constant `NegativeOne` (`-1`), and sets what `+`, `-`, `*`, `/`, `**` and unary minus build for a `NumberKind`. |
+| `python/nary/kinds.py` | Declares the kinds `NumberKind` (whose literals are `int`s) and `BoolKind` with `declare_kind(...)`. |
+| `python/nary/arithmetic.py` | Declares `Add`, `Mul`, `Pow` and the literal `NegativeOne` (`-1`), and sets what `+`, `-`, `*`, `/`, `**` and unary minus build for a `NumberKind`. |
 | `python/nary/elementary.py` | Declares `sin`. |
 | `python/nary/functions.py` | Defines `Lambda` and `is_lambda`, with `declare_function(...)` and `Symbol(kind)`. |
 | `python/nary/relational.py` | Declares `Lt`, `Gt`, `Le`, `Ge` and `Eq`, and sets what `<`, `>`, `<=` and `>=` build for a `NumberKind`. |
@@ -92,13 +95,12 @@ TypeError: Pow takes 2 arguments, got 3
 ## Subtraction, division and negation
 
 There are no `Sub`, `Div` or `Neg` functions. As in SymPy, `-`, `/` and
-unary minus are built from `Add`, `Mul`, `Pow` and a constant `-1`, by
+unary minus are built from `Add`, `Mul`, `Pow` and the literal `-1`, by
 Python functions in `nary/arithmetic.py` given to `set_operator`. Unary
 minus is spelled `"neg"`.
 
 ```python
-# A constant is a function of no arguments, applied once (as true/false in nary/logic.py).
-NegativeOne = declare_function("-1", returns=NumberKind)()
+NegativeOne = NumberKind(-1)
 
 def _subtract(a, b):   # a - b
     return Add(a, Mul(NegativeOne, b))
@@ -122,9 +124,54 @@ True
 
 ```
 
-`NegativeOne` is the only number: there are no integers or other numbers
-yet, and a Python `int` is not accepted as an argument, so `x - 1` and
-`1 - x` are errors.
+## Numbers
+
+The numbers are Python `int`s, because `nary/kinds.py` says so:
+
+```python
+NumberKind = declare_kind("NumberKind", literals=int)
+BoolKind = declare_kind("BoolKind")
+```
+
+Calling `NumberKind` with an `int` makes a literal, a leaf that holds the
+value and prints as its `repr`. An `int` passed where a `NumberKind` is
+expected, to a function or an operator, becomes one, on either side of an
+operator. Nothing is computed: `x - 1` is not folded, and `2 + 3` of two
+literals stays a sum.
+
+```python
+>>> three = nr.NumberKind(3)
+>>> three, three.is_literal, three.value, three.kind
+(3, True, 3, NumberKind)
+>>> nr.sin(1), x + 1, 2 * x, 1 < x
+(sin(1), Add(x, 1), Mul(2, x), Gt(x, 1))
+>>> x - 1, 1 / x
+(Add(x, Mul(-1, 1)), Mul(1, Pow(x, -1)))
+>>> three + 2
+Add(3, 2)
+>>> three == 3, nr.sin(3) == nr.sin(three)
+(False, True)
+>>> nr.NumberKind(True)
+Traceback (most recent call last):
+    ...
+TypeError: NumberKind takes a name (a str) or a literal of type int, got bool: True
+>>> x + 1.5
+Traceback (most recent call last):
+    ...
+TypeError: Add expects NumberKind, got float: 1.5
+
+```
+
+- `literals` is a type or a tuple of types, by default none, and
+  `kind.literals` is that tuple. A value is accepted only if its exact type
+  is one of them, so a `bool` is not an `int` here. A `str` cannot be one,
+  since a string names a symbol.
+- Two literals are equal when they have the same kind, the same type and
+  equal values. A literal is never equal to a symbol or to a Python value.
+- A literal is not a symbol, so it is rejected in a `Symbol(kind)`
+  position. `BoolKind` declares no literals, so `True` is not converted.
+- The compiled module knows no particular type: it holds the value, and
+  converts an argument only when the kind of its position accepts it.
 
 ## Functions
 
@@ -246,10 +293,13 @@ names; a repeated name, whatever the kinds, is a `ValueError`.
 - `e.head` is the head expression of an application and `None` otherwise;
   `e.args` is the arguments of an application and `()` otherwise; `e.name`
   is the name of a symbol or declared function and `None` otherwise.
-  `e.is_symbol` is true for a symbol. `e.params` is what a declared function
-  was declared with, and `None` for any other expression.
+  `e.is_symbol` is true for a symbol and `e.is_literal` for a literal, and
+  `e.value` is the Python value of a literal and `None` otherwise.
+  `e.params` is what a declared function was declared with, and `None` for
+  any other expression.
 - Named arguments such as `eq.lhs` are looked up through the `names` of
-  the head of an application.
+  the head of an application. A name that is already an attribute of
+  `Expr`, such as `value` or `name`, finds the attribute instead.
 - `FunctionKind(inputs, output, rest=None)` takes a tuple of kinds, possibly
   empty, and one kind. The same arguments give the same kind, so function
   kinds are compared by identity like any other. They can nest, and can be
@@ -257,7 +307,8 @@ names; a repeated name, whatever the kinds, is a `ValueError`.
   `output` are `None`.
 - Every `declare_function(...)` call makes a new function, even with a name
   and kind already used, and a declared function is equal only to itself.
-- Symbols are equal when they have the same kind and name, and applications
+- Symbols are equal when they have the same kind and name, literals as
+  described under Numbers, and applications
   (lambdas among them) when their heads and arguments are equal. Expressions
   of different forms are never equal.
 
@@ -289,8 +340,9 @@ TypeError: SetKind takes 1 argument, the name of a leaf, got 3; a node is built 
 
 ```
 
-- Calling a kind takes one argument, the name, and makes a symbol, whose
-  `args` is `()`. Any further argument is a `TypeError`. A node with
+- Calling a kind takes one argument: a name, which makes a symbol, or a
+  value of one of the kind's literal types, which makes a literal. Either
+  has `args` `()`. Any further argument is a `TypeError`. A node with
   arguments is built only by calling an expression of a function kind
   (directly or through an operator), so every argument of every node is an
   `Expr` that passed the kind check of its head.
@@ -372,11 +424,14 @@ TypeError: MatrixKind takes 1 parameter, got 2
 ## Limitations
 
 - The ten operators (`+`, `-`, `*`, `/`, `**`, unary minus, `<`, `>`, `<=`,
-  `>=`) are fixed in Rust. There are no reflected operators (`1 + x`).
+  `>=`) are fixed in Rust. A reflected operator (`1 + x`) works only by
+  turning the left operand into a literal of the kind of the right one.
   `set_operator` can be called once for each kind and operator.
-- There are no numbers other than the constant `-1` (`NegativeOne`). A
-  Python `int` is not converted to an expression, so `x + 1` is a
-  `TypeError`.
+- Integers are the only numbers: there are no rationals or floats, and
+  `x + 1.5` is a `TypeError`. Nothing is computed with integers, so
+  `x - 1` is `Add(x, Mul(-1, 1))` and `2 + 3` of two literals is `Add(2, 3)`.
+- A literal is never equal to a Python value: `NumberKind(3) == 3` is
+  `False`. A literal of an unhashable type cannot be hashed.
 - A kind is only a name and its operators (and, for a function kind, its
   inputs and output). It cannot have methods or attributes of its own, and
   there are no kinds of kinds.
