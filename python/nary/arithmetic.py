@@ -15,3 +15,4 @@ Pow = function(
 # A BoolKind has none, so ``p + q`` on two BoolKinds is a TypeError.
 set_operator(NumberKind, "+", Add)
 set_operator(NumberKind, "*", Mul)
+set_operator(NumberKind, "**", Pow)

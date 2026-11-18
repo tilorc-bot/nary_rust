@@ -315,18 +315,34 @@ fn combine_hashes(parts: [usize; 3]) -> isize {
 enum Operator {
     Add,
     Mul,
+    Pow,
     Lt,
+    Gt,
+    Le,
+    Ge,
 }
 
 impl Operator {
-    const COUNT: usize = 3;
-    const ALL: [Operator; Operator::COUNT] = [Operator::Add, Operator::Mul, Operator::Lt];
+    const COUNT: usize = 7;
+    const ALL: [Operator; Operator::COUNT] = [
+        Operator::Add,
+        Operator::Mul,
+        Operator::Pow,
+        Operator::Lt,
+        Operator::Gt,
+        Operator::Le,
+        Operator::Ge,
+    ];
 
     fn symbol(self) -> &'static str {
         match self {
             Operator::Add => "+",
             Operator::Mul => "*",
+            Operator::Pow => "**",
             Operator::Lt => "<",
+            Operator::Gt => ">",
+            Operator::Le => "<=",
+            Operator::Ge => ">=",
         }
     }
 }
@@ -388,15 +404,30 @@ impl Expr {
         binary(slf, other, Operator::Mul)
     }
 
+    fn __pow__<'py>(
+        slf: &Bound<'py, Self>,
+        other: &Bound<'py, PyAny>,
+        modulo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        if !modulo.is_none() {
+            return Err(PyTypeError::new_err("pow() with a modulus is not supported"));
+        }
+        binary(slf, other, Operator::Pow)
+    }
+
     fn __richcmp__<'py>(
         slf: &Bound<'py, Self>,
         other: &Bound<'py, PyAny>,
         op: CompareOp,
     ) -> PyResult<Py<PyAny>> {
-        match op {
-            CompareOp::Lt => Ok(binary(slf, other, Operator::Lt)?.unbind()),
-            _ => compare(slf.get(), other, op),
-        }
+        let operator = match op {
+            CompareOp::Lt => Operator::Lt,
+            CompareOp::Gt => Operator::Gt,
+            CompareOp::Le => Operator::Le,
+            CompareOp::Ge => Operator::Ge,
+            CompareOp::Eq | CompareOp::Ne => return compare(slf.get(), other, op),
+        };
+        Ok(binary(slf, other, operator)?.unbind())
     }
 
     fn __hash__(&self, py: Python<'_>) -> PyResult<isize> {
@@ -593,7 +624,8 @@ fn function(
 }
 
 /// Say which function an operator builds for a kind:
-/// `set_operator(NumberKind, "+", Add)`. The operators are "+", "*" and "<".
+/// `set_operator(NumberKind, "+", Add)`. The operators are "+", "*", "**",
+/// "<", ">", "<=" and ">=".
 /// Each can be set once for each kind. A kind with no function for an
 /// operator does not support that operator.
 #[pyfunction]
