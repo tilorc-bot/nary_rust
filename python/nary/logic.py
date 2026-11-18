@@ -1,10 +1,10 @@
 """Boolean connectives and constants.
 
 ``And`` and ``Or`` take any number of ``BoolKind`` arguments and ``Not``
-takes one; each returns a ``BoolKind``. ``true`` and ``false`` are constants:
-functions of no arguments, already applied, so they are expressions and are
-not called again. This module is not re-exported from ``nary``; import it as
-``nary.logic``.
+takes one; each returns a ``BoolKind``. ``true`` and ``false`` are
+constants of ``BoolKind``, declared with ``declare_constant``: named leaves,
+each equal only to itself. This module is not re-exported from ``nary``;
+import it as ``nary.logic``.
 
     >>> import nary as nr
     >>> from nary.logic import And, Not, Or, true
@@ -21,7 +21,7 @@ required, and is not converted; use ``true`` and ``false``. There are no
 operators for these functions: ``&``, ``|`` and ``~`` do not build them.
 """
 
-from ._core import declare_function
+from ._core import declare_constant, declare_function
 from .kinds import BoolKind
 
 __all__ = ["And", "Not", "Or", "false", "true"]
@@ -30,6 +30,5 @@ And = declare_function("And", rest=BoolKind, returns=BoolKind)
 Or = declare_function("Or", rest=BoolKind, returns=BoolKind)
 Not = declare_function("Not", BoolKind, returns=BoolKind)
 
-# A constant is a function of no arguments, applied once.
-true = declare_function("true", returns=BoolKind)()
-false = declare_function("false", returns=BoolKind)()
+true = declare_constant("true", BoolKind)
+false = declare_constant("false", BoolKind)

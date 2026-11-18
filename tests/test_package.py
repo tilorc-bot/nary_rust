@@ -9,9 +9,9 @@ from nary import functions, relational
 def test_import_nary_exposes_the_core_and_the_declarations():
     assert set(nary.__all__) >= {
         "Expr", "FunctionKind", "Kind", "KindFamily", "Symbol",
-        "declare_function", "declare_kind", "declare_kind_family", "set_operator",
-        "Lambda", "is_lambda",
-        "NumberKind", "BoolKind", "Add", "Mul", "Pow", "sin", "Lt", "Eq",
+        "declare_constant", "declare_function", "declare_kind", "declare_kind_family",
+        "set_operator", "Lambda", "is_lambda",
+        "NumberKind", "BoolKind", "Add", "Mul", "Pow", "sin", "Lt", "Eq", "pi", "E", "I",
     }
     for name in nary.__all__:
         assert hasattr(nary, name), name

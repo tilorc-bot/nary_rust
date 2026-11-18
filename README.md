@@ -8,8 +8,10 @@ construction written in Rust (PyO3).
   here. A kind can also take other kinds as parameters,
   `TupleKind(NumberKind, BoolKind)`.
 - Every expression is one of four forms: a symbol (`NumberKind("x")`), a
-  literal holding a Python value (`NumberKind(3)`), a declared function
-  (`sin`), or an application of a head expression to arguments (`sin(x)`).
+  literal holding a Python value (`NumberKind(3)`), a declared constant
+  (`pi`), or an application of a head expression to arguments (`sin(x)`). A
+  declared function (`sin`) is a declared constant whose kind is a function
+  kind.
 - A kind declares which Python values are its literals,
   `declare_kind("NumberKind", literals=int)`, and such a value passed where
   that kind is expected becomes a literal of it: `sin(1)`, `x + 1`.
@@ -28,12 +30,13 @@ construction written in Rust (PyO3).
 
 | Path | What it is |
 |---|---|
-| `src/lib.rs` | The compiled module `nary._core`: `Expr`, `Kind`, `declare_kind`, `KindFamily`, `declare_kind_family`, `FunctionKind`, `declare_function`, `Symbol`, `set_operator`. It defines no kind other than the function kinds, and no particular function. |
+| `src/lib.rs` | The compiled module `nary._core`: `Expr`, `Kind`, `declare_kind`, `KindFamily`, `declare_kind_family`, `FunctionKind`, `declare_function`, `declare_constant`, `Symbol`, `set_operator`. It defines no kind other than the function kinds, and no particular function or constant. |
 | `python/nary/` | The package `nary`, the one to import. |
 | `python/nary/__init__.py` | Re-exports the names of `nary._core` and everything listed in the `__all__` of the modules below, so a name added to one of those lists is `nary.<name>` with no change here. |
 | `python/nary/kinds.py` | Declares the kinds `NumberKind` (whose literals are `int`s) and `BoolKind` with `declare_kind(...)`. |
 | `python/nary/arithmetic.py` | Declares `Add`, `Mul`, `Pow` and the literal `NegativeOne` (`-1`), and sets what `+`, `-`, `*`, `/`, `**` and unary minus build for a `NumberKind`. |
 | `python/nary/elementary.py` | Declares `sin`. |
+| `python/nary/constants.py` | Declares the constants `pi`, `E` and `I`. |
 | `python/nary/functions.py` | Defines `Lambda` and `is_lambda`, with `declare_function(...)` and `Symbol(kind)`. |
 | `python/nary/relational.py` | Declares `Lt`, `Gt`, `Le`, `Ge` and `Eq`, and sets what `<`, `>`, `<=` and `>=` build for a `NumberKind`. |
 | `tests/` | The tests. |
@@ -173,9 +176,43 @@ TypeError: Add expects NumberKind, got float: 1.5
 - The compiled module knows no particular type: it holds the value, and
   converts an argument only when the kind of its position accepts it.
 
+## Constants
+
+A constant is a named leaf that stands for one specific thing.
+`declare_constant(name, kind)` declares one, of any kind. `nary/constants.py`
+declares `pi`, `E` and `I`, and `nary/logic.py` declares `true` and `false`:
+
+```python
+pi = declare_constant("pi", NumberKind)
+true = declare_constant("true", BoolKind)
+```
+
+```python
+>>> from nary.logic import And, true
+>>> nr.pi, nr.pi.kind, nr.pi.is_constant, nr.pi.head, nr.pi.args
+(pi, NumberKind, True, None, ())
+>>> nr.sin(nr.pi), 2 * nr.pi, And(x < nr.pi, true)
+(sin(pi), Mul(2, pi), And(Lt(x, pi), true))
+>>> nr.pi == nr.NumberKind("pi"), nr.pi == nr.declare_constant("pi", nr.NumberKind)
+(False, False)
+>>> nr.Lambda(nr.pi, x)
+Traceback (most recent call last):
+    ...
+TypeError: Lambda expects a NumberKind symbol, got NumberKind: pi
+
+```
+
+- A constant is equal only to itself. Every `declare_constant(...)` call
+  makes a new one, even with a name already used, and it is never equal to
+  a symbol of the same name and kind.
+- Unlike a symbol, a constant is not accepted in a `Symbol(kind)` position,
+  so it cannot be bound by `Lambda`.
+- Nothing is known about a constant but its name and kind: `pi` has no
+  numeric value and `I ** 2` stays `Pow(I, 2)`.
+
 ## Functions
 
-A declared function is an expression: a named constant whose kind is a
+A declared function is an expression: a declared constant whose kind is a
 function kind.
 `declare_function(name, *inputs, rest=None, returns, names=None)` declares
 one.
@@ -292,9 +329,11 @@ names; a repeated name, whatever the kinds, is a `ValueError`.
 
 - `e.head` is the head expression of an application and `None` otherwise;
   `e.args` is the arguments of an application and `()` otherwise; `e.name`
-  is the name of a symbol or declared function and `None` otherwise.
-  `e.is_symbol` is true for a symbol and `e.is_literal` for a literal, and
-  `e.value` is the Python value of a literal and `None` otherwise.
+  is the name of a symbol or declared constant and `None` otherwise.
+  `e.is_symbol` is true for a symbol, `e.is_literal` for a literal and
+  `e.is_constant` for a declared constant (so also for a declared function
+  such as `sin`), and `e.value` is the Python value of a literal and `None`
+  otherwise.
   `e.params` is what a declared function was declared with, and `None` for
   any other expression.
 - Named arguments such as `eq.lhs` are looked up through the `names` of
@@ -452,6 +491,6 @@ TypeError: MatrixKind takes 1 parameter, got 2
   not equal to `Lambda(y, y)`. There is no equality up to renaming.
 - There is no substitution, no beta reduction and no free-variable or
   renaming operation. Applying a lambda is inert.
-- A symbol, a declared function and an application of a named head to no
+- A symbol, a declared constant and an application of a named head to no
   arguments can all print the same: `NumberKind("Add")`, `Add` and `Add()`
   all print as `Add`, though none is equal to another.
