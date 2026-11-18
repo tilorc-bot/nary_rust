@@ -3,19 +3,20 @@
 import importlib
 
 import nary
-from nary import relational
+from nary import functions, relational
 
 
 def test_import_nary_exposes_the_core_and_the_declarations():
     assert set(nary.__all__) >= {
-        "Expr", "Function", "Kind", "KindFamily",
-        "function", "kind", "kind_family", "set_operator",
+        "Expr", "FunctionKind", "Kind", "KindFamily", "Symbol",
+        "function", "kind", "kind_family", "set_operator", "Lambda", "is_lambda",
         "NumberKind", "BoolKind", "Add", "Mul", "Pow", "sin", "Lt", "Eq",
     }
     for name in nary.__all__:
         assert hasattr(nary, name), name
     assert nary.Expr is nary._core.Expr
     assert nary.Lt is relational.Lt
+    assert nary.Lambda is functions.Lambda and not hasattr(nary._core, "Lambda")
     assert not hasattr(nary, "Bool")
 
 

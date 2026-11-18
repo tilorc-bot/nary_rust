@@ -96,7 +96,7 @@ def test_calling_an_instantiated_kind_makes_a_leaf():
     A = MatrixKind(NumberKind)("A")
     assert type(A) is Expr
     assert A.kind is MatrixKind(NumberKind)
-    assert (A.head, A.args, repr(A)) == ("A", (), "A")
+    assert (A.head, A.name, A.args, repr(A)) == (None, "A", (), "A")
     with pytest.raises(TypeError, match=r"^MatrixKind\(NumberKind\) takes 1 argument, the name of a leaf, got 2; "):
         MatrixKind(NumberKind)("MatMul", A)
 
@@ -123,14 +123,14 @@ def test_a_function_shows_what_was_declared():
     Matrix = MatrixKind(NumberKind)
     MatAdd = function("MatAdd", Matrix, rest=Matrix, returns=Matrix)
     assert MatAdd.name == "MatAdd"
-    assert len(MatAdd.params) == 1 and MatAdd.params[0] is Matrix
-    assert MatAdd.rest is Matrix and MatAdd.returns is Matrix
+    assert len(MatAdd.kind.inputs) == 1 and MatAdd.kind.inputs[0] is Matrix
+    assert MatAdd.kind.rest is Matrix and MatAdd.kind.output is Matrix
     assert MatAdd.names == ()
-    assert Piece.params == (NumberKind, BoolKind) and Piece.rest is None
-    assert Piece.returns is Pair and Piece.names == ("value", "condition")
-    assert nr.Add.params == () and nr.Add.rest is NumberKind
+    assert Piece.kind.inputs == (NumberKind, BoolKind) and Piece.kind.rest is None
+    assert Piece.kind.output is Pair and Piece.names == ("value", "condition")
+    assert nr.Add.kind.inputs == () and nr.Add.kind.rest is NumberKind
     with pytest.raises(AttributeError):
-        Piece.returns = BoolKind
+        Piece.names = ()
 
 
 def test_an_instantiated_kind_is_checked():
