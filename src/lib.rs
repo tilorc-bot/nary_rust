@@ -2,7 +2,7 @@
 //!
 //! `Expr` is the only class of expression, and every expression is one of
 //! four forms: a symbol, a literal (a Python value held as it is), a declared
-//! function, or an application of a head expression to arguments. Each
+//! constant, or an application of a head expression to arguments. Each
 //! expression has a kind. A kind is an object declared from Python with
 //! `declare_kind(name, literals=...)`, or made by instantiating a kind family
 //! declared with `declare_kind_family(name)`: `TupleKind(NumberKind, BoolKind)`.
@@ -11,13 +11,15 @@
 //! `FunctionKind(inputs, output, rest=None)`, because application is checked
 //! against it: calling an expression of a function kind checks the arguments
 //! against the inputs and builds an application whose kind is the output. A
-//! declared function is a named constant of a function kind, and a leading
+//! declared constant, made by `declare_constant(name, kind)`, is a named leaf
+//! of any kind, equal only to itself. A declared function is a declared
+//! constant of a function kind, made by `declare_function`, and a leading
 //! position of it can be declared `Symbol(kind)` to accept only a symbol. The
 //! checking and node construction happen here.
 //!
 //! No other kind and no particular function is defined in this file. The
-//! kinds (NumberKind, BoolKind), the functions (Add, Mul, Eq and the rest)
-//! and Lambda are declared in Python, in the package `nary`, and each kind is
+//! kinds (NumberKind, BoolKind), the functions (Add, Mul, Eq and the rest),
+//! the constants (pi, true and the rest) and Lambda are declared in Python, in the package `nary`, and each kind is
 //! told what an operator builds with `set_operator`. Which Python values a
 //! kind accepts as literals is also declared in Python; this file knows no
 //! particular type of value.
@@ -538,7 +540,8 @@ impl SymbolMarker {
 ///
 /// A symbol or a literal is made by calling a kind (a literal also by
 /// `apply`, from a value passed where its kind is expected), and a declared
-/// function by `declare_function`. An application is made only by `apply`,
+/// constant by `declare_constant` or, of a function kind, by
+/// `declare_function`. An application is made only by `apply`,
 /// which checks that each argument is an `Expr` of the kind the head's
 /// function kind expects.
 /// Nothing else makes an `Expr`.
@@ -554,11 +557,12 @@ enum Form {
     /// `NumberKind(3)`: a Python value, held as it is, of a type the kind
     /// accepts. Nothing is computed with it.
     Literal { value: Py<PyAny> },
-    /// An opaque named constant of a function kind, made by
-    /// `declare_function`. Equal only to itself.
+    /// An opaque named constant of any kind, made by `declare_constant`,
+    /// or of a function kind by `declare_function`. Equal only to itself.
     Declared {
         name: Py<PyString>,
-        /// Names for the leading arguments of its applications.
+        /// Names for the leading arguments of its applications, for a
+        /// declared function.
         names: Option<Py<PyTuple>>,
         /// For each leading position, whether it was declared
         /// `Symbol(kind)` and so accepts only a symbol. None when no
@@ -570,7 +574,7 @@ enum Form {
 }
 
 impl Expr {
-    /// The name of a symbol or declared function.
+    /// The name of a symbol or declared constant.
     fn plain_name(&self) -> Option<&Py<PyString>> {
         match &self.form {
             Form::Symbol { name } | Form::Declared { name, .. } => Some(name),
@@ -607,7 +611,7 @@ fn structural_eq(py: Python<'_>, a: &Expr, b: &Expr) -> PyResult<bool> {
         (Form::Apply { head: h1, args: a1 }, Form::Apply { head: h2, args: a2 }) => {
             structural_eq(py, h1.get(), h2.get())? && a1.bind(py).as_any().eq(a2.bind(py))?
         }
-        // Declared functions are equal only when identical, checked above,
+        // Declared constants are equal only when identical, checked above,
         // and different forms are never equal.
         _ => false,
     })
@@ -916,7 +920,7 @@ impl Expr {
         }
     }
 
-    /// The name of a symbol or declared function, or None.
+    /// The name of a symbol or declared constant, or None.
     #[getter]
     fn name(&self, py: Python<'_>) -> Option<Py<PyString>> {
         self.plain_name().map(|name| name.clone_ref(py))
@@ -959,6 +963,13 @@ impl Expr {
     #[getter]
     fn is_literal(&self) -> bool {
         matches!(self.form, Form::Literal { .. })
+    }
+
+    /// Whether this is a declared constant, of any kind, so also a declared
+    /// function such as `sin`.
+    #[getter]
+    fn is_constant(&self) -> bool {
+        matches!(self.form, Form::Declared { .. })
     }
 
     /// The Python value held by a literal, or None.
@@ -1156,6 +1167,23 @@ fn declare_function<'py>(
     Bound::new(py, Expr { kind, form: Form::Declared { name, names, symbols } })
 }
 
+/// Declare a constant: `pi = declare_constant("pi", NumberKind)`, a new named
+/// leaf of `kind`, which can be any kind.
+///
+/// It stands for one specific thing: it is equal only to itself, and unlike
+/// a symbol it is not accepted in a `Symbol(kind)` position. Every call makes
+/// a different constant, even with a name already used. Of a function kind
+/// it is a declared function with no argument names.
+#[pyfunction]
+fn declare_constant<'py>(
+    py: Python<'py>,
+    name: Py<PyString>,
+    kind: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, Expr>> {
+    let kind = expect_kind(kind)?;
+    Bound::new(py, Expr { kind, form: Form::Declared { name, names: None, symbols: None } })
+}
+
 /// Say what an operator builds for a kind:
 /// `set_operator(NumberKind, "+", Add)`. The operators are "+", "-", "*",
 /// "/", "**", "neg" (unary minus), "<", ">", "<=" and ">=".
@@ -1204,6 +1232,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(declare_kind_family, m)?)?;
     m.add_function(wrap_pyfunction!(function_kind_py, m)?)?;
     m.add_function(wrap_pyfunction!(declare_function, m)?)?;
+    m.add_function(wrap_pyfunction!(declare_constant, m)?)?;
     m.add_function(wrap_pyfunction!(set_operator, m)?)?;
     Ok(())
 }
