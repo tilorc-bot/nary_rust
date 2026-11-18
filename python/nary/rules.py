@@ -1,11 +1,11 @@
 """Rewrite rules, and the facts ``unordered`` and ``flat``, as plain data.
 
 A rule says that one expression may be replaced by another. It is written
-with the ordinary functions and operators, and recorded with ``rule``:
+with the ordinary functions and operators, with ``rule``:
 
-- ``rule(pattern, replacement, when=None, name=None)`` checks the rule,
-  records it and returns it as a ``Rule``. ``rules()`` returns every rule
-  recorded so far, in the order they were recorded.
+- ``rule(pattern, replacement, when=None, name=None)`` checks the rule and
+  returns it as a ``Rule``. It is not recorded anywhere: a set of rules is
+  an ordinary Python list of them, such as ``nary.arithmetic_rules.rules``.
 - Every symbol in a rule is a variable: it stands for any expression of its
   kind, including one with no value. There is no list of variables. A
   declared constant such as ``pi`` or ``I`` stands for itself.
@@ -43,7 +43,7 @@ loses ``log`` and is wrong at ``a = 0``. Such a condition is written with
         ...
     ValueError: every symbol of a rule must appear in its pattern, but b is in the replacement only
 
-Two facts about a function are recorded next to the rules, because each is
+Two facts about a function are recorded, next to the rules, because each is
 a claim about what the function means that needs a proof, as a rule does.
 They are not rules: applied as rewrites they would never stop. A matcher
 would use them while matching.
@@ -67,10 +67,9 @@ different kinds in one rule. A rule that contains a ``Lambda`` anywhere is
 refused for now: a variable bound by a lambda is not a variable of the rule,
 and how such rules are written and matched has not been designed.
 
-Deliberately not here yet: nothing applies a rule, matches a pattern,
-decides a condition or computes with literals, and nothing writes a rule in
-Lean. All rules go into one list, with no rule sets. The rules about
-numbers are in ``nary.arithmetic_rules``; importing it records them.
+Not here: rules are applied by ``nary.rewriting``. Nothing decides a
+condition or computes with literals, and nothing writes a rule in Lean yet.
+The rules about numbers are the list ``nary.arithmetic_rules.rules``.
 
 The module is imported as ``nary.rules``; its names are not re-exported
 from ``nary``.
@@ -80,10 +79,8 @@ from ._core import Expr, Kind
 from .functions import is_lambda
 from .kinds import BoolKind
 
-__all__ = ["Rule", "flat", "is_flat", "is_unordered", "rule", "rules", "unordered"]
+__all__ = ["Rule", "flat", "is_flat", "is_unordered", "rule", "unordered"]
 
-# Every rule recorded with rule(), in order.
-_rules = []
 # The declared functions recorded with unordered() and with flat().
 _unordered = set()
 _flat = set()
@@ -122,7 +119,7 @@ class Rule:
 
     ``variables`` are the symbols of the pattern, in order of first
     appearance, and ``erased`` those of them that are not in the
-    replacement. Build one with ``rule(...)``, which also records it.
+    replacement. ``rule(...)`` builds one.
     """
 
     __slots__ = ("condition", "erased", "name", "pattern", "replacement", "variables")
@@ -195,7 +192,7 @@ class Rule:
 
 
 def rule(pattern, replacement, when=None, name=None):
-    """Check, record and return the rule ``pattern -> replacement``.
+    """Check and return the rule ``pattern -> replacement``.
 
     ``pattern`` is an expression that is not a bare symbol, and
     ``replacement`` an expression of the same kind, or a Python value that
@@ -205,14 +202,7 @@ def rule(pattern, replacement, when=None, name=None):
     applied only where it is known to hold. ``name`` is ``None`` or a
     ``str``. A rule that contains a ``Lambda`` is refused for now.
     """
-    r = Rule(pattern, replacement, when=when, name=name)
-    _rules.append(r)
-    return r
-
-
-def rules():
-    """Every rule recorded with ``rule``, in the order they were recorded."""
-    return tuple(_rules)
+    return Rule(pattern, replacement, when=when, name=name)
 
 
 def _is_declared_function(e):
