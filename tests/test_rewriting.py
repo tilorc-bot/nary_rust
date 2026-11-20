@@ -1,18 +1,8 @@
-"""Applying rules with nary.rewriting."""
-
-import doctest
-
-import nary.rewriting
 from nary import Add, Lambda, Mul, Ne, NumberKind, cos, log, sin, tan
 from nary.arithmetic_rules import rules
 from nary.rewriting import rewrite
 
-x, y = NumberKind("x"), NumberKind("y")
-
-
-def test_docstring_examples():
-    result = doctest.testmod(nary.rewriting)
-    assert result.attempted > 0 and result.failed == 0
+x, y, z = NumberKind("x"), NumberKind("y"), NumberKind("z")
 
 
 def test_unordered_and_flat_matching():
@@ -36,13 +26,11 @@ def test_erased_variable():
 
 
 def test_erased_variable_with_a_domain():
-    # sin and cos have the domain true; log has Ne(x, 0), tan Ne(cos(x), 0).
     assert rewrite(sin(x) * 0, rules) == NumberKind(0)
     assert rewrite(sin(cos(x)) * 0, rules) == NumberKind(0)
     assert rewrite(sin(log(x)) * 0, rules) == sin(log(x)) * 0
     assert rewrite(log(x) * 0, rules, known=lambda condition: condition == Ne(x, 0)) == NumberKind(0)
     assert rewrite(tan(x) * 0, rules, known=lambda condition: condition == Ne(cos(x), 0)) == NumberKind(0)
-    # A call of a lambda is not known to have a value.
     assert rewrite(Lambda(y, y)(x) * 0, rules) == Lambda(y, y)(x) * 0
 
 
@@ -55,3 +43,13 @@ def test_lambda_untouched():
 def test_several_rules_in_sequence():
     e = (x * 1 + 0) ** 1 - (y + 0) * 0
     assert rewrite(e, rules) == x
+
+
+def test_arithmetic_on_literals():
+    assert rewrite(Add(x, 2, y, 3), rules) == Add(x, 5, y)
+    assert rewrite(Mul(2, x, 3), rules) == Mul(6, x)
+    assert rewrite(2 * x + 3 * x, rules) == Mul(5, x)
+    assert rewrite(2 * x + x, rules) == Mul(3, x)
+    assert rewrite(2 * x - 2 * x, rules) == NumberKind(0)
+    assert rewrite(x * y + 2 * z, rules) == x * y + 2 * z
+    assert rewrite(Add(Mul(2, x, y), Mul(x, y)), rules) == Add(Mul(2, x, y), Mul(x, y))

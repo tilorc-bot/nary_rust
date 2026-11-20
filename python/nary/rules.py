@@ -1,29 +1,4 @@
-"""Rewrite rules, and the facts ``unordered`` and ``flat``, as plain data.
-
-A rule says that one expression may be replaced by another. It is written
-with the ordinary functions and operators, with ``rule``:
-
-- ``rule(pattern, replacement, when=None, name=None)`` checks the rule and
-  returns it as a ``Rule``. It is not recorded anywhere: a set of rules is
-  an ordinary Python list of them, such as ``nary.arithmetic_rules.rules``.
-- Every symbol in a rule is a variable: it stands for any expression of its
-  kind, including one with no value. There is no list of variables. A
-  declared constant such as ``pi`` or ``I`` stands for itself.
-- A Python value as the replacement, such as the ``1`` of ``rule(a / a, 1)``,
-  becomes a literal of the pattern's kind, the way ``x + 1`` converts ``1``.
-- ``when=`` is a ``BoolKind`` expression. The rule may be applied only where
-  it is known to hold.
-
-A rule claims, following issue #2: wherever its condition holds and every
-erased variable has a value, the pattern and the replacement both have no
-value or both have the same value. A variable is erased when it is in the
-pattern and not in the replacement, as ``a`` is in ``a * 0 -> 0``:
-``log(0) * 0`` has no value, so that rule is only claimed where ``a`` has
-one. ``Rule.erased`` lists those variables, and nothing more is derived from
-it. It does not cover every rule that needs a condition: a rule can keep
-every variable and still lose a partial function, as ``exp(log(a)) -> a``
-loses ``log`` and is wrong at ``a = 0``. Such a condition is written with
-``when=``.
+"""rule checks a rule and returns it.
 
     >>> from nary import BoolKind, Ne, NumberKind
     >>> from nary.logic import Not
@@ -32,64 +7,57 @@ loses ``log`` and is wrong at ``a = 0``. Such a condition is written with
     >>> r = rule(a / a, 1, when=Ne(a, 0))
     >>> r
     Rule(Mul(a, Pow(a, -1)), 1, when=Ne(a, 0))
+
+A Rule keeps its pattern, replacement, condition and name.
+
     >>> r.pattern, r.replacement, r.condition, r.name
     (Mul(a, Pow(a, -1)), 1, Ne(a, 0), None)
+
+The variable a is erased because it is not in the replacement.
+
     >>> r.variables, r.erased
     ((a,), (a,))
+
+A rule can have a name.
+
     >>> rule(Not(Not(p)), p, name="double negation")
     Rule(Not(Not(p)), p, name='double negation')
+
+Every symbol of the replacement must be in the pattern.
+
     >>> rule(a + 0, a + NumberKind("b"))
     Traceback (most recent call last):
         ...
     ValueError: every symbol of a rule must appear in its pattern, but b is in the replacement only
 
-Two facts about a function are recorded, next to the rules, because each is
-a claim about what the function means that needs a proof, as a rule does.
-They are not rules: applied as rewrites they would never stop. A matcher
-would use them while matching.
+The symbols inside computed(...) are literal variables, which are never erased.
 
-- ``unordered(f)``: the order of ``f``'s arguments does not change its
-  value, so ``Add(a, b, c)`` is ``Add(c, a, b)``. ``f`` must be a declared
-  function whose positions all have the same kind, with no position that
-  accepts only a symbol.
-- ``flat(f)``: an ``f`` directly inside an ``f`` can be merged into it, so
-  ``Add(a, Add(b, c))`` is ``Add(a, b, c)``. ``f`` must be a declared
-  function that takes any number of arguments (``rest=``) of the kind it
-  returns, and no other arguments.
-- ``is_unordered(f)`` and ``is_flat(f)`` tell whether the fact is recorded.
-  Each fact can be recorded once for each function.
-
-Refused, each with an error: a pattern that is not an expression or is a
-bare symbol; a replacement of another kind than the pattern; a condition
-that is not a ``BoolKind`` expression; a symbol in the replacement or the
-condition that is not in the pattern; two symbols with the same name and
-different kinds in one rule. A rule that contains a ``Lambda`` anywhere is
-refused for now: a variable bound by a lambda is not a variable of the rule,
-and how such rules are written and matched has not been designed.
-
-Not here: rules are applied by ``nary.rewriting``, and ``nary.lean`` writes
-a rule's claim as a Lean statement. Nothing decides a condition or computes
-with literals. The rules about numbers are the list
-``nary.arithmetic_rules.rules``.
-
-The module is imported as ``nary.rules``; its names are not re-exported
-from ``nary``.
+    >>> from nary.rules import computed
+    >>> m, n = NumberKind("m"), NumberKind("n")
+    >>> r = rule(m * a + n * a, computed(m + n) * a, name="collect")
+    >>> r.replacement, r.literal_variables, r.erased
+    (Mul(computed(Add(m, n)), a), (m, n), ())
 """
 
 from ._core import Expr, Kind
+from .domains import declare_function
 from .functions import is_lambda
-from .kinds import BoolKind
+from .kinds import BoolKind, NumberKind
+from .logic import true
 
-__all__ = ["Rule", "flat", "is_flat", "is_unordered", "rule", "unordered"]
+__all__ = [
+    "Rule", "computation", "computed", "computes", "flat", "is_flat",
+    "is_unordered", "rule", "unordered",
+]
 
-# The declared functions recorded with unordered() and with flat().
 _unordered = set()
 _flat = set()
+_computations = {}
+
+computed = declare_function("computed", NumberKind, returns=NumberKind, domain=true)
 
 
 def _subexpressions(e):
-    """Every subexpression of ``e``, ``e`` first, then the head and the
-    arguments of an application from left to right."""
     stack = [e]
     while stack:
         e = stack.pop()
@@ -99,8 +67,6 @@ def _subexpressions(e):
 
 
 def _symbols(e):
-    """The symbols of ``e``, each once, in order of first appearance.
-    Refuses a lambda."""
     symbols = []
     for sub in _subexpressions(e):
         if is_lambda(sub):
@@ -113,17 +79,24 @@ def _symbols(e):
     return symbols
 
 
+def _literal_variables(e):
+    if e.is_symbol:
+        return [e]
+    if e.is_literal:
+        return []
+    if e.head in _computations:
+        return [symbol for arg in e.args for symbol in _literal_variables(arg)]
+    raise ValueError(
+        f"inside computed(...) only symbols, literals and functions recorded "
+        f"with computes() are allowed, got {e!r}"
+    )
+
+
 class Rule:
-    """A rewrite rule: ``pattern`` may be replaced by ``replacement`` where
-    ``condition`` holds (``None`` means everywhere) and every variable in
-    ``erased`` has a value.
-
-    ``variables`` are the symbols of the pattern, in order of first
-    appearance, and ``erased`` those of them that are not in the
-    replacement. ``rule(...)`` builds one.
-    """
-
-    __slots__ = ("condition", "erased", "name", "pattern", "replacement", "variables")
+    __slots__ = (
+        "condition", "erased", "literal_variables", "name", "pattern", "replacement",
+        "variables",
+    )
 
     def __init__(self, pattern, replacement, when=None, name=None):
         if not isinstance(pattern, Expr):
@@ -151,11 +124,22 @@ class Rule:
         if name is not None and not isinstance(name, str):
             raise TypeError(f"the name of a rule must be a str or None, got {name!r}")
 
+        for where, e in (("pattern", pattern), ("condition", when)):
+            if e is not None and any(sub == computed for sub in _subexpressions(e)):
+                raise ValueError(
+                    f"computed(...) may appear only in the replacement of a rule, "
+                    f"but the {where} is {e!r}"
+                )
+        literal_variables = []
+        for sub in _subexpressions(replacement):
+            if sub.head == computed:
+                for symbol in _literal_variables(sub.args[0]):
+                    if symbol not in literal_variables:
+                        literal_variables.append(symbol)
+
         variables = _symbols(pattern)
         in_replacement = _symbols(replacement)
         in_condition = _symbols(when) if when is not None else []
-        # Two symbols with one name and different kinds are different
-        # variables that print the same.
         kinds = {}
         for symbol in variables + in_replacement + in_condition:
             kind = kinds.setdefault(symbol.name, symbol.kind)
@@ -179,6 +163,7 @@ class Rule:
         set_(self, "name", name)
         set_(self, "variables", tuple(variables))
         set_(self, "erased", tuple(v for v in variables if v not in in_replacement))
+        set_(self, "literal_variables", tuple(literal_variables))
 
     def __setattr__(self, attribute, value):
         raise AttributeError("a Rule cannot be changed")
@@ -193,21 +178,10 @@ class Rule:
 
 
 def rule(pattern, replacement, when=None, name=None):
-    """Check and return the rule ``pattern -> replacement``.
-
-    ``pattern`` is an expression that is not a bare symbol, and
-    ``replacement`` an expression of the same kind, or a Python value that
-    becomes a literal of that kind. Every symbol is a variable, and every
-    symbol of the replacement and of ``when`` must be in the pattern.
-    ``when`` is ``None`` or a ``BoolKind`` expression: the rule may be
-    applied only where it is known to hold. ``name`` is ``None`` or a
-    ``str``. A rule that contains a ``Lambda`` is refused for now.
-    """
     return Rule(pattern, replacement, when=when, name=name)
 
 
 def _is_declared_function(e):
-    """Whether ``e`` is a declared function: a constant of a function kind."""
     return isinstance(e, Expr) and e.is_constant and e.kind.inputs is not None
 
 
@@ -217,9 +191,6 @@ def _check_declared_function(caller, f):
 
 
 def unordered(f):
-    """Record that the order of the arguments of the declared function ``f``
-    does not change its value. Every position of ``f`` must have the same
-    kind and accept any expression of it. It can be recorded once."""
     _check_declared_function("unordered", f)
     positions = f.params + ((f.kind.rest,) if f.kind.rest is not None else ())
     if not positions or not all(isinstance(p, Kind) for p in positions):
@@ -238,10 +209,6 @@ def unordered(f):
 
 
 def flat(f):
-    """Record that an application of the declared function ``f`` directly
-    inside another can be merged into it. ``f`` must take any number of
-    arguments (``rest=``) of the kind it returns, and no other arguments.
-    It can be recorded once."""
     _check_declared_function("flat", f)
     if f.kind.inputs or f.kind.rest is not f.kind.output:
         raise ValueError(
@@ -254,12 +221,24 @@ def flat(f):
 
 
 def is_unordered(f):
-    """Whether ``unordered(f)`` has been recorded."""
     _check_declared_function("is_unordered", f)
     return f in _unordered
 
 
 def is_flat(f):
-    """Whether ``flat(f)`` has been recorded."""
     _check_declared_function("is_flat", f)
     return f in _flat
+
+
+def computes(f, integers):
+    _check_declared_function("computes", f)
+    if not callable(integers) or isinstance(integers, Expr):
+        raise TypeError(f"computes expects a Python function, got {integers!r}")
+    if f in _computations:
+        raise ValueError(f"how {f!r} is computed is already recorded")
+    _computations[f] = integers
+
+
+def computation(f):
+    _check_declared_function("computation", f)
+    return _computations.get(f)

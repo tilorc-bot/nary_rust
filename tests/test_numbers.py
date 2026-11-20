@@ -1,5 +1,3 @@
-"""Literals: Python values held as leaves, for kinds that declare them."""
-
 import nary as nr
 import pytest
 from nary import BoolKind, NumberKind, Symbol, declare_function, declare_kind
@@ -39,7 +37,7 @@ def test_literal_equality_and_hash():
     assert NumberKind(10**30) == NumberKind(10**30)
     Other = declare_kind("Other", literals=(int, float))
     assert Other(3) != NumberKind(3)
-    assert Other(1) != Other(1.0)  # the same value, but not the same type
+    assert Other(1) != Other(1.0)
     assert len({NumberKind(1), NumberKind(1), Other(1), Other(1.0)}) == 3
 
 
@@ -58,7 +56,7 @@ def test_a_value_takes_the_kind_of_its_position():
 
 def test_operators_with_an_int_build_inert_trees():
     assert x + 1 == nr.Add(x, 1)
-    assert repr(x - 1) == "Add(x, Mul(-1, 1))"  # not folded
+    assert repr(x - 1) == "Add(x, Mul(-1, 1))"
     assert repr(x / 2) == "Mul(x, Pow(2, -1))"
     assert x ** 2 == nr.Pow(x, 2) and (x < 1) == nr.Lt(x, 1)
     assert (1 < x) == nr.Gt(x, 1)

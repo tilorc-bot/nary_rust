@@ -1,5 +1,3 @@
-"""Matrices of numbers, declared in nary.matrices."""
-
 import pytest
 from nary import NumberKind
 from nary.matrices import (

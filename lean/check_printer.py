@@ -1,21 +1,3 @@
-"""Check that Lean accepts what nary.lean prints.
-
-Prints a handful of example expressions with ``to_lean_example`` into a
-temporary Lean file that imports ``Nary``, and runs ``lake env lean`` on it
-in this directory. Each example is checked three times: at the top level,
-after ``open Nary`` and inside ``namespace Nary``, since the full names are
-meant to be correct wherever the output is pasted. Lean only checks that
-each line is a well-typed term of the stated type; it does not check that
-the term means what the Python expression means.
-
-Run by hand, with the Python that has ``nary`` installed, after
-``lake build``:
-
-    .venv/bin/python lean/check_printer.py
-
-It is not part of the Python tests, which do not need Lean.
-"""
-
 import shutil
 import subprocess
 import sys
@@ -26,36 +8,42 @@ import nary as nr
 from nary.calculus import Derivative, NumberFunction
 from nary.lean import to_lean_example
 from nary.logic import And, Not, Or, false, true
+from nary.sets import (
+    Contains,
+    FiniteSet,
+    Integers,
+    Intersection,
+    NumberSet,
+    Reals,
+    Union,
+)
 
 LEAN_DIR = Path(__file__).resolve().parent
 
 x, y = nr.NumberKind("x"), nr.NumberKind("y")
 p, q = nr.BoolKind("p"), nr.BoolKind("q")
 f = NumberFunction("f")
+S = NumberSet("S")
 
 EXAMPLES = [
-    # symbols, literals and a list: x - y and x / 2
     x - y,
     x / 2,
-    # positional arguments, the constants, the elementary functions
     nr.Pow(nr.E, nr.I * nr.pi) + nr.log(nr.sin(x) + nr.cos(y) * nr.tan(x)),
     nr.exp(nr.re(x)) ** -3,
-    # empty lists
     nr.Add() * nr.Mul(),
-    # comparisons and logic
     And(nr.Eq(x, 0), Or(p, Not(q)), nr.Ne(x, y), true),
     Or(x < y, x <= y, x > y, x >= y, false),
-    # a lambda, and a call of a lambda (a substitution)
     nr.Lambda(x, x * x),
     nr.Lambda(x, nr.sin(x))(y + 1),
-    # a function symbol, Derivative, and a declared function as a value
     f(x) + Derivative(f)(y),
     Derivative(Derivative(nr.sin)),
     nr.Lambda(y, Derivative(nr.Lambda(x, x * y))(y)),
-    # symbol names that are Lean names, keywords, or not identifiers
     nr.NumberKind("I") * nr.I + nr.NumberKind("pi") + nr.NumberKind("fun")
     + nr.NumberKind("at") + nr.NumberKind("x 1") + nr.NumberKind("θ"),
     And(nr.BoolKind("true"), nr.BoolKind("Not"), true),
+    And(Contains(x, Reals), Contains(y, Integers)),
+    Contains(x, Union(FiniteSet(1, y), S, Intersection())),
+    Intersection(S, Union(), FiniteSet()),
 ]
 
 

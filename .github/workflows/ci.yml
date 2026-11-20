@@ -27,18 +27,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # Installs the toolchain from lean/lean-toolchain, downloads Mathlib's
-      # prebuilt files (lake exe cache get) and runs lake build in lean/.
       - uses: leanprover/lean-action@v1
         with:
           lake-package-directory: lean
           auto-config: false
           build: true
-          # --wfail turns warnings into errors, so a proof left as `sorry`
-          # (which Lean only warns about) fails the build.
           build-args: "--wfail"
           use-mathlib-cache: true
-      # check_printer.py needs the nary package and the built Lean project.
       - uses: astral-sh/setup-uv@v10.3.3
       - run: uv venv
       - run: uvx maturin develop -r
