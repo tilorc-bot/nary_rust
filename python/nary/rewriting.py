@@ -1,9 +1,10 @@
 """Applying rewrite rules: ``rewrite(e, rules, known=None)``.
 
 This is the engine that applies rules written with ``nary.rules``. It
-uses each rule's ``pattern``, ``replacement``, ``condition`` and ``erased``,
-and the facts ``unordered`` and ``flat``. It returns a new expression; the
-expression given is never changed, because expressions are immutable.
+uses each rule's ``pattern``, ``replacement``, ``condition``, ``erased`` and
+``literal_variables``, the facts ``unordered`` and ``flat``, and what
+``computes`` records. It returns a new expression; the expression given is
+never changed, because expressions are immutable.
 
     >>> from nary import NumberKind, log, sin
     >>> from nary.arithmetic_rules import rules
@@ -25,7 +26,7 @@ known. ``known`` is the only place where assumptions enter: this module
 decides nothing about conditions itself, except that the constant ``true``
 holds.
 
-How it works, in six points:
+How it works, in seven points:
 
 1. Order of work. The head and the arguments of an application are
    rewritten first, then the application itself. When a rule applies, the
@@ -56,6 +57,9 @@ How it works, in six points:
    ``Add(x, 0, y)`` into ``Add(x, y)``, and ``a + a -> 2 * a`` turns
    ``Add(x, y, x)`` into ``Add(Mul(2, x), y)``. A function recorded as
    ``flat`` but not ``unordered`` is matched by position (there is none yet).
+   A literal variable of the rule (one inside ``computed(...)``) matches
+   only a literal; a way of matching that binds it to anything else is
+   skipped.
 4. Conditions. A condition holds when it is the constant ``true`` or
    ``known`` returns ``True`` for it. Nothing else is evaluated or
    simplified: ``Or(Ne(2, 0), ...)`` is given to ``known`` as it is. A rule
@@ -81,14 +85,19 @@ How it works, in six points:
    check applies to every rule that erases a variable, with or without a
    condition. If one way of matching fails a condition or this check, the
    next way is tried.
-6. Lambdas. A lambda is returned unchanged: the engine does not look inside
+6. Computed literals. In the replacement, after each variable is replaced
+   by what it matched, each ``computed(e)`` is replaced by the literal of
+   the integer value of ``e``, worked out with the Python functions
+   recorded with ``computes``: with ``rule(m + n, computed(m + n))``,
+   ``Add(2, 3)`` becomes ``5``. This is the only arithmetic the engine does,
+   and only where a rule asks for it.
+7. Lambdas. A lambda is returned unchanged: the engine does not look inside
    it, because its variables are not the free symbols that ``known`` talks
    about. The arguments of a call of a lambda are still rewritten.
 
-Deliberately not here: arithmetic on literals (``Add(2, 3)`` stays as it
-is), putting arguments in a canonical order, strategies or options,
-assumptions, and a pattern written with a flat function nested in itself
-(``a + b + a``) is not flattened, so at the top it never matches.
+Deliberately not here: putting arguments in a canonical order, strategies
+or options, assumptions, and a pattern written with a flat function nested
+in itself (``a + b + a``) is not flattened, so at the top it never matches.
 
 The module is imported as ``nary.rewriting``; its names are not re-exported
 from ``nary``.
@@ -98,7 +107,7 @@ from ._core import Expr
 from .domains import domain_of
 from .functions import is_lambda
 from .logic import true
-from .rules import is_flat, is_unordered
+from .rules import computation, computed, is_flat, is_unordered
 
 __all__ = ["rewrite"]
 
@@ -132,6 +141,8 @@ def _rewrite(e, rules, known):
 def _apply(rule, e, known):
     """The result of applying ``rule`` at the top of ``e``, or ``None``."""
     for bindings, used in _match_top(rule.pattern, e):
+        if not all(bindings[v].is_literal for v in rule.literal_variables):
+            continue
         condition = rule.condition
         if condition is not None and not _holds(_substitute(condition, bindings), known):
             continue
@@ -251,11 +262,21 @@ def _match_unordered(patterns, args, bindings, used):
 
 
 def _substitute(e, bindings):
-    """``e`` with each variable in ``bindings`` replaced by what it matched.
-    ``e`` is the replacement or the condition of a rule, so it contains no
-    lambda."""
+    """``e`` with each variable in ``bindings`` replaced by what it matched,
+    and each ``computed(...)`` by its literal (point 6). ``e`` is the
+    replacement or the condition of a rule, so it contains no lambda."""
     if e.is_symbol:
         return bindings.get(e, e)
     if e.head is None:
         return e
+    if e.head == computed:
+        return e.kind(_integer(_substitute(e.args[0], bindings)))
     return _substitute(e.head, bindings)(*(_substitute(arg, bindings) for arg in e.args))
+
+
+def _integer(e):
+    """The integer value of ``e``, made of literals and functions recorded
+    with ``computes``, as ``nary.rules`` checks."""
+    if e.is_literal:
+        return e.value
+    return computation(e.head)(*(_integer(arg) for arg in e.args))

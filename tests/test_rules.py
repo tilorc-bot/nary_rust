@@ -7,7 +7,7 @@ import nary.rules
 import pytest
 from nary import Add, BoolKind, Lambda, Mul, Ne, NumberKind, Pow, declare_function
 from nary.logic import And, true
-from nary.rules import flat, is_flat, is_unordered, rule, unordered
+from nary.rules import computed, flat, is_flat, is_unordered, rule, unordered
 
 a, b = NumberKind("a"), NumberKind("b")
 
@@ -37,6 +37,13 @@ def test_arithmetic_rules():
     assert not is_unordered(Pow) and not is_flat(Pow)
 
 
+def test_literal_variables():
+    m, n = NumberKind("m"), NumberKind("n")
+    r = rule(m * a + n * a, computed(m + n) * a)
+    assert r.variables == (m, a, n) and r.literal_variables == (m, n) and r.erased == ()
+    assert rule(a + 0, a).literal_variables == ()
+
+
 def test_rule_on_booleans():
     p = BoolKind("p")
     r = rule(And(p, true), p)
@@ -56,6 +63,10 @@ def test_refusals():
         rule(Ne(a, 0), BoolKind("a"))
     with pytest.raises(ValueError, match="cannot contain a Lambda yet"):
         rule(Lambda(b, b)(a), a)
+    with pytest.raises(ValueError, match="only in the replacement of a rule, but the pattern"):
+        rule(computed(a) + 0, a)
+    with pytest.raises(ValueError, match="inside computed.* got Pow"):
+        rule(a ** b, computed(a ** b))
     with pytest.raises(ValueError, match="already recorded as unordered"):
         unordered(Add)
     with pytest.raises(ValueError, match="arguments all have one kind"):

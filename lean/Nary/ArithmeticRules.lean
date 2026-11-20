@@ -75,6 +75,25 @@ theorem exp_log : Statement.exp_log := by
   obtain ⟨z, rfl, hz⟩ := holds_ne_zero h
   simp [exp, log, withDomain, logDomain, hz, Complex.exp_log hz]
 
+/-! ### Arithmetic on literals
+
+In these statements `m` and `n` are integers, the values of the literals
+that the engine matched, and `Nary.lit (m + n)` is the literal it computes
+with Python integers. `a` may still have no value: then both sides have none.
+-/
+
+theorem add_literals : Statement.add_literals := by
+  intro m n; simp [Add, lit]
+
+theorem mul_literals : Statement.mul_literals := by
+  intro m n; simp [Mul, lit]
+
+theorem collect : Statement.collect := by
+  intro m n a; cases a <;> simp [Add, Mul, lit, add_mul]
+
+theorem collect_one : Statement.collect_one := by
+  intro n a; cases a <;> simp [Add, Mul, lit]; ring
+
 /-! ### The facts about `Add` and `Mul` -/
 
 /-- The values of the arguments as a multiset (which forgets their order),
@@ -130,6 +149,10 @@ theorem proved : Proved where
   pow_one := pow_one
   pow_zero := pow_zero
   exp_log := exp_log
+  add_literals := add_literals
+  mul_literals := mul_literals
+  collect := collect
+  collect_one := collect_one
   add_unordered := add_unordered
   add_flat := add_flat
   mul_unordered := mul_unordered
