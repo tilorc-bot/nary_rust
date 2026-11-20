@@ -51,8 +51,10 @@ Known gaps:
   ever computed or simplified.
 """
 
-from ._core import FunctionKind, declare_function
+from ._core import FunctionKind
+from .domains import declare_function
 from .kinds import NumberKind
+from .logic import true
 
 __all__ = [
     "NumberFunction",
@@ -61,25 +63,19 @@ __all__ = [
 
 NumberFunction = FunctionKind((NumberKind,), NumberKind)
 
-Integral = declare_function(
-    "Integral", NumberFunction, NumberKind, NumberKind,
-    returns=NumberKind, names=("integrand", "lower", "upper"),
-)
-Sum = declare_function(
-    "Sum", NumberFunction, NumberKind, NumberKind,
-    returns=NumberKind, names=("summand", "lower", "upper"),
-)
-Product = declare_function(
-    "Product", NumberFunction, NumberKind, NumberKind,
-    returns=NumberKind, names=("factor", "lower", "upper"),
-)
-Limit = declare_function(
-    "Limit", NumberFunction, NumberKind,
-    returns=NumberKind, names=("function", "point"),
-)
-Derivative = declare_function(
-    "Derivative", NumberFunction, returns=NumberFunction, names=("function",),
-)
-Antiderivative = declare_function(
-    "Antiderivative", NumberFunction, returns=NumberFunction, names=("function",),
-)
+# The parameters, which name the arguments: Integral(sin, 0, x).integrand.
+integrand, summand = NumberFunction("integrand"), NumberFunction("summand")
+factor, function = NumberFunction("factor"), NumberFunction("function")
+lower, upper, point = NumberKind("lower"), NumberKind("upper"), NumberKind("point")
+
+# AWAITING A DECISION (see nary.domains): when an integral, sum, product or
+# limit has a value cannot be written yet, so these four have domain=None.
+Integral = declare_function("Integral", integrand, lower, upper, returns=NumberKind, domain=None)
+Sum = declare_function("Sum", summand, lower, upper, returns=NumberKind, domain=None)
+Product = declare_function("Product", factor, lower, upper, returns=NumberKind, domain=None)
+Limit = declare_function("Limit", function, point, returns=NumberKind, domain=None)
+# A derivative or an antiderivative is always a function, though it may have
+# no value at some points, as Derivative(f)(a) has none where f is not
+# differentiable.
+Derivative = declare_function("Derivative", function, returns=NumberFunction, domain=true)
+Antiderivative = declare_function("Antiderivative", function, returns=NumberFunction, domain=true)

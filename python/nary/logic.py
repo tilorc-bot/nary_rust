@@ -21,14 +21,15 @@ required, and is not converted; use ``true`` and ``false``. There are no
 operators for these functions: ``&``, ``|`` and ``~`` do not build them.
 """
 
-from ._core import declare_constant, declare_function
+from ._core import declare_constant
+from .domains import declare_function
 from .kinds import BoolKind
 
 __all__ = ["And", "Not", "Or", "false", "true"]
 
-And = declare_function("And", rest=BoolKind, returns=BoolKind)
-Or = declare_function("Or", rest=BoolKind, returns=BoolKind)
-Not = declare_function("Not", BoolKind, returns=BoolKind)
-
 true = declare_constant("true", BoolKind)
 false = declare_constant("false", BoolKind)
+
+And = declare_function("And", rest=BoolKind, returns=BoolKind, domain=true)
+Or = declare_function("Or", rest=BoolKind, returns=BoolKind, domain=true)
+Not = declare_function("Not", BoolKind, returns=BoolKind, domain=true)

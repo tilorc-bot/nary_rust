@@ -1,18 +1,30 @@
-"""Comparisons of numbers. Each returns a BoolKind."""
+"""Comparisons of numbers, each returning a BoolKind, and ``re``, the real
+part of a number, which the domains of the comparisons need."""
 
-from ._core import declare_function, set_operator
+from ._core import set_operator
+from .domains import declare_function
 from .kinds import BoolKind, NumberKind
+from .logic import And, true
 
-__all__ = ["Eq", "Ge", "Gt", "Le", "Lt", "Ne"]
+__all__ = ["Eq", "Ge", "Gt", "Le", "Lt", "Ne", "re"]
 
-Lt = declare_function("Lt", NumberKind, NumberKind, returns=BoolKind)
-Gt = declare_function("Gt", NumberKind, NumberKind, returns=BoolKind)
-Le = declare_function("Le", NumberKind, NumberKind, returns=BoolKind)
-Ge = declare_function("Ge", NumberKind, NumberKind, returns=BoolKind)
+x = NumberKind("x")
+lhs, rhs = NumberKind("lhs"), NumberKind("rhs")
+
+# The real part of a number. It is declared here rather than in
+# elementary.py, which imports this module for Ne.
+re = declare_function("re", x, returns=NumberKind, domain=true)
 # == and != compare structure and return a Python bool, so Eq and Ne have no
 # operator.
-Eq = declare_function("Eq", NumberKind, NumberKind, returns=BoolKind, names=("lhs", "rhs"))
-Ne = declare_function("Ne", NumberKind, NumberKind, returns=BoolKind, names=("lhs", "rhs"))
+Eq = declare_function("Eq", lhs, rhs, returns=BoolKind, domain=true)
+Ne = declare_function("Ne", lhs, rhs, returns=BoolKind, domain=true)
+# A comparison has a value only when both sides are real, as in
+# lean/Nary/Logic.lean. Issue #2 proposes this; the owner has not confirmed it.
+both_real = And(Eq(re(lhs), lhs), Eq(re(rhs), rhs))
+Lt = declare_function("Lt", lhs, rhs, returns=BoolKind, domain=both_real)
+Gt = declare_function("Gt", lhs, rhs, returns=BoolKind, domain=both_real)
+Le = declare_function("Le", lhs, rhs, returns=BoolKind, domain=both_real)
+Ge = declare_function("Ge", lhs, rhs, returns=BoolKind, domain=both_real)
 
 set_operator(NumberKind, "<", Lt)
 set_operator(NumberKind, ">", Gt)

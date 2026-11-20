@@ -8,6 +8,7 @@ from nary import (
     BoolKind, Expr, Kind, KindFamily, NumberKind, declare_function, declare_kind,
     declare_kind_family, set_operator,
 )
+from nary.logic import true
 
 # Families that nary does not have, declared here. Nothing in Rust knows
 # about them.
@@ -15,7 +16,7 @@ TupleKind = declare_kind_family("TupleKind")              # one or more paramete
 MatrixKind = declare_kind_family("MatrixKind", params=1)  # exactly one parameter
 
 Pair = TupleKind(NumberKind, BoolKind)
-Piece = declare_function("Piece", NumberKind, BoolKind, returns=Pair, names=("expr", "condition"))
+Piece = declare_function("Piece", NumberKind("expr"), BoolKind("condition"), returns=Pair, domain=true)
 
 x, y = NumberKind("x"), NumberKind("y")
 
@@ -108,9 +109,9 @@ def test_an_instantiated_kind_in_signatures():
     assert repr(p) == "Piece(x, Lt(x, y))"
     assert (p.expr, p.condition) == (x, x < y)
     Matrix = MatrixKind(NumberKind)
-    MatAdd = declare_function("MatAdd", rest=Matrix, returns=Matrix)
-    Trace = declare_function("Trace", Matrix, returns=NumberKind)
-    First = declare_function("First", Pair, returns=NumberKind)
+    MatAdd = declare_function("MatAdd", rest=Matrix, returns=Matrix, domain=true)
+    Trace = declare_function("Trace", Matrix, returns=NumberKind, domain=true)
+    First = declare_function("First", Pair, returns=NumberKind, domain=true)
     A, B = Matrix("A"), Matrix("B")
     assert MatAdd(A, B).kind is Matrix
     assert Trace(MatAdd(A, B)).kind is NumberKind
@@ -122,7 +123,7 @@ def test_an_instantiated_kind_in_signatures():
 
 def test_a_function_shows_what_was_declared():
     Matrix = MatrixKind(NumberKind)
-    MatAdd = declare_function("MatAdd", Matrix, rest=Matrix, returns=Matrix)
+    MatAdd = declare_function("MatAdd", Matrix, rest=Matrix, returns=Matrix, domain=true)
     assert MatAdd.name == "MatAdd"
     assert len(MatAdd.kind.inputs) == 1 and MatAdd.kind.inputs[0] is Matrix
     assert MatAdd.kind.rest is Matrix and MatAdd.kind.output is Matrix
@@ -136,7 +137,7 @@ def test_a_function_shows_what_was_declared():
 
 def test_an_instantiated_kind_is_checked():
     Matrix = MatrixKind(NumberKind)
-    Trace = declare_function("Trace", Matrix, returns=NumberKind)
+    Trace = declare_function("Trace", Matrix, returns=NumberKind, domain=true)
     with pytest.raises(TypeError, match=r"^Trace expects MatrixKind\(NumberKind\), got MatrixKind\(BoolKind\): P$"):
         Trace(MatrixKind(BoolKind)("P"))
     with pytest.raises(TypeError, match=r"^Trace expects MatrixKind\(NumberKind\), got NumberKind: x$"):
@@ -150,13 +151,13 @@ def test_an_instantiated_kind_is_checked():
 def test_the_result_kind_is_the_declared_one():
     # Nothing is inferred from the arguments: a function declared to return
     # TupleKind(NumberKind, BoolKind) returns that, whatever it is given.
-    Wrap = declare_function("Wrap", rest=MatrixKind(NumberKind), returns=Pair)
+    Wrap = declare_function("Wrap", rest=MatrixKind(NumberKind), returns=Pair, domain=true)
     assert Wrap(MatrixKind(NumberKind)("A")).kind is Pair
 
 
 def test_an_instantiated_kind_has_its_own_operators():
     Matrix = MatrixKind(declare_kind("Scalar"))
-    MatMul = declare_function("MatMul", rest=Matrix, returns=Matrix)
+    MatMul = declare_function("MatMul", rest=Matrix, returns=Matrix, domain=true)
     set_operator(Matrix, "*", MatMul)
     A, B = Matrix("A"), MatrixKind(Matrix.params[0])("B")
     assert repr(A * B) == "MatMul(A, B)"
@@ -222,9 +223,9 @@ def test_a_parameter_must_be_a_kind():
 
 def test_a_family_is_not_a_kind():
     with pytest.raises(TypeError, match=r"^expected a kind, got <kind family TupleKind>$"):
-        declare_function("f", TupleKind, returns=NumberKind)
+        declare_function("f", TupleKind, returns=NumberKind, domain=true)
     with pytest.raises(ValueError, match=r"^returns must be a kind, got <kind family TupleKind>$"):
-        declare_function("f", NumberKind, returns=TupleKind)
+        declare_function("f", NumberKind, returns=TupleKind, domain=true)
     with pytest.raises(TypeError, match=r"^expected a kind, got <kind family TupleKind>$"):
         set_operator(TupleKind, "+", nr.Add)
 
