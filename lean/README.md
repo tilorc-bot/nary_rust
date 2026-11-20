@@ -14,6 +14,8 @@ of expressions yet. Functions are partial, so:
   value;
 - a boolean expression (`BoolKind`) means a proposition or no value,
   `Option Prop` (named `Boolean`);
+- a set of numbers (`SetKind(NumberKind)`, from `nary.sets`) means a set of
+  complex numbers or no value, `Option (Set ℂ)` (named `NumberSet`);
 - a function of one number (`FunctionKind((NumberKind,), NumberKind)`) means
   a function from complex numbers to a complex number or no value,
   `ℂ → Option ℂ` (named `NumberFunction`).
@@ -39,6 +41,7 @@ domains are the same conditions that `python/nary/` declares with
 |---|---|
 | `Nary/Number.lean` | Integer literals, the constants, `Add`, `Mul`, `Pow` and the elementary functions. |
 | `Nary/Logic.lean` | Comparisons, `And`, `Or`, `Not`, `true`, `false`, and `Holds` (a condition has a value and it is true). |
+| `Nary/Sets.lean` | Sets of numbers: `Reals`, `Integers`, `Contains`, `FiniteSet`, `Union`, `Intersection`, and two theorems: `Contains a Reals = Eq (re a) a`, and `Lt a b` has a value exactly when `a` and `b` are both in `Reals`. |
 | `Nary/Calculus.lean` | Applying a function to an argument, and `Derivative`. |
 | `Nary/Facts.lean` | What the facts `unordered` and `flat` mean, `Unordered` and `Flat`, for a function on a list. |
 | `Nary/ArithmeticRules/Statements.lean` | Generated, do not edit: the statements of the rules and facts of `arithmetic_rules.py`, and the structure `Proved` that lists them. |
@@ -76,7 +79,8 @@ the free symbols as variables:
 The names are always the full ones (`Nary.Add`, `Nary.Eq`, `Nary.true`), so
 the output means the same inside or outside `namespace Nary` and after
 `open Nary`. A `NumberKind` symbol `x` is a variable `x : ℂ` and prints as
-`some x`, a `BoolKind` symbol `p : Prop` prints as `some p`, and a
+`some x`, a `BoolKind` symbol `p : Prop` prints as `some p`, a
+`SetKind(NumberKind)` symbol `S : Set ℂ` prints as `some S`, and a
 `FunctionKind((NumberKind,), NumberKind)` symbol is `f : ℂ → Nary.Number`.
 `f(a)`, and any other call whose head is not a declared function, prints as
 `Nary.apply f a`; so `Derivative(f)(a)` is `Nary.apply (Nary.Derivative f) a`.
@@ -125,7 +129,8 @@ A variable of a rule stands for any expression of its kind, including one
 with no value, so a `NumberKind` variable `a` is `a : Nary.Number` and is
 printed as `a`; in an ordinary expression a symbol stands for a number with
 a value, and `to_lean` prints it as `some a`. A `BoolKind` variable is
-`p : Nary.Boolean`. A variable of `FunctionKind((NumberKind,), NumberKind)`
+`p : Nary.Boolean`, and a `SetKind(NumberKind)` variable is
+`S : Nary.NumberSet`. A variable of `FunctionKind((NumberKind,), NumberKind)`
 is `f : Nary.NumberFunction` and gets no `≠ none` hypothesis, because an
 expression of a function kind always means a function (which may have no
 value at some points). `Nary.Holds c` is false where `c` has no value. A
@@ -208,7 +213,7 @@ uses.
 ## Python name → Lean definition
 
 All names are in the namespace `Nary`. Some of them (`Eq`, `Ne`, `And`,
-`Or`, `Not`, `Pow`, `true`, `false`) are also names in Lean itself, so use
+`Or`, `Not`, `Pow`, `true`, `false`, `Union`) are also names in Lean itself, so use
 them inside `namespace Nary` or as `Nary.Eq` and so on, not after
 `open Nary`, where they are ambiguous. "Has a value when" assumes that
 every argument has a value, except for `And` and `Or`.
@@ -229,6 +234,11 @@ every argument has a value, except for `And` and `Or`.
 | `And(p, ...)` | `And [p, ...]` | some argument is false (then false), or every argument has a value (not confirmed); `And()` is true |
 | `Or(p, ...)` | `Or [p, ...]` | some argument is true (then true), or every argument has a value (not confirmed); `Or()` is false |
 | `true`, `false` | `true`, `false` | always |
+| `Reals`, `Integers` | `Reals`, `Integers` | always; the complex numbers with imaginary part 0, and the integers |
+| `Contains(a, S)` | `Contains a S` | always |
+| `FiniteSet(a, ...)` | `FiniteSet [a, ...]` | always; `FiniteSet()` is the empty set |
+| `Union(S, ...)` | `Union [S, ...]` | always; `Union()` is the empty set |
+| `Intersection(S, ...)` | `Intersection [S, ...]` | always; `Intersection()` is the set of all complex numbers |
 | `f(a)`, `f` a function | `apply f a` | `f` has a value at `a` |
 | `sin` used as a function | `fun z => sin (some z)` | |
 | `Lambda(x, body)` | `fun x => body`, with `x` read as `some x` | |
@@ -251,6 +261,9 @@ Issue #2 does not decide these:
 - `Derivative` is the complex derivative, and needs the function to have a
   value on a whole disc around the point. So `Derivative(re)` has no value
   anywhere, although `re` has a derivative along the real line.
+- A set of numbers is `Option (Set ℂ)`, so `FiniteSet(1/0)` has no value
+  (it is not the empty set), and `Intersection()` of no sets is the set of
+  all complex numbers.
 - `Option` is used for "no value", rather than Mathlib's `Part`. `Option`
   is the simpler of the two and gives the same equality; `Part` would only
   be needed if whether something has a value had to stay undecided in the
