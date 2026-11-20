@@ -5,12 +5,14 @@ uses each rule's ``pattern``, ``replacement``, ``condition`` and ``erased``,
 and the facts ``unordered`` and ``flat``. It returns a new expression; the
 expression given is never changed, because expressions are immutable.
 
-    >>> from nary import NumberKind, log
+    >>> from nary import NumberKind, log, sin
     >>> from nary.arithmetic_rules import rules
     >>> from nary.rewriting import rewrite
     >>> x, y = NumberKind("x"), NumberKind("y")
     >>> rewrite((x + 0) * 1 + y * 0, rules)
     x
+    >>> rewrite(sin(x) * 0, rules)
+    0
     >>> rewrite(log(x) * 0, rules)               # log(0) * 0 has no value
     Mul(log(x), 0)
     >>> rewrite(x / x, rules), rewrite(x / x, rules, known=lambda c: True)
@@ -20,7 +22,8 @@ expression given is never changed, because expressions are immutable.
 given a ``BoolKind`` expression and returns ``True`` if that condition is
 known to hold; any other answer means not known. Without ``known`` nothing is
 known. ``known`` is the only place where assumptions enter: this module
-decides nothing about conditions itself.
+decides nothing about conditions itself, except that the constant ``true``
+holds.
 
 How it works, in six points:
 
@@ -53,19 +56,31 @@ How it works, in six points:
    ``Add(x, 0, y)`` into ``Add(x, y)``, and ``a + a -> 2 * a`` turns
    ``Add(x, y, x)`` into ``Add(Mul(2, x), y)``. A function recorded as
    ``flat`` but not ``unordered`` is matched by position (there is none yet).
-4. Conditions. A rule with a condition applies only if ``known`` returns
-   ``True`` for the condition with each variable replaced by what it matched.
+4. Conditions. A condition holds when it is the constant ``true`` or
+   ``known`` returns ``True`` for it. Nothing else is evaluated or
+   simplified: ``Or(Ne(2, 0), ...)`` is given to ``known`` as it is. A rule
+   with a condition applies only if the condition holds, with each variable
+   replaced by what it matched.
 5. Erased variables. A rule that erases a variable (``a`` in ``a * 0 -> 0``)
    is sound only where what the variable matched has a value. This engine
-   accepts that only when the variable matched a symbol, a literal or a
-   constant. So ``x * 0`` becomes ``0`` but ``log(x) * 0``, ``sin(x) * 0``
-   and ``(2 * x) * 0`` are left alone. This is deliberately weak: today a
-   function with no recorded domain (``nary.domains.domain(f) is None``) is
-   either total or not declared yet, so whether a compound expression has a
-   value cannot be decided soundly from what is declared. Nothing is
-   inferred from a condition being known either. The check applies to every
-   rule that erases a variable, with or without a condition. If one way of
-   matching fails a condition or this check, the next way is tried.
+   accepts that when it can show it from the declared domains
+   (``nary.domains``): a symbol, a literal or a constant has a value, and an
+   application ``f(args)`` of a declared function has one when every
+   argument has a value and ``domain_of(f(args))``, the domain of ``f``
+   with its parameters replaced by the arguments, holds. So ``x * 0`` and
+   ``sin(x) * 0`` become ``0``, but ``log(x) * 0`` is left alone unless
+   ``Ne(x, 0)`` is known. A call of a lambda and an application of an
+   unknown function, such as ``f(x)``, are not known to have a value, and
+   neither is an application of one of the functions whose domain awaits a
+   decision, such as ``Integral``. A lambda is an application of a
+   declared function with the domain ``true`` to its variables and its
+   body, so it is known to have a value when its body is:
+   ``Lambda(y, sin(y))`` is, ``Lambda(y, log(y))`` is not. Every lambda
+   means a function, so this can only err on the side of caution, even
+   though ``known`` is asked about the variables as if they were free. The
+   check applies to every rule that erases a variable, with or without a
+   condition. If one way of matching fails a condition or this check, the
+   next way is tried.
 6. Lambdas. A lambda is returned unchanged: the engine does not look inside
    it, because its variables are not the free symbols that ``known`` talks
    about. The arguments of a call of a lambda are still rewritten.
@@ -80,7 +95,9 @@ from ``nary``.
 """
 
 from ._core import Expr
+from .domains import domain_of
 from .functions import is_lambda
+from .logic import true
 from .rules import is_flat, is_unordered
 
 __all__ = ["rewrite"]
@@ -116,9 +133,9 @@ def _apply(rule, e, known):
     """The result of applying ``rule`` at the top of ``e``, or ``None``."""
     for bindings, used in _match_top(rule.pattern, e):
         condition = rule.condition
-        if condition is not None and known(_substitute(condition, bindings)) is not True:
+        if condition is not None and not _holds(_substitute(condition, bindings), known):
             continue
-        if not all(_has_a_value(bindings[v]) for v in rule.erased):
+        if not all(_has_a_value(bindings[v], known) for v in rule.erased):
             continue
         replacement = _substitute(rule.replacement, bindings)
         if used is None:
@@ -132,9 +149,22 @@ def _apply(rule, e, known):
     return None
 
 
-def _has_a_value(e):
+def _holds(condition, known):
+    """Whether ``condition`` holds. See point 4 of the docstring."""
+    return condition == true or known(condition) is True
+
+
+def _has_a_value(e, known):
     """Whether ``e`` certainly has a value. See point 5 of the docstring."""
-    return e.is_symbol or e.is_literal or e.is_constant
+    if e.is_symbol or e.is_literal or e.is_constant:
+        return True
+    # A call of a lambda or of an unknown function has no declared domain.
+    if not _is_declared(e.head):
+        return False
+    condition = domain_of(e)
+    if condition is None:  # a function whose domain awaits a decision
+        return False
+    return all(_has_a_value(arg, known) for arg in e.args) and _holds(condition, known)
 
 
 def _flatten(e):

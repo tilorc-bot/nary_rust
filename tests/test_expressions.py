@@ -3,6 +3,7 @@
 import nary as nr
 import pytest
 from nary import BoolKind, Expr, NumberKind
+from nary.logic import true
 
 x, y, z = (NumberKind(n) for n in "xyz")
 
@@ -65,8 +66,8 @@ def test_equality_and_hash_distinguish_kinds():
     assert NumberKind("p") != BoolKind("p")
     assert hash(NumberKind("p")) != hash(BoolKind("p"))
     assert len({NumberKind("p"), BoolKind("p"), NumberKind("p")}) == 2
-    f = nr.declare_function("f", NumberKind, returns=NumberKind)
-    g = nr.declare_function("f", NumberKind, returns=BoolKind)
+    f = nr.declare_function("f", NumberKind, returns=NumberKind, domain=true)
+    g = nr.declare_function("f", NumberKind, returns=BoolKind, domain=true)
     assert f(x) == f(x)
     assert f(x) != g(x)
 

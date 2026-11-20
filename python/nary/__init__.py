@@ -4,6 +4,8 @@ The compiled module ``nary._core`` provides ``Expr``, ``declare_kind``,
 ``declare_kind_family``, ``FunctionKind``, ``declare_function``,
 ``declare_constant``, ``Symbol`` and ``set_operator``, and knows nothing about
 any particular kind, function or constant other than function kinds. The
+``declare_function`` exported here is the one of ``nary.domains``, which
+calls the compiled one and also records the function's domain. The
 kinds are declared in ``nary.kinds``, and each function is declared in one of
 the other modules of this package with a ``declare_function(...)`` call,
 which makes an expression of a function kind. The constants ``pi``, ``E``
@@ -26,11 +28,11 @@ from ._core import (
     KindFamily,
     Symbol,
     declare_constant,
-    declare_function,
     declare_kind,
     declare_kind_family,
     set_operator,
 )
+from .domains import declare_function
 from .arithmetic import *  # noqa: F403
 from .constants import *  # noqa: F403
 from .elementary import *  # noqa: F403
@@ -39,7 +41,7 @@ from .kinds import *  # noqa: F403
 from .relational import *  # noqa: F403
 
 __all__ = [
-    # the declaration machinery, from the compiled module
+    # the declaration machinery, from the compiled module and nary.domains
     "Expr", "FunctionKind", "Kind", "KindFamily", "Symbol",
     "declare_constant", "declare_function", "declare_kind", "declare_kind_family",
     "set_operator",

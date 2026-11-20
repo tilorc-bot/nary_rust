@@ -43,8 +43,10 @@ Not here:
   but the functions here are declared only for ``SetKind(NumberKind)``.
 """
 
-from ._core import declare_constant, declare_function, declare_kind_family
+from ._core import declare_constant, declare_kind_family
+from .domains import declare_function
 from .kinds import BoolKind, NumberKind
+from .logic import true
 
 __all__ = [
     "SetKind", "NumberSet", "Reals", "Integers",
@@ -58,7 +60,14 @@ NumberSet = SetKind(NumberKind)
 Reals = declare_constant("Reals", NumberSet)
 Integers = declare_constant("Integers", NumberSet)
 
-Contains = declare_function("Contains", NumberKind, NumberSet, returns=BoolKind)
-FiniteSet = declare_function("FiniteSet", rest=NumberKind, returns=NumberSet)
-Union = declare_function("Union", rest=NumberSet, returns=NumberSet)
-Intersection = declare_function("Intersection", rest=NumberSet, returns=NumberSet)
+# Each of these has a value whenever its arguments have one.
+Contains = declare_function(
+    "Contains", NumberKind, NumberSet, returns=BoolKind, domain=true
+)
+FiniteSet = declare_function(
+    "FiniteSet", rest=NumberKind, returns=NumberSet, domain=true
+)
+Union = declare_function("Union", rest=NumberSet, returns=NumberSet, domain=true)
+Intersection = declare_function(
+    "Intersection", rest=NumberSet, returns=NumberSet, domain=true
+)
