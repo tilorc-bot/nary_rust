@@ -26,12 +26,22 @@ import nary as nr
 from nary.calculus import Derivative, NumberFunction
 from nary.lean import to_lean_example
 from nary.logic import And, Not, Or, false, true
+from nary.sets import (
+    Contains,
+    FiniteSet,
+    Integers,
+    Intersection,
+    NumberSet,
+    Reals,
+    Union,
+)
 
 LEAN_DIR = Path(__file__).resolve().parent
 
 x, y = nr.NumberKind("x"), nr.NumberKind("y")
 p, q = nr.BoolKind("p"), nr.BoolKind("q")
 f = NumberFunction("f")
+S = NumberSet("S")
 
 EXAMPLES = [
     # symbols, literals and a list: x - y and x / 2
@@ -56,6 +66,10 @@ EXAMPLES = [
     nr.NumberKind("I") * nr.I + nr.NumberKind("pi") + nr.NumberKind("fun")
     + nr.NumberKind("at") + nr.NumberKind("x 1") + nr.NumberKind("θ"),
     And(nr.BoolKind("true"), nr.BoolKind("Not"), true),
+    # sets of numbers, a set symbol, and empty lists of sets
+    And(Contains(x, Reals), Contains(y, Integers)),
+    Contains(x, Union(FiniteSet(1, y), S, Intersection())),
+    Intersection(S, Union(), FiniteSet()),
 ]
 
 

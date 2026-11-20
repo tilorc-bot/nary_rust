@@ -37,8 +37,10 @@ How each part is printed:
 
 - A symbol of ``NumberKind`` named ``x`` is a Lean variable ``x : ℂ`` and
   prints as ``some x``; a ``BoolKind`` symbol ``p`` is ``p : Prop`` and
-  prints as ``some p``; a symbol ``f`` of ``FunctionKind((NumberKind,),
-  NumberKind)`` is ``f : ℂ → Nary.Number`` and prints as ``f``.
+  prints as ``some p``; a symbol ``S`` of ``SetKind(NumberKind)`` (from
+  ``nary.sets``) is ``S : Set ℂ`` and prints as ``some S``; a symbol ``f``
+  of ``FunctionKind((NumberKind,), NumberKind)`` is ``f : ℂ → Nary.Number``
+  and prints as ``f``.
 - An integer literal prints as ``Nary.lit 3`` or ``Nary.lit (-1)``.
 - The declared functions and constants print with their full Lean names,
   ``Nary.Add``, ``Nary.I``, ``Nary.true``, because several of them (``Eq``,
@@ -106,8 +108,9 @@ hypothesis. ``Nary.Unordered`` and ``Nary.Flat`` are defined by hand in
 In a rule a symbol is a variable that may stand for an expression with no
 value, so it is printed differently from ``to_lean``: a ``NumberKind``
 variable ``a`` is ``a : Nary.Number`` and prints as ``a``, not ``some a``,
-and a ``BoolKind`` variable ``p`` is ``p : Nary.Boolean`` and prints as
-``p``. A variable ``f`` of ``FunctionKind((NumberKind,), NumberKind)`` is
+a ``BoolKind`` variable ``p`` is ``p : Nary.Boolean`` and prints as ``p``,
+and a ``SetKind(NumberKind)`` variable ``S`` is ``S : Nary.NumberSet`` and
+prints as ``S``. A variable ``f`` of ``FunctionKind((NumberKind,), NumberKind)`` is
 ``f : Nary.NumberFunction`` and prints as ``f``, as in ``to_lean``. An
 erased function variable gets no ``≠ none`` hypothesis: an expression of a
 function kind always means a function, though the function may have no
@@ -130,12 +133,13 @@ from ``nary``.
 
 import re as _re
 
-from . import arithmetic, calculus, constants, elementary, logic, relational
+from . import arithmetic, calculus, constants, elementary, logic, relational, sets
 from ._core import Expr
 from .calculus import NumberFunction
 from .functions import is_lambda
 from .kinds import BoolKind, NumberKind
 from .rules import Rule, is_flat, is_unordered
+from .sets import NumberSet
 
 __all__ = ["LEAN_NAMES", "to_lean", "to_lean_example", "to_lean_facts", "to_lean_rule"]
 
@@ -168,21 +172,34 @@ LEAN_NAMES = {
     logic.true: "Nary.true",
     logic.false: "Nary.false",
     calculus.Derivative: "Nary.Derivative",
+    sets.Reals: "Nary.Reals",
+    sets.Integers: "Nary.Integers",
+    sets.Contains: "Nary.Contains",
+    sets.FiniteSet: "Nary.FiniteSet",
+    sets.Union: "Nary.Union",
+    sets.Intersection: "Nary.Intersection",
 }
 
 # The Lean type of a variable of each kind of symbol, and of a result.
-_VARIABLE_TYPES = {NumberKind: "ℂ", BoolKind: "Prop", NumberFunction: "ℂ → Nary.Number"}
+_VARIABLE_TYPES = {
+    NumberKind: "ℂ",
+    BoolKind: "Prop",
+    NumberSet: "Set ℂ",
+    NumberFunction: "ℂ → Nary.Number",
+}
 _RESULT_TYPES = {
     NumberKind: "Nary.Number",
     BoolKind: "Nary.Boolean",
+    NumberSet: "Nary.NumberSet",
     NumberFunction: "ℂ → Nary.Number",
 }
 # The Lean type of a variable of a rule, which may stand for an expression
 # with no value. A function always has a value (a function, which may have
-# no value at some points), so only the first two can be erased.
+# no value at some points), so only the first three can be erased.
 _RULE_VARIABLE_TYPES = {
     NumberKind: "Nary.Number",
     BoolKind: "Nary.Boolean",
+    NumberSet: "Nary.NumberSet",
     NumberFunction: "Nary.NumberFunction",
 }
 
@@ -305,8 +322,8 @@ class _Printer:
         if e.kind not in _VARIABLE_TYPES:
             raise ValueError(
                 f"the symbol {e.name} of kind {e.kind!r} has no Lean definition: "
-                f"only symbols of NumberKind, BoolKind and {NumberFunction!r} "
-                f"are printed"
+                f"only symbols of NumberKind, BoolKind, {NumberSet!r} and "
+                f"{NumberFunction!r} are printed"
             )
         known = self.free.setdefault(e.name, e)
         if known.kind is not e.kind:
@@ -405,7 +422,7 @@ def to_lean_example(e):
     the free symbols of ``e`` as variables with their types, the type of
     ``e`` and its term.
 
-    The variables are grouped by type (numbers, then propositions, then
+    The variables are grouped by type (numbers, propositions, sets, then
     functions), each group in the order the symbols first appear in ``e``.
     """
     printer = _Printer()
