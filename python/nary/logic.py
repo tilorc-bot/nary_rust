@@ -30,6 +30,6 @@ __all__ = ["And", "Not", "Or", "false", "true"]
 true = declare_constant("true", BoolKind)
 false = declare_constant("false", BoolKind)
 
-And = declare_function("And", rest=BoolKind, returns=BoolKind, domain=lambda *args: true)
-Or = declare_function("Or", rest=BoolKind, returns=BoolKind, domain=lambda *args: true)
-Not = declare_function("Not", BoolKind, returns=BoolKind, domain=lambda x: true)
+And = declare_function("And", rest=BoolKind, returns=BoolKind, domain=true)
+Or = declare_function("Or", rest=BoolKind, returns=BoolKind, domain=true)
+Not = declare_function("Not", BoolKind, returns=BoolKind, domain=true)

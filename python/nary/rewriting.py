@@ -69,15 +69,22 @@ How it works, in seven points:
    is sound only where what the variable matched has a value. This engine
    accepts that when it can show it from the declared domains
    (``nary.domains``): a symbol, a literal or a constant has a value, and an
-   application ``f(args)`` of a declared function has one when ``f`` has a
-   stated domain, every argument has a value, and the domain of ``f``
-   applied to the arguments holds. So ``x * 0`` and ``sin(x) * 0`` become
-   ``0``, but ``log(x) * 0`` is left alone unless ``Ne(x, 0)`` is known.
-   An application of a function declared with ``domain=None``, a lambda, a
-   call of a lambda, and an application of an unknown function, such as
-   ``f(x)``, are not known to have a value. The check applies to every
-   rule that erases a variable, with or without a condition. If one way of
-   matching fails a condition or this check, the next way is tried.
+   application ``f(args)`` of a declared function has one when every
+   argument has a value and ``domain_of(f(args))``, the domain of ``f``
+   with its parameters replaced by the arguments, holds. So ``x * 0`` and
+   ``sin(x) * 0`` become ``0``, but ``log(x) * 0`` is left alone unless
+   ``Ne(x, 0)`` is known. A call of a lambda and an application of an
+   unknown function, such as ``f(x)``, are not known to have a value, and
+   neither is an application of one of the functions whose domain awaits a
+   decision, such as ``Integral``. A lambda is an application of a
+   declared function with the domain ``true`` to its variables and its
+   body, so it is known to have a value when its body is:
+   ``Lambda(y, sin(y))`` is, ``Lambda(y, log(y))`` is not. Every lambda
+   means a function, so this can only err on the side of caution, even
+   though ``known`` is asked about the variables as if they were free. The
+   check applies to every rule that erases a variable, with or without a
+   condition. If one way of matching fails a condition or this check, the
+   next way is tried.
 6. Computed literals. In the replacement, after each variable is replaced
    by what it matched, each ``computed(e)`` is replaced by the literal of
    the integer value of ``e``, worked out with the Python functions
@@ -97,7 +104,7 @@ from ``nary``.
 """
 
 from ._core import Expr
-from .domains import domain
+from .domains import domain_of
 from .functions import is_lambda
 from .logic import true
 from .rules import computation, computed, is_flat, is_unordered
@@ -162,13 +169,13 @@ def _has_a_value(e, known):
     """Whether ``e`` certainly has a value. See point 5 of the docstring."""
     if e.is_symbol or e.is_literal or e.is_constant:
         return True
-    # The head of a lambda is declared with domain=None, so a lambda has no
-    # domain here, and neither has a call of a lambda or of an unknown function.
-    condition = domain(e.head) if _is_declared(e.head) else None
-    if condition is None:
+    # A call of a lambda or of an unknown function has no declared domain.
+    if not _is_declared(e.head):
         return False
-    return (all(_has_a_value(arg, known) for arg in e.args)
-            and _holds(condition(*e.args), known))
+    condition = domain_of(e)
+    if condition is None:  # a function whose domain awaits a decision
+        return False
+    return all(_has_a_value(arg, known) for arg in e.args) and _holds(condition, known)
 
 
 def _flatten(e):

@@ -166,7 +166,7 @@ LEAN_NAMES = {
     elementary.tan: "Nary.tan",
     elementary.exp: "Nary.exp",
     elementary.log: "Nary.log",
-    elementary.re: "Nary.re",
+    relational.re: "Nary.re",
     constants.pi: "Nary.pi",
     constants.E: "Nary.E",
     constants.I: "Nary.I",

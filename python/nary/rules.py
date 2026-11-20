@@ -106,6 +106,7 @@ from ._core import Expr, Kind
 from .domains import declare_function
 from .functions import is_lambda
 from .kinds import BoolKind, NumberKind
+from .logic import true
 
 __all__ = [
     "Rule", "computation", "computed", "computes", "flat", "is_flat",
@@ -120,9 +121,10 @@ _computations = {}
 
 # A way of writing rules, not a mathematical function: computed(e) in a
 # replacement is the literal whose value is e, worked out by the engine with
-# Python integers. It has no domain and no Lean definition; nary.lean prints
-# it, in a rule, as Nary.lit applied to integer arithmetic.
-computed = declare_function("computed", NumberKind, returns=NumberKind, domain=None)
+# Python integers. Applied to literals it is a literal, so its domain is
+# true. It has no Lean definition; nary.lean prints it, in a rule, as Nary.lit
+# applied to integer arithmetic.
+computed = declare_function("computed", NumberKind, returns=NumberKind, domain=true)
 
 
 def _subexpressions(e):

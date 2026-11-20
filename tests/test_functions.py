@@ -13,15 +13,16 @@ from nary import (
     declare_function,
     is_lambda,
 )
+from nary.logic import true
 
 x, y = NumberKind("x"), NumberKind("y")
 p = BoolKind("p")
 NumToNum = FunctionKind((NumberKind,), NumberKind)
 f = NumToNum("f")
 # A function that takes a function.
-Apply = declare_function("Apply", NumToNum, NumberKind, returns=NumberKind, names=("fn", "point"), domain=None)
+Apply = declare_function("Apply", NumToNum("fn"), NumberKind("point"), returns=NumberKind, domain=true)
 # A function whose second position accepts only a symbol.
-Derivative = declare_function("Derivative", NumberKind, Symbol(NumberKind), returns=NumberKind, domain=None)
+Derivative = declare_function("Derivative", NumberKind, Symbol(NumberKind), returns=NumberKind, domain=true)
 
 
 def test_a_declared_function_is_an_expression_of_a_function_kind():
@@ -71,7 +72,7 @@ def test_wrong_kind_wrong_count_and_calling_a_non_function():
 
 
 def test_rest_functions():
-    Max = declare_function("Max", NumberKind, rest=NumberKind, returns=NumberKind, domain=None)
+    Max = declare_function("Max", NumberKind, rest=NumberKind, returns=NumberKind, domain=true)
     assert Max.kind is FunctionKind((NumberKind,), NumberKind, rest=NumberKind)
     assert repr(Max(x, y, x)) == "Max(x, y, x)"
     with pytest.raises(TypeError, match=r"^Max takes at least 1 arguments, got 0$"):
@@ -81,8 +82,8 @@ def test_rest_functions():
 
 
 def test_two_declarations_with_the_same_name_are_different():
-    a = declare_function("a", NumberKind, returns=NumberKind, domain=None)
-    b = declare_function("a", NumberKind, returns=NumberKind, domain=None)
+    a = declare_function("a", NumberKind, returns=NumberKind, domain=true)
+    b = declare_function("a", NumberKind, returns=NumberKind, domain=true)
     assert a.kind is b.kind
     assert a != b and a == a
     assert a(x) != b(x) and a(x) == a(x)
@@ -168,7 +169,8 @@ def test_named_arguments_come_from_the_head():
     a = Apply(nr.sin, x)
     assert (a.fn, a.point) == (nr.sin, x)
     assert nr.Eq(x, y).lhs == x
-    assert Apply.names == ("fn", "point") and nr.sin.names == ()
+    assert Apply.names == ("fn", "point") and nr.sin.names == ("x",)
+    assert Derivative.names == ()
     with pytest.raises(AttributeError):
         f(x).lhs
 

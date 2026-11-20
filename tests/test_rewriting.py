@@ -3,7 +3,7 @@
 import doctest
 
 import nary.rewriting
-from nary import Add, Lambda, Mul, Ne, NumberKind, cos, log, sin
+from nary import Add, Lambda, Mul, Ne, NumberKind, cos, log, sin, tan
 from nary.arithmetic_rules import rules
 from nary.rewriting import rewrite
 
@@ -36,12 +36,13 @@ def test_erased_variable():
 
 
 def test_erased_variable_with_a_domain():
-    # sin and cos have the domain true; log has Ne(x, 0).
+    # sin and cos have the domain true; log has Ne(x, 0), tan Ne(cos(x), 0).
     assert rewrite(sin(x) * 0, rules) == NumberKind(0)
     assert rewrite(sin(cos(x)) * 0, rules) == NumberKind(0)
     assert rewrite(sin(log(x)) * 0, rules) == sin(log(x)) * 0
     assert rewrite(log(x) * 0, rules, known=lambda condition: condition == Ne(x, 0)) == NumberKind(0)
-    # A lambda call has no stated domain.
+    assert rewrite(tan(x) * 0, rules, known=lambda condition: condition == Ne(cos(x), 0)) == NumberKind(0)
+    # A call of a lambda is not known to have a value.
     assert rewrite(Lambda(y, y)(x) * 0, rules) == Lambda(y, y)(x) * 0
 
 
