@@ -54,8 +54,9 @@ MatrixKind = declare_kind_family("MatrixKind", params=1)
 
 Matrix = MatrixKind(NumberKind)
 
-# No domain is stated (domain=None): a matrix has no shape yet, so neither
-# matching shapes nor an invertible matrix for Inverse can be written.
+# AWAITING A DECISION (see nary.domains): a matrix has no shape yet, so
+# neither matching shapes nor an invertible matrix for Inverse can be
+# written, and these functions have domain=None.
 MatAdd = declare_function("MatAdd", rest=Matrix, returns=Matrix, domain=None)
 MatMul = declare_function("MatMul", rest=Matrix, returns=Matrix, domain=None)
 Transpose = declare_function("Transpose", Matrix, returns=Matrix, domain=None)

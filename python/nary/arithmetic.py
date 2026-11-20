@@ -7,20 +7,21 @@ There are no Sub, Div or Neg functions. As in SymPy, ``x - y`` is
 
 from ._core import set_operator
 from .domains import declare_function
-from .elementary import re
 from .kinds import NumberKind
 from .logic import Or, true
-from .relational import Gt, Ne
+from .relational import Gt, Ne, re
 
 __all__ = ["Add", "Mul", "Pow", "NegativeOne"]
 
-Add = declare_function("Add", rest=NumberKind, returns=NumberKind, domain=lambda *args: true)
-Mul = declare_function("Mul", rest=NumberKind, returns=NumberKind, domain=lambda *args: true)
+base, exponent = NumberKind("base"), NumberKind("exp")
+
+Add = declare_function("Add", rest=NumberKind, returns=NumberKind, domain=true)
+Mul = declare_function("Mul", rest=NumberKind, returns=NumberKind, domain=true)
 # Division is Pow(y, -1), so the domain of Pow is where division by zero is
 # excluded. Under it 0**0 has no value.
 Pow = declare_function(
-    "Pow", NumberKind, NumberKind, returns=NumberKind, names=("base", "exp"),
-    domain=lambda base, exp: Or(Ne(base, 0), Gt(re(exp), 0)),
+    "Pow", base, exponent, returns=NumberKind,
+    domain=Or(Ne(base, 0), Gt(re(exponent), 0)),
 )
 
 # An ordinary literal, used by -, / and unary minus. It prints as -1.

@@ -27,6 +27,7 @@ is substituted.
 
 from ._core import Expr, FunctionKind, Symbol
 from .domains import declare_function
+from .logic import true
 
 __all__ = ["Lambda", "is_lambda"]
 
@@ -45,8 +46,9 @@ def _lambda_function(variable_kinds, body_kind):
             *(Symbol(kind) for kind in variable_kinds),
             body_kind,
             returns=FunctionKind(variable_kinds, body_kind),
-            # No domain is stated: the rewriting engine leaves lambdas alone.
-            domain=None,
+            # A lambda always means a function, though the function may
+            # have no value at some points.
+            domain=true,
         )
     return _lambda_functions[key]
 
