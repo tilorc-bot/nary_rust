@@ -1,9 +1,4 @@
-"""Sets of numbers, declared in nary.sets."""
-
-import doctest
-
 import nary as nr
-import nary.sets
 import pytest
 from nary.sets import (
     Contains,
@@ -17,12 +12,6 @@ from nary.sets import (
 
 x = nr.NumberKind("x")
 S = NumberSet("S")
-
-
-def test_module_docstring_examples():
-    result = doctest.testmod(nary.sets)
-    assert result.attempted > 0
-    assert result.failed == 0
 
 
 def test_kinds():

@@ -1,5 +1,3 @@
-"""Building expressions with the kinds and functions declared in nary."""
-
 import nary as nr
 import pytest
 from nary import BoolKind, Expr, NumberKind
@@ -22,7 +20,6 @@ def test_result_is_of_the_declared_kind():
     assert nr.sin(x).kind is NumberKind
     assert (x < y).kind is BoolKind
     assert nr.Eq(x, y).kind is BoolKind
-    # Every expression is an Expr, whatever its kind.
     assert type(x + y) is Expr and type(x < y) is Expr
 
 
