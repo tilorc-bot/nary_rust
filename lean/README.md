@@ -132,6 +132,19 @@ value at some points). `Nary.Holds c` is false where `c` has no value. A
 rule without a condition has no `Nary.Holds` hypothesis, and one that erases
 no variable has no `≠ none` hypothesis.
 
+A rule may do arithmetic on literals with `computed(...)` in its
+replacement, as `rule(m + n, computed(m + n), name="add_literals")` does
+(see `python/nary/rules.py`). A variable inside `computed(...)` matches only
+an integer literal, so it is an integer, `m : ℤ`, printed as `Nary.lit m`,
+and `computed(e)` is printed as `Nary.lit (e)` with `e` in Lean's integer
+arithmetic:
+
+    abbrev add_literals : Prop :=
+      ∀ (m n : ℤ), Nary.Add [Nary.lit m, Nary.lit n] = Nary.lit (m + n)
+
+The engine works out `m + n` with Python integers. That Python's `+` and `*`
+on integers agree with Lean's on `ℤ` is taken on trust.
+
 The name given with `rule(..., name="div_self")` is the name of the
 statement, `Nary.ArithmeticRules.Statement.div_self`, and of its theorem,
 `Nary.ArithmeticRules.div_self`. The namespace keeps them apart from
@@ -183,9 +196,10 @@ passes. A rule in another list is not covered: the script reads only
 
 When both pass, each rule and fact as written in Python is proved, from the
 definitions here. What is trusted: the printer in `nary.lean` (that the
-printed statement says what the Python rule means) and the Lean definitions
-of the functions. `#print axioms Nary.ArithmeticRules.proved` shows only
-Lean's standard axioms `propext`, `Classical.choice` and `Quot.sound`.
+printed statement says what the Python rule means), the Lean definitions
+of the functions, and that Python and Lean agree on `+` and `*` of
+integers. `#print axioms Nary.ArithmeticRules.proved` shows only Lean's
+standard axioms `propext`, `Classical.choice` and `Quot.sound`.
 
 ### Why the engine may match part of an `Add` or `Mul`
 

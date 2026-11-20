@@ -52,6 +52,22 @@ abbrev pow_zero : Prop :=
 abbrev exp_log : Prop :=
   ∀ (a : Nary.Number), Nary.Holds (Nary.Ne a (Nary.lit 0)) → Nary.exp (Nary.log a) = a
 
+/-- `Rule(Add(m, n), computed(Add(m, n)), name='add_literals')` -/
+abbrev add_literals : Prop :=
+  ∀ (m n : ℤ), Nary.Add [Nary.lit m, Nary.lit n] = Nary.lit (m + n)
+
+/-- `Rule(Mul(m, n), computed(Mul(m, n)), name='mul_literals')` -/
+abbrev mul_literals : Prop :=
+  ∀ (m n : ℤ), Nary.Mul [Nary.lit m, Nary.lit n] = Nary.lit (m * n)
+
+/-- `Rule(Add(Mul(m, a), Mul(n, a)), Mul(computed(Add(m, n)), a), name='collect')` -/
+abbrev collect : Prop :=
+  ∀ (m n : ℤ) (a : Nary.Number), Nary.Add [Nary.Mul [Nary.lit m, a], Nary.Mul [Nary.lit n, a]] = Nary.Mul [Nary.lit (m + n), a]
+
+/-- `Rule(Add(a, Mul(n, a)), Mul(computed(Add(n, 1)), a), name='collect_one')` -/
+abbrev collect_one : Prop :=
+  ∀ (n : ℤ) (a : Nary.Number), Nary.Add [a, Nary.Mul [Nary.lit n, a]] = Nary.Mul [Nary.lit (n + 1), a]
+
 abbrev add_unordered : Prop :=
   Nary.Unordered Nary.Add
 
@@ -80,6 +96,10 @@ structure Proved : Prop where
   pow_one : Statement.pow_one
   pow_zero : Statement.pow_zero
   exp_log : Statement.exp_log
+  add_literals : Statement.add_literals
+  mul_literals : Statement.mul_literals
+  collect : Statement.collect
+  collect_one : Statement.collect_one
   add_unordered : Statement.add_unordered
   add_flat : Statement.add_flat
   mul_unordered : Statement.mul_unordered
