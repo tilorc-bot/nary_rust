@@ -41,8 +41,8 @@ domains are the same conditions that `python/nary/` declares with
 | `Nary/Number.lean` | Integer literals, the constants, `Add`, `Mul`, `Pow` and the elementary functions. |
 | `Nary/Logic.lean` | Comparisons, `And`, `Or`, `Not`, `true`, `false`, and `Holds` (a condition has a value and it is true). |
 | `Nary/Calculus.lean` | Applying a function to an argument, and `Derivative`. |
-| `Nary/Facts.lean` | What the generic identities mean, for a function on a list: `Flat` (associative), `Unordered` (commutative), `Singleton`, `Identity`, `Idempotent`, `Absorbing`, `Distributive`, and the rules that follow from three of them. |
-| `Nary/ArithmeticRules/Statements.lean` | Generated, do not edit: the statements of the identities listed for `Add`, `Mul`, `Pow`, `exp`, `And` and `Or` and of the rules the engine gets from them, and the structure `Proved` that lists them. |
+| `Nary/Facts.lean` | What the generic identities mean, for a function on a list: `Flat` (associative), `Unordered` (commutative), `Singleton`, `Identity`, `Idempotent`, `Absorbing`, `Distributive`, `Inverse`, `Repeated`, and the rules that follow from three of them. |
+| `Nary/ArithmeticRules/Statements.lean` | Generated, do not edit: the statements of the identities listed for `Add`, `Mul`, `Pow`, `exp`, `sin`, `And` and `Or` and of the rules the engine gets from them, and the structure `Proved` that lists them. |
 | `Nary/ArithmeticRules.lean` | The proofs of those statements, written by hand. |
 | `generate_rules.py` | Writes `Nary/ArithmeticRules/Statements.lean` from Python; see below. |
 | `check_printer.py` | Checks with Lean that what `nary.lean` prints is accepted; see below. |
@@ -104,13 +104,16 @@ line is well typed, not that it means the same as the Python expression.
 ## Identities and rules, proved
 
 Every identity listed with `declare_identities` for `Add`, `Mul`, `Pow`,
-`exp`, `And` and `Or`, and every rule that `nary.rules.identity_rules`
-gives the engine from them (`nary.arithmetic_rules.rules` is those of
-`Add`, `Mul`, `Pow` and `exp`), is proved in Lean. The statements are not
+`exp`, `sin`, `And` and `Or`, and every rule that
+`nary.rules.identity_rules` gives the engine from them
+(`nary.arithmetic_rules.rules` is those of `Add`, `Mul`, `Pow` and `exp`,
+without `mul_repeated`), is proved in Lean. The statements are not
 written in Lean by hand: they are printed from Python, so what is listed,
 what the engine applies and what is proved cannot drift apart unnoticed.
-Each statement is named after its identity, `<function>_<identity>`
-(`add_associative`, `mul_absorbing`, `pow_zero`).
+Each statement is named after its identity: `<function>_<identity>` for a
+generic one (`add_associative`, `mul_absorbing`), the `name=` of an `Equal`
+(`pow_zero`), or a name derived from its left side (`sin_0`, see
+`nary.identities.derived_name`).
 
 ### How a rule becomes a theorem
 
@@ -142,7 +145,7 @@ statement, `Nary.ArithmeticRules.Statement.div_self`, and of its theorem,
 Mathlib's `add_zero`, `div_self` and so on. A rule without a name, or whose
 name is not a plain identifier, cannot be printed as a theorem.
 
-A specific identity, such as `("zero", Equal(a ** 0, 1, when=Ne(a, 0)))`
+A specific identity, such as `Equal(Pow(a, 0), 1, when=Ne(a, 0), name="pow_zero")`
 listed for `Pow`, is printed as the rule it gives (above). An instance of a
 generic identity is printed by `nary.lean.to_lean_identity` as the Lean
 definition of the generic identity applied to the function and the

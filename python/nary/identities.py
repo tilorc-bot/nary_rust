@@ -5,47 +5,57 @@ value. In an identity every symbol is a placeholder, as in a rule
 (``nary.rules``): it stands for any one expression of its kind. By
 convention the name of a placeholder ends in one underscore (``a_``), or in
 two (``s__``) for one that stands for any run of consecutive arguments,
-including none. The convention is only for reading: which placeholders
-stand for a run of arguments is given to ``declare_identity`` with
-``multi=``, not inferred from the name.
+including none. The two underscores are what make a placeholder stand for
+a run of arguments; listing the identity checks that such a placeholder
+sits only at a position that takes any number of arguments.
 
 A generic identity is stated once, for any function, with
-``declare_identity(name, left, right, params=(), multi=(), normal=None)``.
-It is written with placeholders of the kind ``PatternKind`` (and function
-placeholders taking any number of them), declared here as an ordinary kind:
-the core accepts a ``PatternKind`` expression only at a ``PatternKind``
-position, which is all these trees need. The head of ``left`` is a
-function placeholder, ``f_`` below; it is filled with the function the
-identity is listed for. The placeholders in ``params`` are filled where the
-identity is listed, by calling it, as in ``identity(0)``. A placeholder in
-``multi`` may only sit at a position that takes any number of arguments,
-which is checked when the identity is listed. ``normal=`` is recorded as
-data and nothing uses it yet. The generic identities declared here:
+``declare_identity(name, left, right, params=(), normal=None)``. It is
+written with placeholders of the kind ``PatternKind`` (and function
+placeholders taking any number of them), declared here as an ordinary
+kind: the core accepts a ``PatternKind`` expression only at a
+``PatternKind`` position, which is all these trees need. The head of
+``left`` is a function placeholder, ``f`` below; it is filled with the
+function the identity is listed for. The placeholders in ``params`` are
+filled where the identity is listed, by calling it, as in ``identity(0)``;
+the parameter of ``inverse`` and ``repeated`` is an expression in the
+identity's own placeholder ``a``, tied to it by name. ``e`` in
+``inverse``, which is not in its left side, is the parameter of
+``identity`` and is filled from the ``identity(e)`` listed in the same
+block (``inverse`` is refused in a block without one). ``normal=`` is
+recorded as data and nothing uses it yet. The generic identities declared
+here (``f(s, f(t), u)`` is ``f_(s__, f_(t__), u__)``):
 
-    f_(s__, f_(t__), u__) = f_(s__, t__, u__)           associative
-    f_(s__, a_, t__, b_, u__) = f_(s__, b_, t__, a_, u__) commutative  normal=Sorted
-    f_(a_) = a_                                         singleton
-    f_(s__, e_, t__) = f_(s__, t__)                     identity(e_)
-    f_(s__, a_, t__, a_, u__) = f_(s__, a_, t__, u__)   idempotent
-    f_(s__, z_, t__) = z_                               absorbing(z_)
-    f_(a_, g_(b_, c_)) = g_(f_(a_, b_), f_(a_, c_))     distributive(g_)
+    associative   f(s, f(t), u) = f(s, t, u)
+    singleton     f(a) = a
+    identity(e)   f(s, e, t) = f(s, t)
+    idempotent    f(s, a, t, a, u) = f(s, a, t, u)
+    absorbing(z)  f(s, z, t) = z
+    commutative   f(s, a, t, b, u) = f(s, b, t, a, u)    normal=Sorted
+    distributive(g)  f(a, g(b, c)) = g(f(a, b), f(a, c))
+    inverse(i)    f(a, i) = e, with e from identity(e)
+    repeated(r)   f(a, a) = r
 
 ``declare_identities(F, items)`` is the one place where everything that
 holds for the declared function ``F`` is listed: generic identities, called
-with their parameters if they have any, and specific identities, each a
-pair ``(name, Equal(left, right, when=None))`` whose ``left`` is an
-application of ``F``. Listing a generic identity fills ``f_`` with ``F``,
-the parameters with what it was called with (a Python value becomes a
-literal of the kind of ``F``'s arguments) and every other placeholder with
-a symbol of the same name of the kind of its position, and checks the
-result with the ordinary kind checks, so a listing that makes no sense is
-refused when the block is declared. A second block for the same function
-is refused. ``identities(F)`` returns the block as ``Identity`` records,
-each named ``<function>_<identity>`` (``add_associative``,
-``mul_absorbing``), the name of its Lean statement, and each with the
-listed item as an expression of the kind ``IdentityKind``: the generic
-identity applied to its parameters (a version of it declared once for each
-combination of kinds), or the ``Equal``.
+with their parameters if they have any (and with ``when=`` if they hold
+only where a condition does), and specific identities, each
+``Equal(left, right, when=None, name=None)`` whose ``left`` is an
+application of ``F``. ``singleton`` is not listed: it is added after
+``associative`` for a block that lists that, and is stated and proved like
+the others. Listing a generic identity fills ``f`` with ``F``, the
+parameters with what it was called with (a Python value becomes a literal
+of the kind of ``F``'s arguments) and every other placeholder with a symbol
+of the same name of the kind of its position, and checks the result with
+the ordinary kind checks, so a listing that makes no sense is refused when
+the block is declared. A second block for the same function is refused.
+``identities(F)`` returns the block as ``Identity`` records, each named
+after its Lean statement: ``<function>_<identity>`` for a generic one
+(``add_associative``, ``mul_absorbing``), the ``name=`` of an ``Equal``, or
+else a name derived from its left side (``derived_name``: ``sin(0)`` gives
+``sin_0``); and each with the listed item as an expression of the kind
+``IdentityKind``: the generic identity applied to its parameters (a version
+of it declared once for each combination of kinds), or the ``Equal``.
 
     >>> from nary import Add, NumberKind
     >>> from nary.identities import associative, identities
