@@ -1,8 +1,12 @@
 //! Typed, inert expression trees for Python, written in Rust.
 //!
 //! `Expr` is the only class of expression, and every expression is one of
-//! four forms: a symbol, a literal (a Python value held as it is), a declared
-//! constant, or an application of a head expression to arguments. Each
+//! five forms: a symbol, a literal (a Python value held as it is), a declared
+//! constant, a hole, or an application of a head expression to arguments. A
+//! hole, made by `hole(kind, name, multi=False)`, is a placeholder in an
+//! identity: it stands for any one expression of its kind, or with
+//! `multi=True` for any run of arguments, including none. A symbol in an
+//! identity stands for itself. Each
 //! expression has a kind. A kind is an object declared from Python with
 //! `declare_kind(name, literals=...)`, or made by instantiating a kind family
 //! declared with `declare_kind_family(name)`: `TupleKind(NumberKind, BoolKind)`.
@@ -591,7 +595,8 @@ impl SymbolMarker {
 /// An expression, of some kind.
 ///
 /// A symbol or a literal is made by calling a kind (a literal also by
-/// `apply`, from a value passed where its kind is expected), and a declared
+/// `apply`, from a value passed where its kind is expected), a hole by
+/// `hole`, and a declared
 /// constant by `declare_constant` or, of a function kind, by
 /// `declare_function`. An application is made only by `apply`,
 /// which checks that each argument is an `Expr` of the kind the head's
@@ -623,6 +628,10 @@ enum Form {
     },
     /// A head of a function kind applied to arguments.
     Apply { head: Py<Expr>, args: Py<PyTuple> },
+    /// `hole(NumberKind, "a")`: a placeholder in an identity, for any one
+    /// expression of its kind, or with `multi` for any run of consecutive
+    /// arguments, including none. Never equal to a symbol.
+    Hole { name: Py<PyString>, multi: bool },
 }
 
 impl Expr {
@@ -632,6 +641,10 @@ impl Expr {
             Form::Symbol { name } | Form::Declared { name, .. } => Some(name),
             _ => None,
         }
+    }
+
+    fn is_multi_hole(&self) -> bool {
+        matches!(self.form, Form::Hole { multi: true, .. })
     }
 
     /// How a head is named in an error: its name, or else its repr.
@@ -653,6 +666,9 @@ fn structural_eq(py: Python<'_>, a: &Expr, b: &Expr) -> PyResult<bool> {
     Ok(match (&a.form, &b.form) {
         (Form::Symbol { name: x }, Form::Symbol { name: y }) => {
             x.bind(py).as_any().eq(y.bind(py))?
+        }
+        (Form::Hole { name: x, multi: m }, Form::Hole { name: y, multi: n }) => {
+            m == n && x.bind(py).as_any().eq(y.bind(py))?
         }
         // Equal values of different types, such as 1 and 1.0, are different
         // literals.
@@ -704,6 +720,9 @@ fn expr_hash(py: Python<'_>, e: &Expr) -> PyResult<isize> {
             [2, expr_hash(py, head.get())? as usize, args.bind(py).hash()? as usize]
         }
         Form::Literal { value } => [3, e.kind.id, value.bind(py).hash()? as usize],
+        Form::Hole { name, multi } => {
+            [4 + *multi as usize, e.kind.id, name.bind(py).hash()? as usize]
+        }
     };
     Ok(combine_hashes(parts))
 }
@@ -807,6 +826,17 @@ fn apply<'py>(head: &Bound<'py, Expr>, args: &Bound<'py, PyTuple>) -> PyResult<B
             // Tested only when the kinds differ, so it costs nothing on the
             // usual path.
             Ok(expr_arg) if same_kind(expr_arg.get().kind, expected) || is_any(expected) => {
+                // A run of arguments fits only where any number of them
+                // may go.
+                if position < fixed && expr_arg.get().is_multi_hole() {
+                    return Err(PyTypeError::new_err(format!(
+                        "{} cannot take the multi-argument hole {} at position {}, \
+                         which takes exactly one argument",
+                        expr.label(py)?,
+                        expr_arg.get().__repr__(py)?,
+                        position
+                    )));
+                }
                 if let Some(converted) = converted.as_mut() {
                     converted.push(arg.to_owned());
                 }
@@ -983,10 +1013,13 @@ impl Expr {
         }
     }
 
-    /// The name of a symbol or declared constant, or None.
+    /// The name of a symbol, declared constant or hole, or None.
     #[getter]
     fn name(&self, py: Python<'_>) -> Option<Py<PyString>> {
-        self.plain_name().map(|name| name.clone_ref(py))
+        match &self.form {
+            Form::Hole { name, .. } => Some(name.clone_ref(py)),
+            _ => self.plain_name().map(|name| name.clone_ref(py)),
+        }
     }
 
     /// The argument names of a declared function, or `()`.
@@ -1023,6 +1056,18 @@ impl Expr {
         matches!(self.form, Form::Symbol { .. })
     }
 
+    /// Whether this is a hole, made by `hole(kind, name, multi=...)`.
+    #[getter]
+    fn is_hole(&self) -> bool {
+        matches!(self.form, Form::Hole { .. })
+    }
+
+    /// Whether this is a multi-argument hole, `hole(kind, name, multi=True)`.
+    #[getter(is_multi_hole)]
+    fn is_multi_hole_py(&self) -> bool {
+        self.is_multi_hole()
+    }
+
     #[getter]
     fn is_literal(&self) -> bool {
         matches!(self.form, Form::Literal { .. })
@@ -1048,6 +1093,8 @@ impl Expr {
         match &self.form {
             Form::Symbol { name } | Form::Declared { name, .. } => Ok(name.bind(py).to_string()),
             Form::Literal { value } => Ok(value.bind(py).repr()?.to_string()),
+            Form::Hole { name, multi: false } => Ok(format!("?{}", name.bind(py))),
+            Form::Hole { name, multi: true } => Ok(format!("?{}*", name.bind(py))),
             Form::Apply { head, args } => {
                 let head = head.get();
                 let args = args.bind(py);
@@ -1247,6 +1294,27 @@ fn declare_constant<'py>(
     Bound::new(py, Expr { kind, form: Form::Declared { name, names: None, symbols: None } })
 }
 
+/// A hole: `hole(NumberKind, "a")` is a placeholder for any one expression
+/// of kind NumberKind, printed `?a`, and `hole(AnyKind, "s", multi=True)`
+/// one for any run of consecutive arguments, including none, printed `?s*`.
+///
+/// Holes are for identities, in which a symbol stands for itself. Two holes
+/// are equal when their kinds, names and `multi` are, and a hole is never
+/// equal to a symbol. A multi-argument hole is accepted only where any
+/// number of arguments may go (`rest=`), and no hole where a `Symbol(kind)`
+/// is expected.
+#[pyfunction]
+#[pyo3(signature = (kind, name, multi=false))]
+fn hole<'py>(
+    py: Python<'py>,
+    kind: &Bound<'py, PyAny>,
+    name: Py<PyString>,
+    multi: bool,
+) -> PyResult<Bound<'py, Expr>> {
+    let kind = expect_kind(kind)?;
+    Bound::new(py, Expr { kind, form: Form::Hole { name, multi } })
+}
+
 /// Say what an operator builds for a kind:
 /// `set_operator(NumberKind, "+", Add)`. The operators are "+", "-", "*",
 /// "/", "**", "neg" (unary minus), "<", ">", "<=" and ">=".
@@ -1297,6 +1365,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(declare_function, m)?)?;
     m.add_function(wrap_pyfunction!(declare_constant, m)?)?;
     m.add_function(wrap_pyfunction!(set_operator, m)?)?;
+    m.add_function(wrap_pyfunction!(hole, m)?)?;
     m.add("AnyKind", kind_object(m.py(), *ANY_KIND)?)?;
     Ok(())
 }

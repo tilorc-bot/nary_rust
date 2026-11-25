@@ -22,7 +22,7 @@ def test_the_compiled_module_defines_no_kind_and_no_function():
     # application checks it.
     public = {name for name in dir(_core) if not name.startswith("_")}
     assert public == {
-        "AnyKind", "Expr", "FunctionKind", "Kind", "KindFamily", "Symbol",
+        "AnyKind", "Expr", "FunctionKind", "Kind", "KindFamily", "Symbol", "hole",
         "declare_constant", "declare_function", "declare_kind", "declare_kind_family",
         "set_operator",
     }
