@@ -76,11 +76,14 @@ The module is imported as ``nary.rules``; its names are not re-exported
 from ``nary``.
 """
 
+from . import identities as _identities
 from ._core import Expr, Kind
 from .functions import is_lambda
 from .kinds import BoolKind
 
-__all__ = ["Rule", "flat", "is_flat", "is_unordered", "rule", "unordered"]
+__all__ = [
+    "Rule", "flat", "identity_rules", "is_flat", "is_unordered", "rule", "unordered",
+]
 
 # The declared functions recorded with unordered() and with flat().
 _unordered = set()
@@ -241,7 +244,7 @@ def unordered(f):
             f"unordered needs a function whose arguments all have one kind, got {f!r} "
             f"of kind {f.kind!r}"
         )
-    if f in _unordered:
+    if f in _unordered or _identities.lists(f, _identities.commutative):
         raise ValueError(f"{f!r} is already recorded as unordered")
     _unordered.add(f)
 
@@ -257,18 +260,73 @@ def flat(f):
             f"flat needs a function taking any number of arguments of the kind it "
             f"returns, and no others, got {f!r} of kind {f.kind!r}"
         )
-    if f in _flat:
+    if f in _flat or _identities.lists(f, _identities.associative):
         raise ValueError(f"{f!r} is already recorded as flat")
     _flat.add(f)
 
 
 def is_unordered(f):
-    """Whether ``unordered(f)`` has been recorded."""
+    """Whether ``unordered(f)`` has been recorded, or the identities of
+    ``f`` list ``commutative``."""
     _check_declared_function("is_unordered", f)
-    return f in _unordered
+    return f in _unordered or _identities.lists(f, _identities.commutative)
 
 
 def is_flat(f):
-    """Whether ``flat(f)`` has been recorded."""
+    """Whether ``flat(f)`` has been recorded, or the identities of ``f``
+    list ``associative``."""
     _check_declared_function("is_flat", f)
-    return f in _flat
+    return f in _flat or _identities.lists(f, _identities.associative)
+
+
+def _to_symbols(e, function):
+    """``e`` with each hole replaced by the symbol of its kind and name."""
+    if e.is_hole:
+        if e.is_multi_hole:
+            raise ValueError(
+                f"an identity of {function!r} with the multi-argument hole {e!r} outside "
+                f"a generic identity cannot be applied as a rule yet"
+            )
+        return e.kind(e.name)
+    if e.head is None:
+        return e
+    return _to_symbols(e.head, function)(*(_to_symbols(arg, function) for arg in e.args))
+
+
+def identity_rules(f):
+    """The rewrite rules that the identities listed for ``f`` (see
+    ``nary.identities``) give the engine, in the order listed, each named
+    after its identity.
+
+    A specific identity ``Equal(lhs, rhs, when)`` gives the rule
+    ``lhs -> rhs`` with its holes as symbols. Of the generic identities,
+    with ``a`` a variable of the kind of ``f``'s arguments, ``identity(e)``
+    gives ``f(a, e) -> a`` and ``idempotent`` gives ``f(a, a) -> a``, both
+    only if ``singleton`` is listed too, and ``absorbing(z)`` gives
+    ``f(a, z) -> z``. The engine applies such a rule to some of the
+    arguments of a longer application when ``f`` is associative and
+    commutative. ``associative`` and ``commutative`` give no rule (the
+    engine uses them while matching, through ``is_flat`` and
+    ``is_unordered``); ``singleton`` and ``distributive`` give none either.
+    """
+    block = _identities.identities(f)
+    listed = {i.generic for i in block if i.generic is not None}
+    single = _identities.singleton in listed
+    position = f.kind.rest if f.kind.rest is not None else (f.kind.inputs or (None,))[0]
+    rules = []
+    for i in block:
+        if i.generic is None:
+            rules.append(Rule(_to_symbols(i.lhs, f), _to_symbols(i.rhs, f),
+                              when=None if i.when is None else _to_symbols(i.when, f),
+                              name=i.name))
+            continue
+        a = position("a") if isinstance(position, Kind) else None
+        if i.generic is _identities.identity and single:
+            [e] = i.item.args
+            rules.append(Rule(f(a, e), a, name=i.name))
+        elif i.generic is _identities.idempotent and single:
+            rules.append(Rule(f(a, a), a, name=i.name))
+        elif i.generic is _identities.absorbing:
+            [z] = i.item.args
+            rules.append(Rule(f(a, z), z, name=i.name))
+    return rules

@@ -35,7 +35,7 @@ block is declared. A second block for the same function is refused.
 ``<function>_<identity>`` (``add_associative``, ``mul_absorbing``), the name
 of its Lean statement.
 
-    >>> from nary import Add, AnyKind, NumberKind, Pow, sin
+    >>> from nary import Add, NumberKind
     >>> from nary.identities import associative, generic, identities
     >>> generic(associative).definition
     Equal(?f(?s*, ?f(?t*), ?u*), ?f(?s*, ?t*, ?u*))
@@ -45,10 +45,16 @@ of its Lean statement.
     >>> i.item, i.lhs, i.rhs
     (identity(0), Add(?s*, 0, ?t*), Add(?s*, ?t*))
     >>> from nary.identities import declare_identities
-    >>> declare_identities(Pow, [associative])
+    >>> from nary._core import declare_function
+    >>> P = declare_function("P", NumberKind, NumberKind, returns=NumberKind)
+    >>> declare_identities(P, [associative])
     Traceback (most recent call last):
         ...
-    TypeError: associative cannot be listed for Pow: Pow takes 2 arguments, got 1
+    TypeError: associative cannot be listed for P: P takes 2 arguments, got 1
+    >>> declare_identities(Add, [])
+    Traceback (most recent call last):
+        ...
+    ValueError: the identities of Add are already declared
 
 The identities do not rewrite anything themselves. ``nary.rules`` turns a
 block into the facts and rules that ``nary.rewriting`` applies, and

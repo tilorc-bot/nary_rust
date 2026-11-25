@@ -10,6 +10,10 @@ from .domains import declare_function
 from .kinds import NumberKind
 from .logic import Or, true
 from .relational import Gt, Ne, re
+from .identities import (
+    Equal, absorbing, associative, commutative, declare_identities, distributive, hole,
+    identity, singleton,
+)
 
 __all__ = ["Add", "Mul", "Pow", "NegativeOne"]
 
@@ -51,3 +55,29 @@ set_operator(NumberKind, "**", Pow)
 set_operator(NumberKind, "-", _subtract)
 set_operator(NumberKind, "/", _divide)
 set_operator(NumberKind, "neg", _negate)
+
+
+# Everything that holds for each function, in one place (see nary.identities).
+_a = hole(NumberKind, "a")
+
+declare_identities(Add, [
+    associative,
+    commutative,
+    singleton,
+    identity(NumberKind(0)),
+    ("self", Equal(_a + _a, 2 * _a)),
+    ("neg_self", Equal(_a - _a, 0)),
+])
+declare_identities(Mul, [
+    associative,
+    commutative,
+    singleton,
+    identity(NumberKind(1)),
+    absorbing(NumberKind(0)),
+    distributive(Add),
+    ("inv_self", Equal(_a / _a, 1, when=Ne(_a, 0))),
+])
+declare_identities(Pow, [
+    ("one", Equal(_a ** 1, _a)),
+    ("zero", Equal(_a ** 0, 1, when=Ne(_a, 0))),
+])
