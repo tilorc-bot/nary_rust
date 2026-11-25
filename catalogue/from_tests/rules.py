@@ -29,9 +29,13 @@ applies decides its category):
    If SymPy changes none, the assert is ``not-a-simplification`` ("SymPy
    leaves it as written").
 7. The entry's status comes from the checks: the numerical check finds
-   wrong values -> ``rejected``; it finds only points where one side has a
-   value and the other has none -> ``undecided``, in the class
-   ``UNDECIDED_CLASSES`` keyed on the cause; otherwise ``accepted``.
+   wrong values -> ``rejected``; it finds a point it cannot decide at any
+   precision -> ``undecided``, class ``UNSURE``; it finds only points where
+   one side has a value and the other has none -> ``undecided``, in the
+   class of ``UNDECIDED_CLASSES`` keyed on the cause; otherwise
+   ``accepted``. A correct result is never rejected because a tiny
+   non-zero value was taken for 0: ``catalogue.numeric`` decides each point
+   at increasing precisions (its docstring says how).
 """
 
 # ---- the pinned input ------------------------------------------------------
@@ -189,7 +193,17 @@ EXPANSION_CALLS = ("expand", "expand_multinomial")
 # has none, the side without a value and its innermost subexpression that has
 # no value although its arguments do. The class is the sorted set of those
 # causes. One decision per class covers all its entries.
+UNSURE = "numeric: undecidable"
+
 UNDECIDED_CLASSES = {
+    UNSURE: dict(
+        kind="precision",
+        description="at some point the numerical check gives different verdicts at every "
+                    "pair of consecutive precisions (catalogue.numeric.PRECISIONS): a value "
+                    "between 1e-120 and 1e-30 decides whether something is 0, so the check "
+                    "cannot say whether SymPy is right there",
+        question="Should such an entry be proved in Lean (or checked symbolically) before it "
+                 "is accepted or rejected?"),
     "input: Pow(0, 0)": dict(
         kind="off-domain",
         description="the input has no value where it contains 0**0 (as x**0 at x = 0); "

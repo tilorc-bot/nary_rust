@@ -96,8 +96,9 @@ STATUSES = ("accepted", "rejected", "undecided")
 # input, output or assumption. ``comparison``: what "reaches expected" should
 # mean. ``representation``. ``assumptions``: translating SymPy's assumptions.
 # ``wrong-value``: SymPy's result is wrong (the rejected entries).
+# ``precision``: the numerical check cannot decide it at any of its precisions.
 KINDS = ("condition", "off-domain", "vocabulary", "comparison", "representation",
-         "assumptions", "wrong-value")
+         "assumptions", "wrong-value", "precision")
 
 NUMERIC = ("value", "definedness", "none")
 
@@ -305,13 +306,16 @@ def generated(name, input, expected, *, status, sympy, area, sources, assume=Non
     """Make an ``Entry`` generated from SymPy's tests by
     ``catalogue.from_tests``. ``sympy`` is the SymPy call for all statuses
     (the generator checked that SymPy, so called, gives ``expected``). A
-    rejected entry has ``numeric="value"``; an undecided one has
-    ``numeric="definedness"`` and ``cause``, its class in
-    ``catalogue.from_tests.rules.UNDECIDED_CLASSES``."""
+    rejected entry has ``numeric="value"``; an undecided one has ``cause``,
+    its class in ``catalogue.from_tests.rules.UNDECIDED_CLASSES``, and
+    ``numeric="definedness"``, or ``"none"`` when its kind is
+    ``"precision"`` (the check found no counterexample it could decide)."""
     _check_tags_area(name, tags, area)
     if status not in STATUSES:
         raise ValueError(f"{name}: unknown status {status!r}")
     numeric = {"accepted": None, "rejected": "value", "undecided": "definedness"}[status]
+    if kind == "precision":
+        numeric = "none"
     if (cause is not None) != (status == "undecided"):
         raise ValueError(f"{name}: give a cause exactly for an undecided entry")
     return Entry(name, status, input, _literal(expected), area, tuple(tags), dict(assume or {}),

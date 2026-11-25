@@ -11,7 +11,7 @@ SymPy commit [16fa855354](https://github.com/sympy/sympy/tree/16fa855354eb7bcabd
 | non-rewrite | 27 | checks that SymPy does NOT rewrite one side into the other (!=, is not); a possible future negative entry |
 | not-translatable | 21 | needs running code the generator does not follow (a loop, a branch, a helper, a substitution); the reason says what |
 
-Generated entries: 67 (accepted 63, rejected 1, undecided 3); hand-written entries linked: 0.
+Generated entries: 67 (accepted 64, rejected 0, undecided 3); hand-written entries linked: 0.
 
 Undecided classes:
 
@@ -227,7 +227,7 @@ Reasons, by category:
 | [test_issue_6429 L374](https://github.com/sympy/sympy/blob/16fa855354eb7bcabd3fe10993841e03b1382692/sympy/core/tests/test_power.py#L374) | out-of-vocabulary | needs floats, series |
 | [test_issue_6429 L375](https://github.com/sympy/sympy/blob/16fa855354eb7bcabd3fe10993841e03b1382692/sympy/core/tests/test_power.py#L375) | out-of-vocabulary | needs floats, series |
 | [test_issue_7638 L380](https://github.com/sympy/sympy/blob/16fa855354eb7bcabd3fe10993841e03b1382692/sympy/core/tests/test_power.py#L380) | out-of-vocabulary | needs floats |
-| [test_issue_7638 L384](https://github.com/sympy/sympy/blob/16fa855354eb7bcabd3fe10993841e03b1382692/sympy/core/tests/test_power.py#L384) | entry | `power_l384_1` (rejected) |
+| [test_issue_7638 L384](https://github.com/sympy/sympy/blob/16fa855354eb7bcabd3fe10993841e03b1382692/sympy/core/tests/test_power.py#L384) | entry | `power_l384_1` (accepted) |
 | [test_issue_7638 L386](https://github.com/sympy/sympy/blob/16fa855354eb7bcabd3fe10993841e03b1382692/sympy/core/tests/test_power.py#L386) | not-a-simplification | a structure query (.exp) |
 | [test_issue_7638 L388](https://github.com/sympy/sympy/blob/16fa855354eb7bcabd3fe10993841e03b1382692/sympy/core/tests/test_power.py#L388) | out-of-vocabulary | needs Abs |
 | [test_issue_7638 L389](https://github.com/sympy/sympy/blob/16fa855354eb7bcabd3fe10993841e03b1382692/sympy/core/tests/test_power.py#L389) | non-rewrite | checks that SymPy does not rewrite one side into the other (!=, is not, not) |

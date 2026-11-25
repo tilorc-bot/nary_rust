@@ -281,10 +281,15 @@ def cause(input, expected, counterexamples):
 
 
 def status_of(entry):
-    """``(status, cause)`` from the numerical check."""
+    """``(status, cause)`` from the numerical check: wrong values at some
+    point -> rejected; otherwise, a point no precision decides
+    (``numeric.Result.unsure``) -> undecided, class ``rules.UNSURE``;
+    otherwise only definedness -> undecided, class from ``cause``."""
     result = numeric.check(entry.input, entry.expected, entry.when)
     if result.value_counterexamples:
         return "rejected", None
+    if result.unsure:
+        return "undecided", rules.UNSURE
     if result.counterexamples:
         found = cause(entry.input, entry.expected, result.counterexamples)
         if found not in rules.UNDECIDED_CLASSES:
