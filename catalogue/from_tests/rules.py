@@ -22,9 +22,12 @@ applies decides its category):
    ``S_ATTRIBUTES``, ``OUT_OF_VOCABULARY``, ``METHODS``, ``CALL_METHODS``);
    a missing piece makes the assert ``out-of-vocabulary``, naming it, and a
    construct the generator cannot follow makes it ``not-translatable``.
-6. Every operand that SymPy changes gives an entry from its written form
-   to SymPy's value; if SymPy changes none, the assert is
-   ``not-a-simplification`` ("SymPy leaves it as written").
+6. Every operand but the last that SymPy changes gives an entry from its
+   written form to SymPy's value of the last operand. The last operand is
+   the test's way of writing the expected value; it gives an entry only
+   when no other operand does (the test wrote the simplified form first).
+   If SymPy changes none, the assert is ``not-a-simplification`` ("SymPy
+   leaves it as written").
 7. The entry's status comes from the checks: the numerical check finds
    wrong values -> ``rejected``; it finds only points where one side has a
    value and the other has none -> ``undecided``, in the class
@@ -93,6 +96,14 @@ QUERY_CALLS = {
 }
 
 
+# An order comparison anywhere in the assert asks for a truth value.
+ORDER_COMPARISONS = {
+    "Lt": "an inequality (a truth value)", "Gt": "an inequality (a truth value)",
+    "LtE": "an inequality (a truth value)", "GtE": "an inequality (a truth value)",
+    "In": "a membership test",
+}
+
+
 def is_query_attribute(name):
     """The reason an attribute marks a query, or None."""
     if name.startswith("is_"):
@@ -100,6 +111,10 @@ def is_query_attribute(name):
         return f"{kind} ({name})"
     return QUERY_ATTRIBUTES.get(name)
 
+
+# ---- 3. non-rewrites --------------------------------------------------------
+
+NON_REWRITE = "checks that SymPy does not rewrite one side into the other (!=, is not, not)"
 
 # ---- 5. translation into nary --------------------------------------------
 
@@ -109,7 +124,7 @@ OUT_OF_VOCABULARY = {
     "Float": "floats", "N": "floats",
     "sec": "sec", "csc": "csc", "atan": "atan", "sinh": "sinh", "cosh": "cosh",
     "tanh": "tanh", "erf": "erf", "abs": "Abs", "Abs": "Abs",
-    "O": "series (O)", "Poly": "Poly", "FiniteSet": "sets", "Basic": "bare Basic/Expr",
+    "O": "series", "Poly": "Poly", "FiniteSet": "sets", "Basic": "bare Basic/Expr",
     "Expr": "bare Basic/Expr",
 }
 
@@ -156,6 +171,14 @@ CALL_FUNCTIONS = {
     "expand_multinomial": "expand_multinomial",
 }
 
+# ---- tags of generated entries -------------------------------------------
+#
+# Fixed rules (generate.tags_of): "literal-arithmetic" when the input has no
+# symbols; "rational-literals" when either side has Pow(k, -m) with literals k
+# and m; "expansion" when the SymPy call is one of EXPANSION_CALLS. Nothing
+# else is guessed.
+EXPANSION_CALLS = ("expand", "expand_multinomial")
+
 # The SymPy assumptions a symbol may have are those of the tables ASSUMPTIONS
 # and NO_CONDITION in catalogue/entry.py; any other is out of vocabulary.
 
@@ -169,20 +192,28 @@ CALL_FUNCTIONS = {
 UNDECIDED_CLASSES = {
     "input: Pow(0, 0)": dict(
         kind="off-domain",
-        description="SymPy gives a value where nary's input has none: the input contains "
-                    "0**0 at some point (as x**0 at x = 0), which has no value in nary",
-        question="Should a generated entry that only fails at 0**0 be accepted with a "
+        description="the input has no value where it contains 0**0 (as x**0 at x = 0); "
+                    "SymPy's result has one",
+        question="Should a generated entry that fails only at 0**0 be accepted with a "
                  "condition, kept undecided, or left out? (as the hand-written undecided "
                  "entries pow_zero_unconditional and zero_pow_zero)"),
-    "input: Pow(0, negative)": dict(
+    "input: Pow(0, w) with re(w) <= 0": dict(
         kind="condition",
-        description="SymPy gives a value where nary's input has none: the input divides by "
-                    "zero at some point (Pow(0, w) with w a negative real)",
-        question="Same, for a division by zero in the input that SymPy cancels"),
-    "expected: Pow(0, negative)": dict(
+        description="the input has no value where it raises 0 to a power w with re(w) <= 0, "
+                    "w != 0 (a division by zero, as 1/x**y at x = 0, y = -1); SymPy's "
+                    "result has a value there",
+        question="Should an entry whose input is defined on less than its result be "
+                 "accepted (it extends the domain), and with which condition?"),
+    "expected: Pow(0, w) with re(w) <= 0": dict(
         kind="condition",
-        description="SymPy's result has no value where the input has one: the result "
-                    "divides by zero at a point where the input does not",
+        description="SymPy's result has no value where it raises 0 to a power w with "
+                    "re(w) <= 0, w != 0, at a point where the input has a value",
         question="Should an entry whose result is defined on less than its input be "
                  "accepted as a generic simplification?"),
+    "expected: log(0)": dict(
+        kind="condition",
+        description="SymPy's result has no value where it takes log(0), at a point where "
+                    "the input has a value (x**y = exp(y*log(x)) at x = 0, re(y) > 0)",
+        question="Should a rewrite into exp/log that loses the value at 0 be accepted as a "
+                 "generic simplification, given a condition (Ne(x, 0)), or left out?"),
 }

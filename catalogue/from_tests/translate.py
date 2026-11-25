@@ -57,7 +57,10 @@ class Helper:
 
 @dataclass(frozen=True)
 class Unknown:
-    """A name whose value the generator does not know; ``reason`` says why."""
+    """A name whose value the generator does not know; ``reason`` says why,
+    and ``category`` is what an assert using it is (``not-translatable``, or
+    ``not-a-simplification`` for a value that came from a query)."""
+    category: str
     reason: str
 
 
@@ -77,7 +80,7 @@ def missing(*labels):
     return Missing(frozenset(labels))
 
 
-def rational(p, q):
+def rational(p, q=1):
     """``p/q`` as the catalogue writes it: Pow(q, -1) for 1/q, Mul(p, Pow(q, -1))
     otherwise, an integer literal for q = 1."""
     r = sympy.Rational(p, q)
@@ -94,6 +97,8 @@ def _number(v):
 
 def _combine(f, values):
     """``f`` applied to the expressions of ``values``, with Missing propagated."""
+    if any(isinstance(v.expr, tuple) for v in values):
+        raise NotTranslatable("arithmetic on a tuple of symbols")
     assume = merge(*(v.assume for v in values))
     gone = [v.expr for v in values if isinstance(v.expr, Missing)]
     if gone:
@@ -200,7 +205,7 @@ class Translator:
             if spec[0] == "rational":
                 return V(rational(spec[1], spec[2]))
             if spec[0] == "int":
-                return V(spec[1])
+                return V(nr.NumberKind(spec[1]))
             if spec[0] == "missing":
                 return V(missing(spec[1]))
             return V(getattr(nr, spec[0]))
@@ -248,14 +253,13 @@ class Translator:
             if ints and len(args) in (1, 2):
                 return V(rational(*(a.expr for a in args)))
             raise NotTranslatable("Rational of something other than Python ints")
-        if name in ("Integer", "Number"):
-            if ints and len(args) == 1:
+        if name in ("Integer", "Number", "S"):
+            # A SymPy integer, not a Python int: no Python arithmetic on it.
+            if len(args) == 1 and isinstance(args[0].expr, int):
+                return V(nr.NumberKind(args[0].expr))
+            if name == "S" and len(args) == 1:
                 return args[0]
             raise NotTranslatable(f"{name} of something other than a Python int")
-        if name == "S":
-            if len(args) == 1:
-                return args[0]
-            raise NotTranslatable("S with several arguments")
         if name == "sqrt" and len(args) == 1:
             return _combine(lambda e: Pow(_number(e), rational(1, 2)), args)
         if name == "cbrt" and len(args) == 1:
@@ -284,11 +288,14 @@ class Translator:
             if not (isinstance(value, ast.Constant) and isinstance(value.value, bool)):
                 raise NotTranslatable(f"{name} with a computed assumption")
             facts[key] = value.value
-        names = [s.name for s in sympy.symbols(args[0].value, seq=True)]
-        made = [symbol(n, facts) for n in names]
         if name == "Symbol":
-            return made[0]
-        return V(tuple(made))
+            return symbol(args[0].value, facts)
+        made = sympy.symbols(args[0].value)
+        if isinstance(made, sympy.Symbol):
+            return symbol(made.name, facts)
+        if not (isinstance(made, tuple) and all(isinstance(m, sympy.Symbol) for m in made)):
+            raise NotTranslatable("symbols with a range or a nested name")
+        return V(tuple(symbol(m.name, facts) for m in made))
 
 
 # ---- SymPy's values back into nary -----------------------------------------
@@ -324,7 +331,7 @@ def from_sympy(e):
         f = _FROM_SYMPY_FUNCTIONS[type(e)]
         return _combine(f, [from_sympy(e.args[0])])
     if isinstance(e, sympy.Order):
-        return V(missing("series (O)"))
+        return V(missing("series"))
     if isinstance(e, sympy.Abs):
         return V(missing("Abs"))
     if isinstance(e, sympy.Basic):
