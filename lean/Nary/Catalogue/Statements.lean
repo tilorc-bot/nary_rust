@@ -403,4 +403,260 @@ abbrev call_lambda : Prop :=
 abbrev call_lambda_literal : Prop :=
   Nary.apply (fun t => Nary.Pow (some t) (Nary.lit 2)) (Nary.lit 3) = Nary.lit 9
 
+/-- `power_l27` -/
+abbrev power_l27 : Prop :=
+  Nary.Pow (Nary.Pow (Nary.lit 5) (Nary.lit (-1))) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Mul [Nary.Pow (Nary.lit 5) (Nary.lit (-1)), Nary.Pow (Nary.lit 5) (Nary.Pow (Nary.lit 2) (Nary.lit (-1)))]
+
+/-- `power_l28` -/
+abbrev power_l28 : Prop :=
+  Nary.Mul [Nary.lit 2, Nary.Pow (Nary.Pow (Nary.lit 5) (Nary.lit (-1))) (Nary.Pow (Nary.lit 2) (Nary.lit (-1)))] = Nary.Mul [Nary.Mul [Nary.lit 2, Nary.Pow (Nary.lit 5) (Nary.lit (-1))], Nary.Pow (Nary.lit 5) (Nary.Pow (Nary.lit 2) (Nary.lit (-1)))]
+
+/-- `power_l31` -/
+abbrev power_l31 : Prop :=
+  Nary.Pow (Nary.Pow (Nary.lit 5) (Nary.lit (-1))) (Nary.Mul [Nary.lit 3, Nary.Pow (Nary.lit 2) (Nary.lit (-1))]) = Nary.Mul [Nary.Pow (Nary.lit 25) (Nary.lit (-1)), Nary.Pow (Nary.lit 5) (Nary.Pow (Nary.lit 2) (Nary.lit (-1)))]
+
+/-- `power_l32` -/
+abbrev power_l32 : Prop :=
+  Nary.Mul [Nary.lit 2, Nary.Pow (Nary.Pow (Nary.lit 5) (Nary.lit (-1))) (Nary.Mul [Nary.lit 3, Nary.Pow (Nary.lit 2) (Nary.lit (-1))])] = Nary.Mul [Nary.Mul [Nary.lit 2, Nary.Pow (Nary.lit 25) (Nary.lit (-1))], Nary.Pow (Nary.lit 5) (Nary.Pow (Nary.lit 2) (Nary.lit (-1)))]
+
+/-- `power_l35` -/
+abbrev power_l35 : Prop :=
+  Nary.Pow (Nary.Pow (Nary.lit 5) (Nary.lit (-1))) (Nary.Mul [Nary.lit 17, Nary.Pow (Nary.lit 3) (Nary.lit (-1))]) = Nary.Mul [Nary.Pow (Nary.lit 15625) (Nary.lit (-1)), Nary.Pow (Nary.lit 5) (Nary.Pow (Nary.lit 3) (Nary.lit (-1)))]
+
+/-- `power_l36` -/
+abbrev power_l36 : Prop :=
+  Nary.Mul [Nary.lit 2, Nary.Pow (Nary.Pow (Nary.lit 5) (Nary.lit (-1))) (Nary.Mul [Nary.lit 17, Nary.Pow (Nary.lit 3) (Nary.lit (-1))])] = Nary.Mul [Nary.Mul [Nary.lit 2, Nary.Pow (Nary.lit 15625) (Nary.lit (-1))], Nary.Pow (Nary.lit 5) (Nary.Pow (Nary.lit 3) (Nary.lit (-1)))]
+
+/-- `power_l41` -/
+abbrev power_l41 : Prop :=
+  Nary.Pow (Nary.Add [Nary.lit 1835878332164045600327283789016195386006135170226228373525065, Nary.Pow (Nary.lit 7) (Nary.lit (-1))]) (Nary.Pow (Nary.lit 3) (Nary.lit (-1))) = Nary.Mul [Nary.Mul [Nary.lit 234232585392159195136, Nary.Pow (Nary.lit 7) (Nary.lit (-1))], Nary.Pow (Nary.lit 7) (Nary.Mul [Nary.lit 2, Nary.Pow (Nary.lit 3) (Nary.lit (-1))])]
+
+/-- `power_l52` -/
+abbrev power_l52 : Prop :=
+  ∀ (x : ℂ), Nary.Pow (Nary.lit 2) (Nary.Add [Nary.lit (-1), Nary.Mul [Nary.lit (-1), some x]]) = Nary.Mul [Nary.Pow (Nary.lit 2) (Nary.lit (-1)), Nary.Pow (Nary.lit 2) (Nary.Mul [Nary.lit (-1), some x])]
+
+/-- `power_l58` -/
+abbrev power_l58 : Prop :=
+  ∀ (x : ℂ), Nary.Pow (Nary.Pow (some x) (Nary.Pow (Nary.lit 3) (Nary.lit (-1)))) (Nary.lit 2) = Nary.Pow (some x) (Nary.Mul [Nary.lit 2, Nary.Pow (Nary.lit 3) (Nary.lit (-1))])
+
+/-- `power_l75_1` -/
+abbrev power_l75_1 : Prop :=
+  Nary.Pow (Nary.lit 25) (Nary.Pow (Nary.lit 3) (Nary.lit (-1))) = Nary.Pow (Nary.lit 5) (Nary.Mul [Nary.lit 2, Nary.Pow (Nary.lit 3) (Nary.lit (-1))])
+
+/-- `power_l81` -/
+abbrev power_l81 : Prop :=
+  ∀ (a : ℂ), Nary.Holds (Nary.Gt (some a) (Nary.lit 0)) → Nary.Pow (Nary.Pow (some a) (Nary.lit 3)) (Nary.Mul [Nary.lit 2, Nary.Pow (Nary.lit 5) (Nary.lit (-1))]) = Nary.Pow (some a) (Nary.Mul [Nary.lit 6, Nary.Pow (Nary.lit 5) (Nary.lit (-1))])
+
+/-- `power_l82` -/
+abbrev power_l82 : Prop :=
+  ∀ (a b : ℂ), Nary.Holds (Nary.And [Nary.Gt (some a) (Nary.lit 0), Nary.Eq (Nary.re (some b)) (some b)]) → Nary.Pow (Nary.Pow (some a) (Nary.lit 2)) (some b) = Nary.Pow (some a) (Nary.Mul [Nary.lit 2, some b])
+
+/-- `power_l87` -/
+abbrev power_l87 : Prop :=
+  Nary.Mul [Nary.lit (-1), Nary.Mul [Nary.lit (-1), Nary.Pow (Nary.Add [Nary.Pow (Nary.lit 5) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))), Nary.Mul [Nary.lit (-1), Nary.lit 1]]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1)))]] = Nary.Pow (Nary.Add [Nary.lit (-1), Nary.Pow (Nary.lit 5) (Nary.Pow (Nary.lit 2) (Nary.lit (-1)))]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1)))
+
+/-- `power_l223` -/
+abbrev power_l223 : Prop :=
+  Nary.Pow Nary.I Nary.I = Nary.exp (Nary.Mul [Nary.Mul [Nary.lit (-1), Nary.Pow (Nary.lit 2) (Nary.lit (-1))], Nary.pi])
+
+/-- `power_l233` -/
+abbrev power_l233 : Prop :=
+  Nary.Pow (Nary.lit 5) (Nary.Add [Nary.lit 6, Nary.Mul [Nary.lit 7, Nary.I]]) = Nary.exp (Nary.Mul [Nary.Add [Nary.lit 6, Nary.Mul [Nary.lit 7, Nary.I]], Nary.log (Nary.lit 5)])
+
+/-- `power_l236` -/
+abbrev power_l236 : Prop :=
+  Nary.Pow (Nary.lit 123) (Nary.lit 789) = Nary.lit 86125731920088030688274390404251836790854899545401820212531740726154980447597244015622037778992322341961177896717643509894403324479512020043922984659404827007501078240566925858045956491525263710686449359605852785735048473478763956091231042195797822748386247615792793740200203963653183832769609220930354317098559863226893647009447863383985925801629515759903843078780393892280811149842856144521913589621191150217773506834047032915433917363874243218093779609242058562180621228345092467660191780424784350461551474924208084629333470666560501328704646823871214197532633277470829574420608019257935966506064978726988341454694009747689074663471426406897458004190083195324621827211113091145214033439418439831966190438300781652781915512620644550828740212001069889149940965132124093308016390819023247348239545827297931309477102504194215368260958916870726537327425724984955813871836564432668243511602226047221928047662887828646654485998650359165398738081961515720592790651404017574380870692539597271554251026225823815882304490380414787258800796258730391652760872337813551029376221356922510462310722882337946173149131502912873665853481219817183543454301779420813708534575329207325541736022245154783177865840863114903831143697607521968622365207783981089812331348473726152496457080464319741109546628016656351271343280724423503171598865580469330430108919380840186240765384056515454043827426381486754781548260134750055039456278727697487647803734579871913949372308018692280211006137039254075533212008898404985669705991593788624872129898012592303702947951052691120273325880988982634363465984951292321139584304378089081340197583163920275507501479116312613235555882618763
+
+/-- `power_l237` -/
+abbrev power_l237 : Prop :=
+  Nary.Pow (Nary.lit 1) Nary.I = Nary.lit 1
+
+/-- `power_l241` -/
+abbrev power_l241 : Prop :=
+  Nary.Pow (Nary.lit (-2)) (Nary.Add [Nary.lit 2, Nary.Mul [Nary.lit 5, Nary.I]]) = Nary.exp (Nary.Mul [Nary.Add [Nary.lit 2, Nary.Mul [Nary.lit 5, Nary.I]], Nary.Add [Nary.Mul [Nary.pi, Nary.I], Nary.log (Nary.lit 2)]])
+
+/-- `power_l244` -/
+abbrev power_l244 : Prop :=
+  Nary.Pow (Nary.lit (-2)) (Nary.lit (-5)) = Nary.Mul [Nary.lit (-1), Nary.Pow (Nary.lit 32) (Nary.lit (-1))]
+
+/-- `power_l261` -/
+abbrev power_l261 : Prop :=
+  ∀ (x : ℂ), Nary.Pow (Nary.lit 0) (Nary.Mul [Nary.lit 2, some x]) = Nary.Pow (Nary.lit 0) (some x)
+
+/-- `power_l266` -/
+abbrev power_l266 : Prop :=
+  ∀ (x y : ℂ), Nary.Pow (Nary.lit 0) (Nary.Mul [Nary.Mul [Nary.lit 2, some x], some y]) = Nary.Pow (Nary.lit 0) (Nary.Mul [some x, some y])
+
+/-- `power_l333` -/
+abbrev power_l333 : Prop :=
+  Nary.Pow (Nary.Pow (Nary.lit 33) (Nary.Mul [Nary.Mul [Nary.I, Nary.lit 9], Nary.Pow (Nary.lit 10) (Nary.lit (-1))])) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Mul [Nary.lit (-1), Nary.Pow (Nary.lit 33) (Nary.Mul [Nary.Mul [Nary.lit 9, Nary.Pow (Nary.lit 20) (Nary.lit (-1))], Nary.I])]
+
+/-- `power_l336` -/
+abbrev power_l336 : Prop :=
+  Nary.Pow (Nary.exp (Nary.Mul [Nary.lit 3, Nary.I])) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.exp (Nary.Mul [Nary.Mul [Nary.lit 3, Nary.Pow (Nary.lit 2) (Nary.lit (-1))], Nary.I])
+
+/-- `power_l337` -/
+abbrev power_l337 : Prop :=
+  Nary.Pow (Nary.Mul [Nary.Mul [Nary.lit (-1), Nary.Pow (Nary.lit 3) (Nary.Pow (Nary.lit 2) (Nary.lit (-1)))], Nary.Add [Nary.lit 1, Nary.Mul [Nary.lit 2, Nary.I]]]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Mul [Nary.Pow (Nary.lit 3) (Nary.Pow (Nary.lit 4) (Nary.lit (-1))), Nary.Pow (Nary.Add [Nary.lit (-1), Nary.Mul [Nary.lit (-2), Nary.I]]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1)))]
+
+/-- `power_l338` -/
+abbrev power_l338 : Prop :=
+  Nary.Pow (Nary.exp (Nary.Mul [Nary.lit 5, Nary.I])) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Mul [Nary.lit (-1), Nary.exp (Nary.Mul [Nary.Mul [Nary.lit 5, Nary.Pow (Nary.lit 2) (Nary.lit (-1))], Nary.I])]
+
+/-- `power_l384_1` -/
+abbrev power_l384_1 : Prop :=
+  Nary.Pow (Nary.Pow (Nary.Add [Nary.lit 1, Nary.I]) (Nary.Mul [Nary.Mul [Nary.lit 12, Nary.I], Nary.Mul [Nary.pi, Nary.Pow (Nary.log (Nary.Pow (Nary.lit 2) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))))) (Nary.lit (-1))]])) (Nary.Pow (Nary.lit 3) (Nary.lit (-1))) = Nary.Pow (Nary.Add [Nary.lit 1, Nary.I]) (Nary.Mul [Nary.lit 4, Nary.pi, Nary.I, Nary.Pow (Nary.log (Nary.Pow (Nary.lit 2) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))))) (Nary.lit (-1))])
+
+/-- `power_l392` -/
+abbrev power_l392 : Prop :=
+  ∀ (p : ℂ), Nary.Holds (Nary.Gt (some p) (Nary.lit 0)) → Nary.Pow (Nary.Pow (some p) (Nary.lit 2)) (Nary.Pow (Nary.lit 3) (Nary.lit (-1))) = Nary.Pow (some p) (Nary.Mul [Nary.lit 2, Nary.Pow (Nary.lit 3) (Nary.lit (-1))])
+
+/-- `power_l394` -/
+abbrev power_l394 : Prop :=
+  Nary.Pow (Nary.Mul [Nary.lit 1, Nary.Pow (Nary.Add [Nary.lit 1, Nary.I]) (Nary.lit (-1))]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Mul [Nary.Pow (Nary.lit 2) (Nary.lit (-1)), Nary.Pow (Nary.lit 2) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))), Nary.Pow (Nary.Add [Nary.lit 1, Nary.Mul [Nary.lit (-1), Nary.I]]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1)))]
+
+/-- `power_l396` -/
+abbrev power_l396 : Prop :=
+  Nary.Pow (Nary.Mul [Nary.lit 1, Nary.Pow (Nary.Add [Nary.lit 1, Nary.Mul [Nary.lit (-1), Nary.Pow (Nary.lit 2) (Nary.Pow (Nary.lit 2) (Nary.lit (-1)))]]) (Nary.lit (-1))]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Mul [Nary.I, Nary.Pow (Nary.Add [Nary.lit (-1), Nary.Pow (Nary.lit 2) (Nary.Pow (Nary.lit 2) (Nary.lit (-1)))]) (Nary.Mul [Nary.lit (-1), Nary.Pow (Nary.lit 2) (Nary.lit (-1))])]
+
+/-- `power_l397` -/
+abbrev power_l397 : Prop :=
+  Nary.Pow (Nary.Mul [Nary.lit 1, Nary.Pow (Nary.Add [Nary.lit 1, Nary.Mul [Nary.lit (-1), Nary.Pow (Nary.lit 2) (Nary.Pow (Nary.lit 2) (Nary.lit (-1)))]]) (Nary.lit (-1))]) (Nary.Mul [Nary.lit (-1), Nary.Pow (Nary.lit 2) (Nary.lit (-1))]) = Nary.Mul [Nary.lit (-1), Nary.I, Nary.Pow (Nary.Add [Nary.lit (-1), Nary.Pow (Nary.lit 2) (Nary.Pow (Nary.lit 2) (Nary.lit (-1)))]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1)))]
+
+/-- `power_l401` -/
+abbrev power_l401 : Prop :=
+  ∀ (p : ℂ), Nary.Holds (Nary.Gt (some p) (Nary.lit 0)) → Nary.Pow (Nary.Pow (Nary.Add [some p, Nary.I]) (Nary.Mul [Nary.lit 4, Nary.Pow (Nary.lit 3) (Nary.lit (-1))])) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Pow (Nary.Add [Nary.I, some p]) (Nary.Mul [Nary.lit 2, Nary.Pow (Nary.lit 3) (Nary.lit (-1))])
+
+/-- `power_l410` -/
+abbrev power_l410 : Prop :=
+  Nary.Pow (Nary.Pow (Nary.Add [Nary.lit 1, Nary.Mul [Nary.I, Nary.Pow (Nary.lit 5) (Nary.lit (-1))]]) (Nary.lit 5)) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Pow (Nary.Add [Nary.lit 1, Nary.Mul [Nary.Pow (Nary.lit 5) (Nary.lit (-1)), Nary.I]]) (Nary.Mul [Nary.lit 5, Nary.Pow (Nary.lit 2) (Nary.lit (-1))])
+
+/-- `power_l411` -/
+abbrev power_l411 : Prop :=
+  Nary.Pow (Nary.Pow (Nary.Add [Nary.lit 1, Nary.Mul [Nary.I, Nary.Pow (Nary.lit 5) (Nary.lit (-1))]]) (Nary.lit 6)) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Pow (Nary.Add [Nary.lit 1, Nary.Mul [Nary.Pow (Nary.lit 5) (Nary.lit (-1)), Nary.I]]) (Nary.lit 3)
+
+/-- `power_l442` -/
+abbrev power_l442 : Prop :=
+  Nary.Pow (Nary.Add [Nary.lit 3, Nary.Mul [Nary.lit 4, Nary.I]]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Add [Nary.lit 2, Nary.I]
+
+/-- `power_l443` -/
+abbrev power_l443 : Prop :=
+  Nary.Pow (Nary.Add [Nary.lit 3, Nary.Mul [Nary.lit (-1), Nary.Mul [Nary.lit 4, Nary.I]]]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Add [Nary.lit 2, Nary.Mul [Nary.lit (-1), Nary.I]]
+
+/-- `power_l444` -/
+abbrev power_l444 : Prop :=
+  Nary.Pow (Nary.Add [Nary.lit (-3), Nary.Mul [Nary.lit (-1), Nary.Mul [Nary.lit 4, Nary.I]]]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Add [Nary.lit 1, Nary.Mul [Nary.lit (-2), Nary.I]]
+
+/-- `power_l445` -/
+abbrev power_l445 : Prop :=
+  Nary.Pow (Nary.Add [Nary.lit (-3), Nary.Mul [Nary.lit 4, Nary.I]]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Add [Nary.lit 1, Nary.Mul [Nary.lit 2, Nary.I]]
+
+/-- `power_l446` -/
+abbrev power_l446 : Prop :=
+  Nary.Pow (Nary.Add [Nary.lit 32, Nary.Mul [Nary.lit 24, Nary.I]]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Add [Nary.lit 6, Nary.Mul [Nary.lit 2, Nary.I]]
+
+/-- `power_l447` -/
+abbrev power_l447 : Prop :=
+  Nary.Pow (Nary.Add [Nary.lit 32, Nary.Mul [Nary.lit (-1), Nary.Mul [Nary.lit 24, Nary.I]]]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Add [Nary.lit 6, Nary.Mul [Nary.lit (-2), Nary.I]]
+
+/-- `power_l448` -/
+abbrev power_l448 : Prop :=
+  Nary.Pow (Nary.Add [Nary.lit (-32), Nary.Mul [Nary.lit (-1), Nary.Mul [Nary.lit 24, Nary.I]]]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Add [Nary.lit 2, Nary.Mul [Nary.lit (-6), Nary.I]]
+
+/-- `power_l449` -/
+abbrev power_l449 : Prop :=
+  Nary.Pow (Nary.Add [Nary.lit (-32), Nary.Mul [Nary.lit 24, Nary.I]]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Add [Nary.lit 2, Nary.Mul [Nary.lit 6, Nary.I]]
+
+/-- `power_l454` -/
+abbrev power_l454 : Prop :=
+  Nary.Pow (Nary.Mul [Nary.Add [Nary.lit 3, Nary.Mul [Nary.lit 4, Nary.I]], Nary.Pow (Nary.lit 4) (Nary.lit (-1))]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Add [Nary.lit 1, Nary.Mul [Nary.Pow (Nary.lit 2) (Nary.lit (-1)), Nary.I]]
+
+/-- `power_l458` -/
+abbrev power_l458 : Prop :=
+  Nary.Pow (Nary.Mul [Nary.Add [Nary.lit 8, Nary.Mul [Nary.lit 15, Nary.I]], Nary.Pow (Nary.lit 8) (Nary.lit (-1))]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Add [Nary.Mul [Nary.lit 5, Nary.Pow (Nary.lit 4) (Nary.lit (-1))], Nary.Mul [Nary.Mul [Nary.lit 3, Nary.Pow (Nary.lit 4) (Nary.lit (-1))], Nary.I]]
+
+/-- `power_l460` -/
+abbrev power_l460 : Prop :=
+  Nary.Pow (Nary.Mul [Nary.Add [Nary.lit 3, Nary.Mul [Nary.lit (-1), Nary.Mul [Nary.lit 4, Nary.I]]], Nary.Pow (Nary.lit 25) (Nary.lit (-1))]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Add [Nary.Mul [Nary.lit 2, Nary.Pow (Nary.lit 5) (Nary.lit (-1))], Nary.Mul [Nary.Mul [Nary.lit (-1), Nary.Pow (Nary.lit 5) (Nary.lit (-1))], Nary.I]]
+
+/-- `power_l461` -/
+abbrev power_l461 : Prop :=
+  Nary.Pow (Nary.Mul [Nary.Add [Nary.lit 3, Nary.Mul [Nary.lit (-1), Nary.Mul [Nary.lit 4, Nary.I]]], Nary.Pow (Nary.lit 26) (Nary.lit (-1))]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Mul [Nary.Pow (Nary.lit 26) (Nary.lit (-1)), Nary.Pow (Nary.lit 26) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))), Nary.Add [Nary.lit 2, Nary.Mul [Nary.lit (-1), Nary.I]]]
+
+/-- `power_l464` -/
+abbrev power_l464 : Prop :=
+  Nary.Pow (Nary.Mul [Nary.Add [Nary.lit 3, Nary.Mul [Nary.lit 4, Nary.I]], Nary.Pow (Nary.Add [Nary.lit 3, Nary.Mul [Nary.lit (-1), Nary.Mul [Nary.lit 4, Nary.I]]]) (Nary.lit (-1))]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Add [Nary.Mul [Nary.lit 3, Nary.Pow (Nary.lit 5) (Nary.lit (-1))], Nary.Mul [Nary.Mul [Nary.lit 4, Nary.Pow (Nary.lit 5) (Nary.lit (-1))], Nary.I]]
+
+/-- `power_l465` -/
+abbrev power_l465 : Prop :=
+  Nary.Pow (Nary.Mul [Nary.lit 2, Nary.Pow (Nary.Add [Nary.lit 3, Nary.Mul [Nary.lit 4, Nary.I]]) (Nary.lit (-1))]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Mul [Nary.Pow (Nary.lit 5) (Nary.lit (-1)), Nary.Pow (Nary.lit 2) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))), Nary.Add [Nary.lit 2, Nary.Mul [Nary.lit (-1), Nary.I]]]
+
+/-- `power_l467` -/
+abbrev power_l467 : Prop :=
+  Nary.Pow (Nary.Mul [Nary.lit (-2), Nary.Pow (Nary.Add [Nary.lit 3, Nary.Mul [Nary.lit 4, Nary.I]]) (Nary.lit (-1))]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Mul [Nary.Pow (Nary.lit 5) (Nary.lit (-1)), Nary.Pow (Nary.lit 2) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))), Nary.Add [Nary.lit 1, Nary.Mul [Nary.lit 2, Nary.I]]]
+
+/-- `power_l470` -/
+abbrev power_l470 : Prop :=
+  Nary.Pow (Nary.Mul [Nary.lit 1, Nary.Pow (Nary.Add [Nary.lit 3, Nary.Mul [Nary.I, Nary.lit 4]]) (Nary.lit (-1))]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Add [Nary.Mul [Nary.lit 2, Nary.Pow (Nary.lit 5) (Nary.lit (-1))], Nary.Mul [Nary.Mul [Nary.lit (-1), Nary.Pow (Nary.lit 5) (Nary.lit (-1))], Nary.I]]
+
+/-- `power_l471` -/
+abbrev power_l471 : Prop :=
+  Nary.Pow (Nary.Mul [Nary.lit 1, Nary.Pow (Nary.Add [Nary.lit 3, Nary.Mul [Nary.lit (-1), Nary.I]]) (Nary.lit (-1))]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Mul [Nary.Pow (Nary.lit 10) (Nary.lit (-1)), Nary.Pow (Nary.lit 10) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))), Nary.Pow (Nary.Add [Nary.lit 3, Nary.I]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1)))]
+
+/-- `power_l476` -/
+abbrev power_l476 : Prop :=
+  Nary.Pow (Nary.Pow (Nary.Add [Nary.lit 3, Nary.Mul [Nary.lit 4, Nary.I]]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1)))) (Nary.lit 3) = Nary.Pow (Nary.Add [Nary.lit 2, Nary.I]) (Nary.lit 3)
+
+/-- `power_l477` -/
+abbrev power_l477 : Prop :=
+  Nary.Pow (Nary.Add [Nary.lit 3, Nary.Mul [Nary.lit 4, Nary.I]]) (Nary.Mul [Nary.lit 3, Nary.Pow (Nary.lit 2) (Nary.lit (-1))]) = Nary.Add [Nary.lit 2, Nary.Mul [Nary.lit 11, Nary.I]]
+
+/-- `power_l478` -/
+abbrev power_l478 : Prop :=
+  Nary.Pow (Nary.Add [Nary.lit 6, Nary.Mul [Nary.lit 8, Nary.I]]) (Nary.Mul [Nary.lit 3, Nary.Pow (Nary.lit 2) (Nary.lit (-1))]) = Nary.Mul [Nary.lit 2, Nary.Pow (Nary.lit 2) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))), Nary.Add [Nary.lit 2, Nary.Mul [Nary.lit 11, Nary.I]]]
+
+/-- `power_l484` -/
+abbrev power_l484 : Prop :=
+  Nary.Pow (Nary.Mul [Nary.Add [Nary.lit 3, Nary.Mul [Nary.lit 4, Nary.I]], Nary.Pow (Nary.Pow (Nary.Add [Nary.lit 3, Nary.Mul [Nary.lit (-1), Nary.Mul [Nary.lit 4, Nary.I]]]) (Nary.lit 3)) (Nary.lit (-1))]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Mul [Nary.Pow (Nary.lit 125) (Nary.lit (-1)), Nary.Pow (Nary.Mul [Nary.Add [Nary.lit (-117), Nary.Mul [Nary.lit 44, Nary.I]], Nary.Add [Nary.lit 3, Nary.Mul [Nary.lit 4, Nary.I]]]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1)))]
+
+/-- `power_l485` -/
+abbrev power_l485 : Prop :=
+  Nary.Pow (Nary.Mul [Nary.Add [Nary.lit 3, Nary.Mul [Nary.lit 4, Nary.I]], Nary.Pow (Nary.Pow (Nary.Add [Nary.lit 3, Nary.Mul [Nary.lit (-1), Nary.Mul [Nary.lit 4, Nary.I]]]) (Nary.lit 3)) (Nary.lit (-1))]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Add [Nary.Mul [Nary.lit 7, Nary.Pow (Nary.lit 125) (Nary.lit (-1))], Nary.Mul [Nary.Mul [Nary.lit (-24), Nary.Pow (Nary.lit 125) (Nary.lit (-1))], Nary.I]]
+
+/-- `power_l489` -/
+abbrev power_l489 : Prop :=
+  Nary.Pow (Nary.Mul [Nary.lit 2, Nary.I]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Add [Nary.lit 1, Nary.I]
+
+/-- `power_l491` -/
+abbrev power_l491 : Prop :=
+  Nary.Pow (Nary.Mul [Nary.lit 2, Nary.I]) (Nary.Mul [Nary.lit 3, Nary.Pow (Nary.lit 2) (Nary.lit (-1))]) = Nary.Pow (Nary.Add [Nary.lit 1, Nary.I]) (Nary.lit 3)
+
+/-- `power_l495` -/
+abbrev power_l495 : Prop :=
+  Nary.Pow (Nary.Mul [Nary.Mul [Nary.lit (-9), Nary.Pow (Nary.lit 2) (Nary.lit (-1))], Nary.I]) (Nary.Mul [Nary.lit 3, Nary.Pow (Nary.lit 2) (Nary.lit (-1))]) = Nary.Mul [Nary.Mul [Nary.lit 27, Nary.Pow (Nary.lit 8) (Nary.lit (-1))], Nary.Pow (Nary.Add [Nary.lit 1, Nary.Mul [Nary.lit (-1), Nary.I]]) (Nary.lit 3)]
+
+/-- `power_l547` -/
+abbrev power_l547 : Prop :=
+  Nary.Pow (Nary.Mul [Nary.lit 1, Nary.Pow (Nary.tan (Nary.Add [Nary.lit 1, Nary.I])) (Nary.lit (-1))]) (Nary.Pow (Nary.lit 2) (Nary.lit (-1))) = Nary.Pow (Nary.tan (Nary.Add [Nary.lit 1, Nary.I])) (Nary.Mul [Nary.lit (-1), Nary.Pow (Nary.lit 2) (Nary.lit (-1))])
+
+/-- `power_l615` -/
+abbrev power_l615 : Prop :=
+  Nary.Pow (Nary.Mul [Nary.lit 2, Nary.Pow (Nary.lit 3) (Nary.lit (-1))]) (Nary.Mul [Nary.lit 3, Nary.Pow (Nary.lit 2) (Nary.lit (-1))]) = Nary.Mul [Nary.Mul [Nary.lit 2, Nary.Pow (Nary.lit 9) (Nary.lit (-1))], Nary.Pow (Nary.lit 6) (Nary.Pow (Nary.lit 2) (Nary.lit (-1)))]
+
+/-- `power_l616` -/
+abbrev power_l616 : Prop :=
+  Nary.Pow (Nary.Pow (Nary.lit 6) (Nary.lit (-1))) (Nary.Mul [Nary.lit 9, Nary.Pow (Nary.lit 4) (Nary.lit (-1))]) = Nary.Mul [Nary.Pow (Nary.lit 216) (Nary.lit (-1)), Nary.Pow (Nary.lit 6) (Nary.Mul [Nary.lit 3, Nary.Pow (Nary.lit 4) (Nary.lit (-1))])]
+
+/-- `power_l617` -/
+abbrev power_l617 : Prop :=
+  Nary.Pow (Nary.Mul [Nary.lit 3, Nary.Pow (Nary.lit 7) (Nary.lit (-1))]) (Nary.Mul [Nary.lit 7, Nary.Pow (Nary.lit 3) (Nary.lit (-1))]) = Nary.Mul [Nary.Mul [Nary.lit 9, Nary.Pow (Nary.lit 343) (Nary.lit (-1))], Nary.Pow (Nary.lit 3) (Nary.Pow (Nary.lit 3) (Nary.lit (-1))), Nary.Pow (Nary.lit 7) (Nary.Mul [Nary.lit 2, Nary.Pow (Nary.lit 3) (Nary.lit (-1))])]
+
+/-- `power_l635` -/
+abbrev power_l635 : Prop :=
+  Nary.Pow (Nary.lit 2) (Nary.lit 3) = Nary.lit 8
+
+/-- `power_l649` -/
+abbrev power_l649 : Prop :=
+  Nary.Pow (Nary.Pow Nary.I (Nary.Pow (Nary.lit 2) (Nary.lit (-1)))) (Nary.Mul [Nary.lit 9, Nary.Pow (Nary.lit 2) (Nary.lit (-1))]) = Nary.Mul [Nary.lit (-1), Nary.Pow Nary.I (Nary.Pow (Nary.lit 4) (Nary.lit (-1)))]
+
 end Nary.Catalogue.Statement

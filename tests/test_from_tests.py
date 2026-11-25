@@ -131,3 +131,17 @@ def test_tiny_value_is_not_zero():
     result = numeric.check(entry.input, entry.expected, entry.when)
     assert not result.counterexamples and not result.unsure and result.revised == 1
     assert entry.status == "accepted"
+
+
+def test_tactic_proofs():
+    """lean/Nary/Catalogue/Tactics.lean is what catalogue.lean_tactics writes
+    from the proofs it records: each with a tactic of the fixed list, for a
+    generated accepted entry, and nothing hand-edited. (Lean itself checks
+    the proofs, in lake build --wfail.)"""
+    from catalogue import lean_tactics
+    recorded = lean_tactics.proofs()
+    assert lean_tactics.PATH.read_text(encoding="utf-8") == lean_tactics.render(recorded)
+    names = {e.name for e in lean_tactics.candidates()}
+    labels = {label for label, _ in lean_tactics.TACTICS}
+    for name, label in recorded.items():
+        assert name in names and label in labels
