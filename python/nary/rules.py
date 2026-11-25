@@ -59,21 +59,13 @@ would use them while matching.
 - ``is_unordered(f)`` and ``is_flat(f)`` tell whether the fact is recorded.
   Each fact can be recorded once for each function.
 
-The identities listed for a function with ``declare_identities``
-(``nary.identities``) are the other source of facts and rules, and the one
-the functions of ``nary`` use: ``is_unordered(f)`` and ``is_flat(f)`` are
-also true when the block of ``f`` lists ``commutative`` or ``associative``
-(``unordered(f)`` and ``flat(f)`` then refuse, as already recorded);
-``identity_rules(f)`` gives the rules of the block, and ``specific_rule(i)``
-the rule of one specific identity.
-
 Refused, each with an error: a pattern that is not an expression or is a
 bare symbol; a replacement of another kind than the pattern; a condition
 that is not a ``BoolKind`` expression; a symbol in the replacement or the
 condition that is not in the pattern; two symbols with the same name and
-different kinds in one rule. A rule that contains a ``Lambda`` anywhere is refused for now: a variable
-bound by a lambda is not a variable of the rule, and how such rules are
-written and matched has not been designed.
+different kinds in one rule. A rule that contains a ``Lambda`` anywhere is
+refused for now: a variable bound by a lambda is not a variable of the rule,
+and how such rules are written and matched has not been designed.
 
 Not here: rules are applied by ``nary.rewriting``, and ``nary.lean`` writes
 a rule's claim as a Lean statement. Nothing decides a condition or computes
@@ -84,15 +76,11 @@ The module is imported as ``nary.rules``; its names are not re-exported
 from ``nary``.
 """
 
-from . import identities as _identities
 from ._core import Expr, Kind
 from .functions import is_lambda
 from .kinds import BoolKind
 
-__all__ = [
-    "Rule", "flat", "identity_rules", "is_flat", "is_unordered", "rule", "specific_rule",
-    "unordered",
-]
+__all__ = ["Rule", "flat", "is_flat", "is_unordered", "rule", "unordered"]
 
 # The declared functions recorded with unordered() and with flat().
 _unordered = set()
@@ -244,7 +232,7 @@ def unordered(f):
             f"unordered needs a function whose arguments all have one kind, got {f!r} "
             f"of kind {f.kind!r}"
         )
-    if f in _unordered or _identities.lists(f, _identities.commutative):
+    if f in _unordered:
         raise ValueError(f"{f!r} is already recorded as unordered")
     _unordered.add(f)
 
@@ -260,101 +248,18 @@ def flat(f):
             f"flat needs a function taking any number of arguments of the kind it "
             f"returns, and no others, got {f!r} of kind {f.kind!r}"
         )
-    if f in _flat or _identities.lists(f, _identities.associative):
+    if f in _flat:
         raise ValueError(f"{f!r} is already recorded as flat")
     _flat.add(f)
 
 
 def is_unordered(f):
-    """Whether ``unordered(f)`` has been recorded, or the identities of
-    ``f`` list ``commutative``."""
+    """Whether ``unordered(f)`` has been recorded."""
     _check_declared_function("is_unordered", f)
-    return f in _unordered or _identities.lists(f, _identities.commutative)
+    return f in _unordered
 
 
 def is_flat(f):
-    """Whether ``flat(f)`` has been recorded, or the identities of ``f``
-    list ``associative``."""
+    """Whether ``flat(f)`` has been recorded."""
     _check_declared_function("is_flat", f)
-    return f in _flat or _identities.lists(f, _identities.associative)
-
-
-def _without_convention(e, symbols):
-    """``e`` with each placeholder named by the convention of
-    ``nary.identities`` (``a_``) renamed to the plain variable of a rule
-    (``a``), unless two of ``symbols`` would then share a name."""
-    plain = {p: p.kind(p.name.rstrip("_") or p.name) for p in symbols}
-    if len({q.name for q in plain.values()}) < len(plain) or any(
-        q in symbols and q != p for p, q in plain.items()
-    ):
-        return e
-    return _rename(e, plain)
-
-
-def _rename(e, plain):
-    if e in plain:
-        return plain[e]
-    if e.head is None:
-        return e
-    return _rename(e.head, plain)(*(_rename(arg, plain) for arg in e.args))
-
-
-def specific_rule(i):
-    """The rule ``lhs -> rhs`` (where ``when`` holds) of the specific
-    identity ``i``, an ``nary.identities.Identity``, with the name of the
-    identity. Its placeholders become the variables of the rule, without
-    the trailing underscores of the naming convention (``a_`` becomes
-    ``a``)."""
-    if i.generic is not None:
-        raise ValueError(f"{i!r} is an instance of a generic identity, not a specific one")
-    return _plain_rule(i)
-
-
-def _plain_rule(i):
-    """The rule ``lhs -> rhs`` (where ``when`` holds) of the identity
-    ``i``, named after it, its placeholders without the convention."""
-    symbols = [p for p in _symbols(i.lhs) if p.kind.inputs is None]
-    lhs, rhs = (_without_convention(side, symbols) for side in (i.lhs, i.rhs))
-    when = None if i.when is None else _without_convention(i.when, symbols)
-    return Rule(lhs, rhs, when=when, name=i.name)
-
-
-def identity_rules(f):
-    """The rewrite rules that the identities listed for ``f`` (see
-    ``nary.identities``) give the engine, in the order listed, each named
-    after its identity.
-
-    A specific identity ``Equal(lhs, rhs, when)`` gives the rule
-    ``lhs -> rhs``. Of the generic identities,
-    with ``a`` a variable of the kind of ``f``'s arguments, ``identity(e)``
-    gives ``f(a, e) -> a`` and ``idempotent`` gives ``f(a, a) -> a``, both
-    only if ``singleton`` is listed too, and ``absorbing(z)`` gives
-    ``f(a, z) -> z``; ``inverse(i)`` gives ``f(a, i) -> e``, with ``e``
-    from the ``identity(e)`` of the block, and ``repeated(r)`` gives
-    ``f(a, a) -> r`` (each where its ``when=`` holds). The engine applies such a rule to some of the
-    arguments of a longer application when ``f`` is associative and
-    commutative. ``associative`` and ``commutative`` give no rule (the
-    engine uses them while matching, through ``is_flat`` and
-    ``is_unordered``); ``singleton`` and ``distributive`` give none either.
-    """
-    block = _identities.identities(f)
-    listed = {i.generic for i in block if i.generic is not None}
-    single = _identities.singleton in listed
-    position = f.kind.rest if f.kind.rest is not None else (f.kind.inputs or (None,))[0]
-    rules = []
-    for i in block:
-        if i.generic is None:
-            rules.append(specific_rule(i))
-            continue
-        a = position("a") if isinstance(position, Kind) else None
-        if i.generic is _identities.identity and single:
-            [e] = i.item.args
-            rules.append(Rule(f(a, e), a, name=i.name))
-        elif i.generic is _identities.idempotent and single:
-            rules.append(Rule(f(a, a), a, name=i.name))
-        elif i.generic is _identities.absorbing:
-            [z] = i.item.args
-            rules.append(Rule(f(a, z), z, name=i.name))
-        elif i.generic in (_identities.inverse, _identities.repeated):
-            rules.append(_plain_rule(i))
-    return rules
+    return f in _flat

@@ -1,17 +1,23 @@
-"""The rewrite rules about numbers, as the list ``rules``, which is what
-``nary.rewriting.rewrite`` is given.
+"""Rules about numbers: the facts about ``Add`` and ``Mul``, and the first
+rewrite rules.
 
-The rules are not written here: they come from the identities listed for
-``Add``, ``Mul``, ``Pow`` and ``exp`` in ``nary.arithmetic`` and
-``nary.elementary`` (see ``nary.identities``), through
-``nary.rules.identity_rules``. Each rule is named after its identity. The
-facts that ``Add`` and ``Mul`` are unordered and flat come from the same
-blocks, which list ``commutative`` and ``associative``.
+Each function's identities are declared in one block below
+(``nary.identities``), which records its facts and gives its rules.
+Importing this module records the facts. The rules are the list ``rules``,
+which is what ``nary.rewriting.rewrite`` is given.
 
-Every identity, and every rule the engine applies, is proved in Lean
-(``lean/README.md``): ``lean/generate_rules.py`` writes the statements to
-``lean/Nary/ArithmeticRules/Statements.lean`` and the proofs are written by
-hand in ``lean/Nary/ArithmeticRules.lean``.
+Every rule and every fact here is proved in Lean, from the definitions in
+``lean/Nary/Number.lean``. For a rule that means: wherever its condition
+holds and its erased variables have a value, both sides have no value or
+both have the same value (see ``nary.rules``). The Lean statements are
+printed from this file: ``lean/generate_rules.py`` writes them to
+``lean/Nary/ArithmeticRules/Statements.lean``, and the proofs are written by
+hand in ``lean/Nary/ArithmeticRules.lean``. The name of a rule is the name
+of its theorem, ``Nary.ArithmeticRules.add_zero`` and so on, and every rule
+here needs one. After changing or adding a rule, run that script and prove
+the new statement; until then ``tests/test_lean.py`` fails (the script was
+not run) or ``lake build`` fails (a statement has no proof that fits).
+``lean/README.md`` explains the arrangement.
 
     >>> from nary import Add, NumberKind, Pow
     >>> from nary.arithmetic_rules import rules
@@ -20,27 +26,44 @@ hand in ``lean/Nary/ArithmeticRules.lean``.
     (True, True, False)
     >>> a = NumberKind("a")
     >>> [(r, r.erased) for r in rules if r.pattern == a * 0]
-    [(Rule(Mul(a, 0), 0, name='mul_absorbing'), (a,))]
-
-``mul_repeated`` (``a * a -> a**2``) is listed, stated and proved but not
-in ``rules``: with it, ``x*x - x*x`` would no longer rewrite to 0, since
-both sides become ``Pow(x, 2)`` and ``Pow(x, 2) - Pow(x, 2)`` does not
-rewrite with these rules.
+    [(Rule(Mul(a, 0), 0, name='mul_zero'), (a,))]
 
 ``a ** 0 -> 1`` needs ``Ne(a, 0)`` because ``0**0`` has no value here: there
 is no separate power with a natural-number exponent yet.
 """
 
 from .arithmetic import Add, Mul, Pow
-from .elementary import exp
-from .rules import identity_rules
+from .elementary import exp, log
+from .identities import (
+    Equal, absorbing, associative, commutative, declare_identities, identity, inverse,
+)
+from .kinds import NumberKind
+from .relational import Ne
 
-# The rules left out of the default set, by name (see above).
-LEFT_OUT = ("mul_repeated",)
+a = NumberKind("a")
 
-rules = [
-    r
-    for f in (Add, Mul, Pow, exp)
-    for r in identity_rules(f)
-    if r.name not in LEFT_OUT
-]
+add = declare_identities(Add, [
+    associative,
+    commutative,
+    identity(0, name="add_zero"),
+    Equal(a + a, 2 * a, name="add_self"),
+    inverse(Mul(-1, a), name="sub_self"),
+])
+mul = declare_identities(Mul, [
+    associative,
+    commutative,
+    identity(1, name="mul_one"),
+    absorbing(0, name="mul_zero"),
+    inverse(Pow(a, -1), when=Ne(a, 0), name="div_self"),
+])
+power = declare_identities(Pow, [
+    Equal(a ** 1, a, name="pow_one"),
+    Equal(a ** 0, 1, when=Ne(a, 0), name="pow_zero"),
+])
+exponential = declare_identities(exp, [
+    Equal(exp(log(a)), a, when=Ne(a, 0), name="exp_log"),
+])
+
+# Rules for different functions never match the same expression, so only
+# the order within each block matters to rewriting.
+rules = add + mul + power + exponential

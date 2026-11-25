@@ -25,98 +25,36 @@ private theorem holds_ne_zero {a : Number} (h : Holds (Ne a (lit 0))) :
   | none => simp [Ne, Holds] at h
   | some z => exact ⟨z, rfl, by simpa [Ne, Holds, lit] using h⟩
 
-/-- A list of numbers all of which have a value has a list of values. -/
-private theorem mapM_some {β : Type*} :
-    ∀ xs : List (Option β), (∀ x ∈ xs, x ≠ none) → ∃ l, xs.mapM id = some l
-  | [], _ => ⟨[], rfl⟩
-  | x :: xs, h => by
-    obtain ⟨b, rfl⟩ := Option.ne_none_iff_exists'.mp (h x (by simp))
-    obtain ⟨l, hl⟩ := mapM_some xs (fun y hy => h y (by simp [hy]))
-    exact ⟨b :: l, by simp [List.mapM_cons, hl]⟩
+theorem add_zero : Statement.add_zero := by
+  intro a; cases a <;> simp [Add, lit]
 
-/-! ### `Add` -/
+theorem mul_one : Statement.mul_one := by
+  intro a; cases a <;> simp [Mul, lit]
 
-theorem add_singleton : Statement.add_singleton := by
-  intro a; cases a <;> simp [Add]
-
-theorem add_identity : Statement.add_identity := by
-  intro xs ys
-  simp only [Add, List.mapM_append, List.mapM_cons]
-  cases xs.mapM id <;> cases ys.mapM id <;> simp [lit]
-
-theorem add_identity_rule : Statement.add_identity_rule :=
-  add_identity.rule add_singleton
-
-theorem add_inverse : Statement.add_inverse := by
-  intro a _ h
+theorem mul_zero : Statement.mul_zero := by
+  intro a h
   obtain ⟨z, rfl⟩ := Option.ne_none_iff_exists'.mp h
-  simp [Add, Mul, lit]
-
-theorem add_inverse_rule : Statement.add_inverse_rule :=
-  fun a h => add_inverse a trivial h
-
-theorem add_repeated : Statement.add_repeated := by
-  intro a _; cases a <;> simp [Add, Mul, lit, two_mul]
-
-theorem add_repeated_rule : Statement.add_repeated_rule :=
-  fun a => add_repeated a trivial
-
-/-! ### `Mul` -/
-
-theorem mul_singleton : Statement.mul_singleton := by
-  intro a; cases a <;> simp [Mul]
-
-theorem mul_identity : Statement.mul_identity := by
-  intro xs ys
-  simp only [Mul, List.mapM_append, List.mapM_cons]
-  cases xs.mapM id <;> cases ys.mapM id <;> simp [lit]
-
-theorem mul_identity_rule : Statement.mul_identity_rule :=
-  mul_identity.rule mul_singleton
-
-theorem mul_absorbing : Statement.mul_absorbing := by
-  intro xs ys h
-  obtain ⟨l₁, h₁⟩ := mapM_some xs (fun x hx => h x (by simp [hx]))
-  obtain ⟨l₂, h₂⟩ := mapM_some ys (fun x hx => h x (by simp [hx]))
-  simp [Mul, List.mapM_append, List.mapM_cons, h₁, h₂, lit]
-
-theorem mul_absorbing_rule : Statement.mul_absorbing_rule :=
-  mul_absorbing.rule
+  simp [Mul, lit]
 
 /-- Without the hypothesis `a ≠ none`, `a * 0 → 0` is wrong: at `a = log(0)`
 the left side has no value and the right side is 0. -/
 example : Mul [log (lit 0), lit 0] ≠ lit 0 := by
   simp [Mul, log, withDomain, logDomain, lit]
 
-theorem mul_distributive : Statement.mul_distributive := by
-  intro a b c
-  cases a <;> cases b <;> cases c <;> simp [Mul, Add, mul_add]
+theorem add_self : Statement.add_self := by
+  intro a; cases a <;> simp [Add, Mul, lit, two_mul]
 
-theorem mul_inverse : Statement.mul_inverse := by
+theorem sub_self : Statement.sub_self := by
+  intro a h
+  obtain ⟨z, rfl⟩ := Option.ne_none_iff_exists'.mp h
+  simp [Add, Mul, lit]
+
+theorem div_self : Statement.div_self := by
   intro a h _
   obtain ⟨z, rfl, hz⟩ := holds_ne_zero h
   have : z * Complex.exp (-Complex.log z) = 1 := by
     rw [Complex.exp_neg, Complex.exp_log hz, mul_inv_cancel₀ hz]
   simp [Mul, Pow, withDomain₂, powDomain, powTotal, lit, hz, this]
-
-theorem mul_inverse_rule : Statement.mul_inverse_rule :=
-  mul_inverse
-
-theorem mul_repeated : Statement.mul_repeated := by
-  intro a _
-  cases a with
-  | none => simp [Mul, Pow, withDomain₂]
-  | some z =>
-    by_cases hz : z = 0
-    · simp [Mul, Pow, withDomain₂, powDomain, powTotal, lit, hz]
-    · have : Complex.exp (2 * Complex.log z) = z * z := by
-        rw [two_mul, Complex.exp_add, Complex.exp_log hz]
-      simp [Mul, Pow, withDomain₂, powDomain, powTotal, lit, hz, this]
-
-theorem mul_repeated_rule : Statement.mul_repeated_rule :=
-  fun a => mul_repeated a trivial
-
-/-! ### `Pow` and `exp` -/
 
 theorem pow_one : Statement.pow_one := by
   intro a
@@ -137,18 +75,7 @@ theorem exp_log : Statement.exp_log := by
   obtain ⟨z, rfl, hz⟩ := holds_ne_zero h
   simp [exp, log, withDomain, logDomain, hz, Complex.exp_log hz]
 
-/-! ### `sin` -/
-
-theorem sin_0 : Statement.sin_0 := by
-  simp [Statement.sin_0, sin, lit]
-
-theorem sin_mul_neg1_a : Statement.sin_mul_neg1_a := by
-  intro a; cases a <;> simp [sin, Mul, lit, Complex.sin_neg]
-
-theorem sin_add_a_mul_2_pi : Statement.sin_add_a_mul_2_pi := by
-  intro a; cases a <;> simp [sin, Add, Mul, lit, pi, Complex.sin_add_two_pi]
-
-/-! ### `Add` and `Mul`: associative and commutative -/
+/-! ### The facts about `Add` and `Mul` -/
 
 /-- The values of the arguments as a multiset (which forgets their order),
 or `none` if one argument has no value. -/
@@ -170,255 +97,42 @@ private theorem values_perm {xs ys : List Number} (h : xs.Perm ys) :
     cases x <;> cases y <;> cases values l <;> simp [Multiset.cons_swap]
   | trans _ _ ih₁ ih₂ => exact ih₁.trans ih₂
 
-theorem add_commutative : Statement.add_commutative := by
+theorem add_unordered : Statement.add_unordered := by
   intro xs ys h
   have := congrArg (Option.map Multiset.sum) (values_perm h)
   simpa [values, Add, Option.map_map, Function.comp_def] using this
 
-theorem mul_commutative : Statement.mul_commutative := by
+theorem mul_unordered : Statement.mul_unordered := by
   intro xs ys h
   have := congrArg (Option.map Multiset.prod) (values_perm h)
   simpa [values, Mul, Option.map_map, Function.comp_def] using this
 
-theorem add_associative : Statement.add_associative := by
+theorem add_flat : Statement.add_flat := by
   intro xs ys zs
   simp only [Add, List.mapM_append, List.mapM_cons]
   cases xs.mapM id <;> cases ys.mapM id <;> cases zs.mapM id <;> simp
 
-theorem mul_associative : Statement.mul_associative := by
+theorem mul_flat : Statement.mul_flat := by
   intro xs ys zs
   simp only [Mul, List.mapM_append, List.mapM_cons]
   cases xs.mapM id <;> cases ys.mapM id <;> cases zs.mapM id <;> simp
 
-/-! ### `And` and `Or`
-
-Both are Kleene connectives (`Nary/Logic.lean`): the value of `And l` depends
-only on whether some argument is false and whether some argument has no
-value, so two lists that agree on both give the same value. -/
-
-private theorem and_of_false {l : List Boolean} (h : ∃ p, some p ∈ l ∧ ¬p) :
-    And l = some False := by
-  unfold And; simp [h]
-
-private theorem and_of_none {l : List Boolean} (h : ¬∃ p, some p ∈ l ∧ ¬p) (hn : none ∈ l) :
-    And l = none := by
-  unfold And; simp [h, hn]
-
-private theorem and_of_true {l : List Boolean} (h : ¬∃ p, some p ∈ l ∧ ¬p) (hn : none ∉ l) :
-    And l = some True := by
-  unfold And; simp [h, hn]
-
-private theorem or_of_true {l : List Boolean} (h : ∃ p, some p ∈ l ∧ p) :
-    Or l = some True := by
-  unfold Or; simp [h]
-
-private theorem or_of_none {l : List Boolean} (h : ¬∃ p, some p ∈ l ∧ p) (hn : none ∈ l) :
-    Or l = none := by
-  unfold Or; simp [h, hn]
-
-private theorem or_of_false {l : List Boolean} (h : ¬∃ p, some p ∈ l ∧ p) (hn : none ∉ l) :
-    Or l = some False := by
-  unfold Or; simp [h, hn]
-
-private theorem and_eq {l₁ l₂ : List Boolean}
-    (hf : (∃ p, some p ∈ l₁ ∧ ¬p) ↔ (∃ p, some p ∈ l₂ ∧ ¬p))
-    (hn : none ∈ l₁ ↔ none ∈ l₂) : And l₁ = And l₂ := by
-  by_cases h₁ : ∃ p, some p ∈ l₁ ∧ ¬p
-  · rw [and_of_false h₁, and_of_false (hf.mp h₁)]
-  by_cases h₂ : none ∈ l₁
-  · rw [and_of_none h₁ h₂, and_of_none (mt hf.mpr h₁) (hn.mp h₂)]
-  · rw [and_of_true h₁ h₂, and_of_true (mt hf.mpr h₁) (mt hn.mpr h₂)]
-
-private theorem or_eq {l₁ l₂ : List Boolean}
-    (ht : (∃ p, some p ∈ l₁ ∧ p) ↔ (∃ p, some p ∈ l₂ ∧ p))
-    (hn : none ∈ l₁ ↔ none ∈ l₂) : Or l₁ = Or l₂ := by
-  by_cases h₁ : ∃ p, some p ∈ l₁ ∧ p
-  · rw [or_of_true h₁, or_of_true (ht.mp h₁)]
-  by_cases h₂ : none ∈ l₁
-  · rw [or_of_none h₁ h₂, or_of_none (mt ht.mpr h₁) (hn.mp h₂)]
-  · rw [or_of_false h₁ h₂, or_of_false (mt ht.mpr h₁) (mt hn.mpr h₂)]
-
-private theorem and_mem {l₁ l₂ : List Boolean} (h : ∀ x, x ∈ l₁ ↔ x ∈ l₂) :
-    And l₁ = And l₂ :=
-  and_eq (by simp only [h]) (h none)
-
-private theorem or_mem {l₁ l₂ : List Boolean} (h : ∀ x, x ∈ l₁ ↔ x ∈ l₂) :
-    Or l₁ = Or l₂ :=
-  or_eq (by simp only [h]) (h none)
-
-theorem and_commutative : Statement.and_commutative :=
-  fun _ _ h => and_mem (fun _ => h.mem_iff)
-
-theorem or_commutative : Statement.or_commutative :=
-  fun _ _ h => or_mem (fun _ => h.mem_iff)
-
-theorem and_idempotent : Statement.and_idempotent := by
-  intro xs ys zs a
-  apply and_mem; intro x; simp only [List.mem_append, List.mem_cons]; tauto
-
-theorem or_idempotent : Statement.or_idempotent := by
-  intro xs ys zs a
-  apply or_mem; intro x; simp only [List.mem_append, List.mem_cons]; tauto
-
-theorem and_singleton : Statement.and_singleton := by
-  intro a
-  rcases a with _ | p
-  · simp [And]
-  · by_cases hp : p
-    · simp [And, hp]
-    · simp [And, hp]; exact ⟨False, not_false⟩
-
-theorem or_singleton : Statement.or_singleton := by
-  intro a
-  rcases a with _ | p
-  · simp [Or]
-  · by_cases hp : p
-    · simp [Or, hp]; exact ⟨True, trivial⟩
-    · simp [Or, hp]
-
-theorem and_identity : Statement.and_identity := by
-  intro xs ys
-  apply and_eq <;> simp [true, or_and_right, exists_or]
-
-theorem or_identity : Statement.or_identity := by
-  intro xs ys
-  apply or_eq <;> simp [false, or_and_right, exists_or]
-
-theorem and_absorbing : Statement.and_absorbing := by
-  intro xs ys _
-  exact and_of_false ⟨False, by simp [Nary.false], not_false⟩
-
-theorem or_absorbing : Statement.or_absorbing := by
-  intro xs ys _
-  exact or_of_true ⟨True, by simp [Nary.true], trivial⟩
-
-theorem and_associative : Statement.and_associative := by
-  intro xs ys zs
-  by_cases hf : ∃ p, some p ∈ ys ∧ ¬p
-  · have hv := and_of_false hf
-    obtain ⟨p, hp, hnp⟩ := hf
-    exact (and_of_false ⟨False, by simp [hv], not_false⟩).trans
-      (and_of_false ⟨p, by simp [hp], hnp⟩).symm
-  by_cases hn : none ∈ ys
-  · have hv : And ys = none := and_of_none hf hn
-    apply and_eq
-    · simp only [List.mem_append, List.mem_cons, hv]
-      constructor
-      · rintro ⟨p, h | h | h, hp⟩
-        · exact ⟨p, by simp [h], hp⟩
-        · simp at h
-        · exact ⟨p, by simp [h], hp⟩
-      · rintro ⟨p, (h | h) | h, hp⟩
-        · exact ⟨p, by simp [h], hp⟩
-        · exact absurd ⟨p, h, hp⟩ hf
-        · exact ⟨p, by simp [h], hp⟩
-    · simp [hn, hv]
-  · have hv : And ys = some True := and_of_true hf hn
-    apply and_eq
-    · simp only [List.mem_append, List.mem_cons, hv]
-      constructor
-      · rintro ⟨p, h | h | h, hp⟩
-        · exact ⟨p, by simp [h], hp⟩
-        · simp only [Option.some.injEq] at h; exact absurd trivial (h ▸ hp)
-        · exact ⟨p, by simp [h], hp⟩
-      · rintro ⟨p, (h | h) | h, hp⟩
-        · exact ⟨p, by simp [h], hp⟩
-        · exact absurd ⟨p, h, hp⟩ hf
-        · exact ⟨p, by simp [h], hp⟩
-    · simp [hn, hv]
-
-theorem or_associative : Statement.or_associative := by
-  intro xs ys zs
-  by_cases ht : ∃ p, some p ∈ ys ∧ p
-  · have hv := or_of_true ht
-    obtain ⟨p, hp, hpp⟩ := ht
-    exact (or_of_true ⟨True, by simp [hv], trivial⟩).trans
-      (or_of_true ⟨p, by simp [hp], hpp⟩).symm
-  by_cases hn : none ∈ ys
-  · have hv : Or ys = none := or_of_none ht hn
-    apply or_eq
-    · simp only [List.mem_append, List.mem_cons, hv]
-      constructor
-      · rintro ⟨p, h | h | h, hp⟩
-        · exact ⟨p, by simp [h], hp⟩
-        · simp at h
-        · exact ⟨p, by simp [h], hp⟩
-      · rintro ⟨p, (h | h) | h, hp⟩
-        · exact ⟨p, by simp [h], hp⟩
-        · exact absurd ⟨p, h, hp⟩ ht
-        · exact ⟨p, by simp [h], hp⟩
-    · simp [hn, hv]
-  · have hv : Or ys = some False := or_of_false ht hn
-    apply or_eq
-    · simp only [List.mem_append, List.mem_cons, hv]
-      constructor
-      · rintro ⟨p, h | h | h, hp⟩
-        · exact ⟨p, by simp [h], hp⟩
-        · simp only [Option.some.injEq] at h; exact (h ▸ hp : False).elim
-        · exact ⟨p, by simp [h], hp⟩
-      · rintro ⟨p, (h | h) | h, hp⟩
-        · exact ⟨p, by simp [h], hp⟩
-        · exact absurd ⟨p, h, hp⟩ ht
-        · exact ⟨p, by simp [h], hp⟩
-    · simp [hn, hv]
-
-theorem and_identity_rule : Statement.and_identity_rule := and_identity.rule and_singleton
-theorem and_idempotent_rule : Statement.and_idempotent_rule := and_idempotent.rule and_singleton
-theorem and_absorbing_rule : Statement.and_absorbing_rule := and_absorbing.rule
-theorem or_identity_rule : Statement.or_identity_rule := or_identity.rule or_singleton
-theorem or_idempotent_rule : Statement.or_idempotent_rule := or_idempotent.rule or_singleton
-theorem or_absorbing_rule : Statement.or_absorbing_rule := or_absorbing.rule
-
 /-! ### All of them -/
 
 /-- Every generated statement is proved. -/
-theorem proved : Proved := by
-  exact {
-    add_associative := add_associative
-    add_singleton := add_singleton
-    add_commutative := add_commutative
-    add_identity := add_identity
-    add_inverse := add_inverse
-    add_repeated := add_repeated
-    add_identity_rule := add_identity_rule
-    add_inverse_rule := add_inverse_rule
-    add_repeated_rule := add_repeated_rule
-    mul_associative := mul_associative
-    mul_singleton := mul_singleton
-    mul_commutative := mul_commutative
-    mul_identity := mul_identity
-    mul_absorbing := mul_absorbing
-    mul_inverse := mul_inverse
-    mul_repeated := mul_repeated
-    mul_distributive := mul_distributive
-    mul_identity_rule := mul_identity_rule
-    mul_absorbing_rule := mul_absorbing_rule
-    mul_inverse_rule := mul_inverse_rule
-    mul_repeated_rule := mul_repeated_rule
-    pow_one := pow_one
-    pow_zero := pow_zero
-    exp_log := exp_log
-    sin_0 := sin_0
-    sin_mul_neg1_a := sin_mul_neg1_a
-    sin_add_a_mul_2_pi := sin_add_a_mul_2_pi
-    and_associative := and_associative
-    and_singleton := and_singleton
-    and_commutative := and_commutative
-    and_idempotent := and_idempotent
-    and_identity := and_identity
-    and_absorbing := and_absorbing
-    and_idempotent_rule := and_idempotent_rule
-    and_identity_rule := and_identity_rule
-    and_absorbing_rule := and_absorbing_rule
-    or_associative := or_associative
-    or_singleton := or_singleton
-    or_commutative := or_commutative
-    or_idempotent := or_idempotent
-    or_identity := or_identity
-    or_absorbing := or_absorbing
-    or_idempotent_rule := or_idempotent_rule
-    or_identity_rule := or_identity_rule
-    or_absorbing_rule := or_absorbing_rule
-  }
+theorem proved : Proved where
+  add_zero := add_zero
+  mul_one := mul_one
+  mul_zero := mul_zero
+  add_self := add_self
+  sub_self := sub_self
+  div_self := div_self
+  pow_one := pow_one
+  pow_zero := pow_zero
+  exp_log := exp_log
+  add_unordered := add_unordered
+  add_flat := add_flat
+  mul_unordered := mul_unordered
+  mul_flat := mul_flat
 
 end Nary.ArithmeticRules

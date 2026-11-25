@@ -23,14 +23,6 @@ operators for these functions: ``&``, ``|`` and ``~`` do not build them.
 
 from ._core import declare_constant
 from .domains import declare_function
-from .identities import (
-    absorbing,
-    associative,
-    commutative,
-    declare_identities,
-    idempotent,
-    identity,
-)
 from .kinds import BoolKind
 
 __all__ = ["And", "Not", "Or", "false", "true"]
@@ -41,20 +33,3 @@ false = declare_constant("false", BoolKind)
 And = declare_function("And", rest=BoolKind, returns=BoolKind, domain=true)
 Or = declare_function("Or", rest=BoolKind, returns=BoolKind, domain=true)
 Not = declare_function("Not", BoolKind, returns=BoolKind, domain=true)
-
-
-# Everything that holds for each function, in one place (see nary.identities).
-declare_identities(And, [
-    associative,
-    commutative,
-    idempotent,
-    identity(true),
-    absorbing(false),
-])
-declare_identities(Or, [
-    associative,
-    commutative,
-    idempotent,
-    identity(false),
-    absorbing(true),
-])
