@@ -2,9 +2,10 @@
 
 What the functions declared in `python/nary/` mean, written as Lean 4
 definitions with [Mathlib](https://github.com/leanprover-community/mathlib4),
-and proofs that the rewrite rules of `python/nary/arithmetic_rules.py` are
-correct, with each rule's Lean statement printed from the Python rule (see
-"Rules and facts, proved" below). The meaning follows issue #2.
+and proofs of every identity listed for a function in Python (see
+`python/nary/identities.py`) and of every rule the engine applies, with each
+Lean statement printed from Python (see "Identities and rules, proved"
+below). The meaning follows issue #2.
 
 Each declared function is a Lean definition on values; there is no Lean type
 of expressions yet. Functions are partial, so:
@@ -40,8 +41,8 @@ domains are the same conditions that `python/nary/` declares with
 | `Nary/Number.lean` | Integer literals, the constants, `Add`, `Mul`, `Pow` and the elementary functions. |
 | `Nary/Logic.lean` | Comparisons, `And`, `Or`, `Not`, `true`, `false`, and `Holds` (a condition has a value and it is true). |
 | `Nary/Calculus.lean` | Applying a function to an argument, and `Derivative`. |
-| `Nary/Facts.lean` | What the facts `unordered` and `flat` mean, `Unordered` and `Flat`, for a function on a list. |
-| `Nary/ArithmeticRules/Statements.lean` | Generated, do not edit: the statements of the rules and facts of `arithmetic_rules.py`, and the structure `Proved` that lists them. |
+| `Nary/Facts.lean` | What the generic identities mean, for a function on a list: `Flat` (associative), `Unordered` (commutative), `Singleton`, `Identity`, `Idempotent`, `Absorbing`, `Distributive`, and the rules that follow from three of them. |
+| `Nary/ArithmeticRules/Statements.lean` | Generated, do not edit: the statements of the identities listed for `Add`, `Mul`, `Pow`, `exp`, `And` and `Or` and of the rules the engine gets from them, and the structure `Proved` that lists them. |
 | `Nary/ArithmeticRules.lean` | The proofs of those statements, written by hand. |
 | `generate_rules.py` | Writes `Nary/ArithmeticRules/Statements.lean` from Python; see below. |
 | `check_printer.py` | Checks with Lean that what `nary.lean` prints is accepted; see below. |
@@ -100,13 +101,16 @@ It needs `lake` on `PATH` or in `~/.elan/bin`. It is run by hand and is not
 part of the Python tests, which do not need Lean. Lean checks only that each
 line is well typed, not that it means the same as the Python expression.
 
-## Rules and facts, proved
+## Identities and rules, proved
 
-Every rule in `nary.arithmetic_rules.rules`, and the four facts recorded
-there (`unordered(Add)`, `flat(Add)`, `unordered(Mul)`, `flat(Mul)`), is
-proved in Lean. The statements are not written in Lean by hand: they are
-printed from the Python rules, so the rule that the engine applies and the
-statement that is proved cannot drift apart unnoticed.
+Every identity listed with `declare_identities` for `Add`, `Mul`, `Pow`,
+`exp`, `And` and `Or`, and every rule that `nary.rules.identity_rules`
+gives the engine from them (`nary.arithmetic_rules.rules` is those of
+`Add`, `Mul`, `Pow` and `exp`), is proved in Lean. The statements are not
+written in Lean by hand: they are printed from Python, so what is listed,
+what the engine applies and what is proved cannot drift apart unnoticed.
+Each statement is named after its identity, `<function>_<identity>`
+(`add_associative`, `mul_absorbing`, `pow_zero`).
 
 ### How a rule becomes a theorem
 
@@ -138,20 +142,38 @@ statement, `Nary.ArithmeticRules.Statement.div_self`, and of its theorem,
 Mathlib's `add_zero`, `div_self` and so on. A rule without a name, or whose
 name is not a plain identifier, cannot be printed as a theorem.
 
-The facts are printed as `Nary.Unordered Nary.Add`, `Nary.Flat Nary.Add`
-and so on (by `nary.lean.to_lean_facts`), with these definitions, written by
-hand in `Nary/Facts.lean`:
+A specific identity, such as `("zero", Equal(a ** 0, 1, when=Ne(a, 0)))`
+listed for `Pow`, is printed as the rule it gives (above). An instance of a
+generic identity is printed by `nary.lean.to_lean_identity` as the Lean
+definition of the generic identity applied to the function and the
+parameters (`nary.lean.GENERIC_DEFINITIONS`), such as
+
+    abbrev mul_absorbing : Prop :=
+      Nary.Absorbing Nary.Mul (Nary.lit 0)
+
+with the definitions written by hand in `Nary/Facts.lean`, for example
 
     def Unordered (f : List α → β) : Prop := ∀ xs ys, xs.Perm ys → f xs = f ys
     def Flat (f : List α → α) : Prop := ∀ xs ys zs, f (xs ++ f ys :: zs) = f (xs ++ ys ++ zs)
 
-They are stated only for a function that takes its arguments as a list;
-`to_lean_facts` refuses any other function.
+`commutative` is stated as `Unordered` (swapping two arguments generates
+every reordering) and `associative` as `Flat`. They are stated only for a
+function that takes its arguments as a list. `Absorbing` carries the
+hypothesis that the other arguments have a value, the claim every rule
+makes about an erased variable.
+
+The engine applies a generic identity as a rule on two arguments, such as
+`Mul(a, 0) -> 0` for `absorbing(0)`. That rule is printed as a rule and
+gets its own statement, `<function>_<identity>_rule` (`mul_absorbing_rule`),
+proved from the generic statement (`Identity.rule`, `Idempotent.rule`,
+`Absorbing.rule` in `Nary/Facts.lean`), so what the engine applies is
+proved too. `to_lean_facts` still prints the facts recorded with
+`unordered()` and `flat()`.
 
 ### The files and how to regenerate
 
 - `generate_rules.py` writes `Nary/ArithmeticRules/Statements.lean`. It
-  holds one `abbrev Statement.<name> : Prop` for each rule and each fact,
+  holds one `abbrev Statement.<name> : Prop` for each identity and rule,
   and a structure `Proved` with one field `<name> : Statement.<name>` for
   each of them. Its first lines say that it is generated and must not be
   edited.
@@ -159,29 +181,29 @@ They are stated only for a function that takes its arguments as a list;
   `theorem <name> : Statement.<name>` for each one, then ends with
   `theorem proved : Proved`, which lists every theorem by name.
 
-After changing, adding or removing a rule in `arithmetic_rules.py`, from the
-top of the repository:
+After changing, adding or removing an identity in a block, from the top of
+the repository:
 
     .venv/bin/python lean/generate_rules.py
     cd lean && lake build
 
 and add or fix proofs in `Nary/ArithmeticRules.lean` until `lake build`
-passes. A rule in another list is not covered: the script reads only
-`nary.arithmetic_rules.rules` and the facts for `Add` and `Mul`.
+passes. Only the blocks of the functions in `FUNCTIONS` in
+`generate_rules.py` are covered; a rule in another list is not.
 
 ### The two checks
 
 1. The Python test `test_generated_lean_file_is_current` in
    `tests/test_lean.py` compares the committed
    `Nary/ArithmeticRules/Statements.lean` with what `generate_rules.py`
-   prints now. It fails when a rule changed in Python, or one was added or
-   removed, and the script was not run. It does not need Lean.
+   prints now. It fails when an identity changed in Python, or one was added
+   or removed, and the script was not run. It does not need Lean.
 2. `lake build` fails when a generated statement has no proof: `Proved`
    then has a field that `proved` does not give. It also fails when a
    statement changed and its proof no longer proves it, because each
    theorem's type is the generated statement.
 
-When both pass, each rule and fact as written in Python is proved, from the
+When both pass, each identity and rule as written in Python is proved, from the
 definitions here. What is trusted: the printer in `nary.lean` (that the
 printed statement says what the Python rule means) and the Lean definitions
 of the functions. `#print axioms Nary.ArithmeticRules.proved` shows only
@@ -201,8 +223,8 @@ again), so where the rule's hypotheses hold the proved rule gives
 at the position of the first matched argument; and by `Flat` again,
 merging `R` into the sum when it is itself an `Add`, as the engine does, does
 not change the value. Flattening before matching (`Add(Add(x, y), z)` matched
-as `Add(x, y, z)`) is `Flat` itself. The same holds for `Mul`. This
-argument is on paper: the engine is not proved, only the rules and facts it
+as `Add(x, y, z)`) is `Flat` itself. The same holds for `Mul`, `And` and `Or`. This
+argument is on paper: the engine is not proved, only the identities and rules it
 uses.
 
 ## Python name → Lean definition
