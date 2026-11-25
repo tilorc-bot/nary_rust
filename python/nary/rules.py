@@ -59,6 +59,14 @@ would use them while matching.
 - ``is_unordered(f)`` and ``is_flat(f)`` tell whether the fact is recorded.
   Each fact can be recorded once for each function.
 
+The identities listed for a function with ``declare_identities``
+(``nary.identities``) are the other source of facts and rules, and the one
+the functions of ``nary`` use: ``is_unordered(f)`` and ``is_flat(f)`` are
+also true when the block of ``f`` lists ``commutative`` or ``associative``
+(``unordered(f)`` and ``flat(f)`` then refuse, as already recorded);
+``identity_rules(f)`` gives the rules of the block, and ``specific_rule(i)``
+the rule of one specific identity.
+
 Refused, each with an error: a pattern that is not an expression or is a
 bare symbol; a replacement of another kind than the pattern; a condition
 that is not a ``BoolKind`` expression; a symbol in the replacement or the
