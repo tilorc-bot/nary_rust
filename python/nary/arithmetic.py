@@ -7,6 +7,16 @@ There are no Sub, Div or Neg functions. As in SymPy, ``x - y`` is
 
 from ._core import set_operator
 from .domains import declare_function
+from .identities import (
+    Equal,
+    absorbing,
+    associative,
+    commutative,
+    declare_identities,
+    distributive,
+    identity,
+    singleton,
+)
 from .kinds import NumberKind
 from .logic import Or, true
 from .relational import Gt, Ne, re
@@ -51,3 +61,29 @@ set_operator(NumberKind, "**", Pow)
 set_operator(NumberKind, "-", _subtract)
 set_operator(NumberKind, "/", _divide)
 set_operator(NumberKind, "neg", _negate)
+
+
+# Everything that holds for each function, in one place (see nary.identities).
+_a = NumberKind("a_")
+
+declare_identities(Add, [
+    associative,
+    commutative,
+    singleton,
+    identity(0),
+    ("self", Equal(_a + _a, 2 * _a)),
+    ("neg_self", Equal(_a - _a, 0)),
+])
+declare_identities(Mul, [
+    associative,
+    commutative,
+    singleton,
+    identity(1),
+    absorbing(0),
+    distributive(Add),
+    ("inv_self", Equal(_a / _a, 1, when=Ne(_a, 0))),
+])
+declare_identities(Pow, [
+    ("one", Equal(_a ** 1, _a)),
+    ("zero", Equal(_a ** 0, 1, when=Ne(_a, 0))),
+])
