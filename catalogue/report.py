@@ -1,48 +1,68 @@
 """Counts for the catalogue, in Markdown: ``python -m catalogue.report``.
 
-Entries by area and by tag, how many today's engine reaches, how many are
-proved in Lean, the mismatches by kind, and the mismatch questions.
+Entries by status; for the accepted ones, by area and by tag, how many
+today's engine reaches and how many are proved in Lean; the rejected and
+undecided ones by kind, and the questions of the undecided ones.
 """
 
 from collections import Counter
 
 from .engine import reaches
-from .entries import ENTRIES
-from .entry import TAGS
+from .entries import ENTRIES, with_status
+from .entry import AREAS, KINDS, STATUSES, TAGS
 from .lean import proved
-from .mismatches import KINDS, MISMATCHES
+
+
+def _counts(counter, keys):
+    return ", ".join(f"{k} {counter[k]}" for k in keys if counter[k])
 
 
 def report():
-    passing = {e.name for e in ENTRIES if reaches(e)}
+    accepted = with_status("accepted")
+    others = with_status("rejected", "undecided")
+    passing = {e.name for e in accepted if reaches(e)}
     lean = set(proved())
+    statuses = Counter(e.status for e in ENTRIES)
     lines = [
-        f"- entries: {len(ENTRIES)}; today's engine reaches {len(passing)}; "
-        f"proved in Lean {len(lean)}, stated only {len(ENTRIES) - len(lean)}",
-        f"- entries with SymPy assumptions: {sum(bool(e.assume) for e in ENTRIES)}; "
+        f"- entries: {len(ENTRIES)} ({_counts(statuses, STATUSES)})",
+        f"- accepted: today's engine reaches {len(passing)} of {len(accepted)}; "
+        f"proved in Lean {len(lean)}, stated only {len(accepted) - len(lean)}",
+        f"- accepted with SymPy assumptions: {sum(bool(e.assume) for e in accepted)}; "
         f"through a SymPy call rather than automatic evaluation: "
-        f"{sum(e.sympy != 'auto' for e in ENTRIES)}",
-        f"- marked as needing open PR #27: {sum('#27' in e.needs for e in ENTRIES)}",
+        f"{sum(e.sympy != 'auto' for e in accepted)}",
+        f"- accepted, marked as needing open PR #27: {sum('#27' in e.needs for e in accepted)}",
+    ]
+    for status in ("rejected", "undecided"):
+        group = with_status(status)
+        kinds = Counter(e.kind for e in group)
+        numeric = Counter(e.numeric or "no nary form" for e in group)
+        lines.append(f"- {status}: {len(group)}, by kind: {_counts(kinds, KINDS)}; "
+                     f"numerical check finds: "
+                     f"{_counts(numeric, ('value', 'definedness', 'none', 'no nary form'))}")
+    lines += [
         "",
-        "| tag | entries | engine reaches | proved in Lean |",
+        "Accepted entries by tag:",
+        "",
+        "| tag | accepted | engine reaches | proved in Lean |",
         "|---|---|---|---|",
     ]
     for tag in TAGS:
-        names = [e.name for e in ENTRIES if tag in e.tags]
-        lines.append(f"| {tag} | {len(names)} | {len(passing & set(names))} | "
-                     f"{len(lean & set(names))} |")
-    areas = Counter(e.area for e in ENTRIES)
-    lines += ["", "By area: " + ", ".join(f"{a} {c}" for a, c in areas.items()), ""]
-    kinds = Counter(m.kind for m in MISMATCHES)
-    lines.append(f"- mismatches: {len(MISMATCHES)} ("
-                 + ", ".join(f"{k} {kinds[k]}" for k in KINDS if kinds[k]) + "); "
-                 f"rejected SymPy results: {kinds['rejected']}")
-    lines += ["", "Engine reaches: " + ", ".join(e.name for e in ENTRIES if e.name in passing)]
-    lines += ["", "Mismatch questions:", ""]
-    for m in MISMATCHES:
-        if not m.question.startswith(("As ", "None expected", "Same, ")):
-            lines.append(f"- **{m.name}** ({m.kind}): `{m.sympy}` gives `{m.sympy_gives}`. "
-                         f"{m.question}")
+        names = {e.name for e in accepted if tag in e.tags}
+        lines.append(f"| {tag} | {len(names)} | {len(passing & names)} | {len(lean & names)} |")
+    lines += ["", "By area:", "", "| area | accepted | rejected | undecided |", "|---|---|---|---|"]
+    for area in AREAS:
+        row = Counter(e.status for e in ENTRIES if e.area == area)
+        if row:
+            lines.append(f"| {area} | {row['accepted']} | {row['rejected']} | "
+                         f"{row['undecided']} |")
+    lines += ["", "Engine reaches: " + ", ".join(e.name for e in accepted if e.name in passing)]
+    lines += ["", "Rejected: " + ", ".join(f"`{e.sympy_source}`" for e in others
+                                           if e.status == "rejected")]
+    lines += ["", "Undecided entries, questions for Tilo:", ""]
+    for e in with_status("undecided"):
+        if not e.question.startswith(("As ", "None expected", "Same, ")):
+            lines.append(f"- **{e.name}** ({e.kind}): `{e.sympy_source}` gives "
+                         f"`{e.sympy_gives}`. {e.question}")
     return "\n".join(lines)
 
 

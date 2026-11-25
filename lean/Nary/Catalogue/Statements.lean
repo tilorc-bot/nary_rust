@@ -4,7 +4,8 @@ Do not edit: change the entries in Python and run
 
     .venv/bin/python -m catalogue.lean
 
-One statement for each entry of the catalogue of desired simplifications: for
+One statement for each accepted entry of the catalogue of desired
+simplifications (rejected and undecided entries are not stated): for
 all values of its symbols, where its condition holds, the input and the
 expected output have the same meaning. Proofs of some of them are in
 `Nary/Catalogue.lean`.

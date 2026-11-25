@@ -1,4 +1,4 @@
-"""Running a catalogue entry through today's engine.
+"""Running an accepted catalogue entry through today's engine.
 
 ``reaches(entry)`` rewrites ``entry.input`` with ``nary.rewriting.rewrite``
 and ``nary.arithmetic_rules.rules`` and says whether the result is
@@ -16,7 +16,8 @@ and ``expected`` are compared after flattening every function recorded as
 ``unordered`` (today ``Add`` and ``Mul``). Both facts are proved in Lean, so
 this comparison never calls two expressions with different values the same.
 Whether a catalogue should ask for more (an exact form) is one of the
-questions in ``catalogue.mismatches``.
+questions of the undecided entry ``argument_order`` in
+``catalogue.entries``.
 """
 
 from nary.arithmetic_rules import rules as RULES

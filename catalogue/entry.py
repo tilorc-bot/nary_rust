@@ -6,6 +6,19 @@ holds. It is written with nary's own expressions, in the shape of
 ``Entry.as_rule()`` is a ``Rule`` and the same entry can be run through
 ``nary.rewriting.rewrite`` and printed to Lean.
 
+The catalogue is one list, ``catalogue.entries.ENTRIES``, and every entry
+has a ``status``:
+
+- ``"accepted"``: a desired simplification. SymPy makes it, the numerical
+  check finds no counterexample, it is run through the engine and stated in
+  Lean.
+- ``"rejected"``: something SymPy does that is wrong: the numerical check
+  finds a point where both sides have a value and the values differ. Kept
+  so that the test fails if it ever stops being wrong.
+- ``"undecided"``: SymPy and nary's semantics (issue #2) do not line up, and
+  Tilo has not decided what the catalogue should do. The entry records the
+  options and the question.
+
 Symbols in an entry stand for numbers (or propositions) that have a value,
 as they do when the entry is given to ``rewrite``; unlike in a rule, they do
 not range over "no value". ``catalogue.lean`` states an entry that way.
@@ -15,19 +28,55 @@ assumptions under which SymPy makes the simplification, through the fixed
 table ``ASSUMPTIONS``. So the condition the entry is checked under is the
 one SymPy was given, translated, and nothing else.
 
-Fields:
+Fields of every entry:
 
 - ``name``: an identifier, also the name of the Lean statement.
-- ``input``, ``expected``: nary expressions of the same kind.
-- ``sympy``: how SymPy gets it, a key of ``catalogue.sympy_check.CALLS``.
-  ``"auto"`` means SymPy's constructors already do it.
+- ``status``: one of ``STATUSES``.
+- ``input``, ``expected``: nary expressions of the same kind. For a
+  rejected or undecided entry, the claim SymPy's result makes; both are
+  ``None`` when it cannot be written in nary (then only the SymPy text is
+  recorded).
+- ``area``: what it is about, from ``AREAS``; only for grouping.
+- ``tags``: the machinery the entry seems to need, from ``TAGS``.
 - ``assume``: SymPy assumptions by symbol name, such as
   ``{"x": {"positive": True}}``.
-- ``tags``: the machinery the entry seems to need, from ``TAGS``.
-- ``area``: what it is about, from ``AREAS``; only for grouping.
 - ``needs``: open pull requests that would provide part of that machinery,
   such as ``("#27",)``.
 - ``note``: anything else worth saying.
+
+For an accepted entry:
+
+- ``sympy``: how SymPy gets it, a key of ``catalogue.sympy_check.CALLS``.
+  ``"auto"`` means SymPy's constructors already do it.
+
+For a rejected or undecided entry (what ``catalogue/mismatches.py`` used
+to hold):
+
+- ``kind``: why it is not accepted, from ``KINDS``.
+- ``sympy_source``: a SymPy expression in Python syntax, evaluated with
+  everything from ``sympy`` and the symbols ``x, y, a, b`` (no
+  assumptions), ``n`` (``integer=True``), ``r`` (``real=True``), ``p, q``.
+- ``sympy_gives``: its ``repr``, or, if it raises, the name of the
+  exception. Tested against the pinned SymPy.
+- ``semantics``: what nary's semantics say about it.
+- ``options``: the choices, as text.
+- ``question``: the question for Tilo.
+- ``numeric``: what ``catalogue.numeric.check`` finds on ``input ->
+  expected`` (always without a condition), when they are given:
+
+  - ``"value"``: a point where both sides have a value and the values
+    differ. SymPy's result is wrong, whatever one thinks of definedness.
+    Exactly the rejected entries.
+  - ``"definedness"``: points where one side has a value and the other has
+    none, and no point where both have different values. SymPy's result is
+    right where both sides have a value; nary's semantics reject it as a
+    rewrite.
+  - ``"none"``: no counterexample among the points tried. Used where the
+    difference is one the numerical check cannot see; ``semantics`` says
+    why.
+
+- ``no_value``: an nary expression that must have no value under
+  ``catalogue.numeric``: what SymPy gives a value to (or refuses).
 """
 
 from dataclasses import dataclass, field
@@ -36,7 +85,21 @@ import nary as nr
 from nary.logic import And
 from nary.rules import rule
 
-__all__ = ["AREAS", "ASSUMPTIONS", "Entry", "TAGS", "entry"]
+__all__ = ["AREAS", "ASSUMPTIONS", "Entry", "KINDS", "NUMERIC", "STATUSES", "TAGS", "entry",
+           "rejected", "undecided"]
+
+STATUSES = ("accepted", "rejected", "undecided")
+
+# Why an entry is not accepted. ``condition``: SymPy's result holds only under
+# a condition SymPy does not ask for. ``off-domain``: SymPy gives a value, or an
+# error, where nary has no value. ``vocabulary``: nary has no way to write the
+# input, output or assumption. ``comparison``: what "reaches expected" should
+# mean. ``representation``. ``assumptions``: translating SymPy's assumptions.
+# ``wrong-value``: SymPy's result is wrong (the rejected entries).
+KINDS = ("condition", "off-domain", "vocabulary", "comparison", "representation",
+         "assumptions", "wrong-value")
+
+NUMERIC = ("value", "definedness", "none")
 
 # The machinery an entry seems to need. An entry usually has several.
 TAGS = {
@@ -62,7 +125,7 @@ TAGS = {
 }
 
 AREAS = ("arithmetic", "powers", "exp-log", "trig", "complex", "logic", "relational",
-         "calculus", "lambda")
+         "calculus", "lambda", "conventions")
 
 
 # SymPy assumption -> the nary condition on the symbol. SymPy's
@@ -81,14 +144,28 @@ ASSUMPTIONS = {
 @dataclass(frozen=True)
 class Entry:
     name: str
+    status: str
     input: nr.Expr
     expected: nr.Expr
-    sympy: str
-    tags: tuple
     area: str
+    tags: tuple = ()
     assume: dict = field(default_factory=dict)
     needs: tuple = ()
     note: str = ""
+    sympy: str = None
+    kind: str = None
+    sympy_source: str = None
+    sympy_gives: str = None
+    semantics: str = ""
+    options: tuple = ()
+    question: str = ""
+    numeric: str = None
+    no_value: object = None
+
+    @property
+    def has_nary_form(self):
+        """Whether ``input`` and ``expected`` are given."""
+        return self.input is not None
 
     @property
     def conditions(self):
@@ -96,7 +173,7 @@ class Entry:
         found = []
         symbols = {}
         for e in (self.input, self.expected):
-            for s in _symbols(e):
+            for s in _symbols(e) if e is not None else ():
                 symbols.setdefault(s.name, s)
         for name, facts in self.assume.items():
             for fact in facts.items():
@@ -128,14 +205,60 @@ def _symbols(e):
             yield from _symbols(a)
 
 
-def entry(name, input, expected, *, sympy, tags, area, assume=None, needs=(), note=""):
-    """Make an ``Entry``, converting a Python int ``expected`` to a literal."""
-    if isinstance(expected, int):
-        expected = nr.NumberKind(expected)
+def _check_tags_area(name, tags, area):
     unknown = set(tags) - set(TAGS)
     if unknown:
         raise ValueError(f"{name}: unknown tags {sorted(unknown)}")
     if area not in AREAS:
         raise ValueError(f"{name}: unknown area {area!r}")
-    return Entry(name, input, expected, sympy, tuple(tags), area, dict(assume or {}),
-                 tuple(needs), note)
+
+
+def _literal(e):
+    return nr.NumberKind(e) if isinstance(e, int) else e
+
+
+def entry(name, input, expected, *, sympy, tags, area, assume=None, needs=(), note=""):
+    """Make an accepted ``Entry``, converting a Python int ``expected`` to a
+    literal."""
+    _check_tags_area(name, tags, area)
+    return Entry(name, "accepted", input, _literal(expected), area, tuple(tags),
+                 dict(assume or {}), tuple(needs), note, sympy=sympy)
+
+
+def _not_accepted(status, name, kind, input, expected, *, area, sympy_source, sympy_gives,
+                  semantics, options, question, numeric, no_value, tags, note):
+    _check_tags_area(name, tags, area)
+    if kind not in KINDS:
+        raise ValueError(f"{name}: unknown kind {kind!r}")
+    if (input is None) != (expected is None):
+        raise ValueError(f"{name}: give both input and expected, or neither")
+    if (numeric is None) != (input is None) or numeric not in NUMERIC + (None,):
+        raise ValueError(f"{name}: numeric must be one of {NUMERIC} exactly when there is "
+                         "an nary form")
+    return Entry(name, status, input, _literal(expected), area, tuple(tags), {}, (), note,
+                 kind=kind, sympy_source=sympy_source, sympy_gives=sympy_gives,
+                 semantics=semantics, options=tuple(options), question=question,
+                 numeric=numeric, no_value=no_value)
+
+
+def rejected(name, input, expected, *, area, sympy_source, sympy_gives, semantics, options,
+             question, tags=(), note=""):
+    """Make a rejected ``Entry``: SymPy turns ``input`` into ``expected``
+    (``sympy_source`` gives ``sympy_gives``), and the numerical check finds
+    wrong values."""
+    return _not_accepted("rejected", name, "wrong-value", input, expected, area=area,
+                         sympy_source=sympy_source, sympy_gives=sympy_gives,
+                         semantics=semantics, options=options, question=question,
+                         numeric="value", no_value=None, tags=tags, note=note)
+
+
+def undecided(name, kind, input=None, expected=None, *, area, sympy_source, sympy_gives,
+              semantics, options, question, numeric=None, no_value=None, tags=(), note=""):
+    """Make an undecided ``Entry``: a case where SymPy and nary do not line
+    up, waiting for Tilo."""
+    if kind == "wrong-value":
+        raise ValueError(f"{name}: a wrong value is rejected, not undecided")
+    return _not_accepted("undecided", name, kind, input, expected, area=area,
+                         sympy_source=sympy_source, sympy_gives=sympy_gives,
+                         semantics=semantics, options=options, question=question,
+                         numeric=numeric, no_value=no_value, tags=tags, note=note)

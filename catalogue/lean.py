@@ -1,7 +1,7 @@
 """The catalogue as Lean statements.
 
-Writes ``lean/Nary/Catalogue/Statements.lean``: for each entry, a Lean
-proposition with the entry's name,
+Writes ``lean/Nary/Catalogue/Statements.lean``: for each accepted entry, a
+Lean proposition with the entry's name,
 
     abbrev add_zero : Prop :=
       ∀ (x : ℂ), Nary.Add [some x, Nary.lit 0] = some x
@@ -12,8 +12,10 @@ and expected have the same meaning (on ``Nary.Number``: both no value, or
 the same value). Terms are printed with ``nary.lean.to_lean``, so a symbol
 ``x`` prints as ``some x``: in an entry a symbol stands for a value, unlike
 the variable of a rule (``nary.lean.to_lean_rule``), which may stand for an
-expression with no value. Every entry can be stated, including those with a
-``Lambda``, which ``nary.rules`` does not accept as rules.
+expression with no value. Every accepted entry can be stated, including
+those with a ``Lambda``, which ``nary.rules`` does not accept as rules.
+Rejected and undecided entries are not stated: a statement here is a claim to
+prove, and theirs are false (rejected) or not yet wanted (undecided).
 
 Some of the statements are proved by hand in ``lean/Nary/Catalogue.lean``
 (``proved()`` lists them); the rest are stated only. ``lake build`` checks
@@ -34,7 +36,7 @@ from pathlib import Path
 import nary as nr
 from nary.lean import to_lean
 
-from .entries import ENTRIES
+from .entries import with_status
 from .numeric import symbols_of
 
 __all__ = ["PATH", "PROOFS", "proved", "render", "statement"]
@@ -53,7 +55,8 @@ Do not edit: change the entries in Python and run
 
     .venv/bin/python -m catalogue.lean
 
-One statement for each entry of the catalogue of desired simplifications: for
+One statement for each accepted entry of the catalogue of desired
+simplifications (rejected and undecided entries are not stated): for
 all values of its symbols, where its condition holds, the input and the
 expected output have the same meaning. Proofs of some of them are in
 `Nary/Catalogue.lean`.
@@ -85,12 +88,12 @@ def statement(entry):
 def render():
     """The text of the generated Lean file."""
     return (f"{HEADER}\nnamespace Nary.Catalogue.Statement\n\n"
-            + "\n\n".join(statement(e) for e in ENTRIES)
+            + "\n\n".join(statement(e) for e in with_status("accepted"))
             + "\n\nend Nary.Catalogue.Statement\n")
 
 
 def proved():
-    """The names of the entries proved in ``lean/Nary/Catalogue.lean``: each
+    """The names of the accepted entries proved in ``lean/Nary/Catalogue.lean``: each
     ``theorem <name> : Statement.<name>`` there."""
     text = PROOFS.read_text(encoding="utf-8")
     return [m.group(1) for m in re.finditer(r"^theorem (\w+) : Statement\.\1\b", text, re.M)]
