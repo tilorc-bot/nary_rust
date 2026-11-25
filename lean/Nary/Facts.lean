@@ -10,7 +10,7 @@ facts `unordered(f)` and `flat(f)` of `python/nary/rules.py` mean. The
 rewriting engine (`python/nary/rewriting.py`) relies on them when it matches
 some of the arguments of a longer `Add` or `Mul`.
 
-As for a rule, an identity is claimed where the holes it erases (in its left
+As for a rule, an identity is claimed where the placeholders it erases (in its left
 side and not its right) have a value; only `Absorbing` erases any.
 -/
 import Mathlib.Data.List.Perm.Basic
