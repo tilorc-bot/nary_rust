@@ -63,9 +63,10 @@ Refused, each with an error: a pattern that is not an expression or is a
 bare symbol; a replacement of another kind than the pattern; a condition
 that is not a ``BoolKind`` expression; a symbol in the replacement or the
 condition that is not in the pattern; two symbols with the same name and
-different kinds in one rule. A rule that contains a ``Lambda`` anywhere is
-refused for now: a variable bound by a lambda is not a variable of the rule,
-and how such rules are written and matched has not been designed.
+different kinds in one rule; a hole (holes belong to ``nary.identities``).
+A rule that contains a ``Lambda`` anywhere is refused for now: a variable
+bound by a lambda is not a variable of the rule, and how such rules are
+written and matched has not been designed.
 
 Not here: rules are applied by ``nary.rewriting``, and ``nary.lean`` writes
 a rule's claim as a Lean statement. Nothing decides a condition or computes
@@ -104,13 +105,18 @@ def _subexpressions(e):
 
 def _symbols(e):
     """The symbols of ``e``, each once, in order of first appearance.
-    Refuses a lambda."""
+    Refuses a lambda and a hole."""
     symbols = []
     for sub in _subexpressions(e):
         if is_lambda(sub):
             raise ValueError(
                 f"a rule cannot contain a Lambda yet, got {sub!r}: variables "
                 f"bound by a lambda need a design that does not exist yet"
+            )
+        if sub.is_hole:
+            raise ValueError(
+                f"a rule cannot contain the hole {sub!r}: in a rule every symbol is a "
+                f"variable, and holes belong to identities (nary.identities)"
             )
         if sub.is_symbol and sub not in symbols:
             symbols.append(sub)
