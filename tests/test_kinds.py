@@ -18,9 +18,11 @@ x, y = NumberKind("x"), NumberKind("y")
 
 
 def test_the_compiled_module_defines_no_kind_and_no_function():
+    # AnyKind is the one kind it defines (with function kinds), because
+    # application checks it.
     public = {name for name in dir(_core) if not name.startswith("_")}
     assert public == {
-        "Expr", "FunctionKind", "Kind", "KindFamily", "Symbol",
+        "AnyKind", "Expr", "FunctionKind", "Kind", "KindFamily", "Symbol",
         "declare_constant", "declare_function", "declare_kind", "declare_kind_family",
         "set_operator",
     }

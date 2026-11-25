@@ -128,6 +128,13 @@ class Rule:
     def __init__(self, pattern, replacement, when=None, name=None):
         if not isinstance(pattern, Expr):
             raise TypeError(f"the pattern of a rule must be an expression, got {pattern!r}")
+        if pattern.kind.generic:
+            # A rule is applied to and proved for expressions with a meaning,
+            # and those contain no generic part.
+            raise TypeError(
+                f"the pattern of a rule cannot be of the generic kind {pattern.kind!r}, "
+                f"got {pattern!r}"
+            )
         if pattern.is_symbol:
             raise ValueError(
                 f"the pattern of a rule cannot be a bare symbol, got {pattern!r}: "
@@ -214,6 +221,8 @@ def _is_declared_function(e):
 def _check_declared_function(caller, f):
     if not _is_declared_function(f):
         raise TypeError(f"{caller} expects a declared function, got {f!r}")
+    if f.kind.generic:
+        raise TypeError(f"{caller} expects a function with a meaning, got {f!r} of the generic kind {f.kind!r}")
 
 
 def unordered(f):

@@ -7,10 +7,19 @@
 //! `declare_kind(name, literals=...)`, or made by instantiating a kind family
 //! declared with `declare_kind_family(name)`: `TupleKind(NumberKind, BoolKind)`.
 //!
-//! The one kind defined here is the function kind,
-//! `FunctionKind(inputs, output, rest=None)`, because application is checked
-//! against it: calling an expression of a function kind checks the arguments
-//! against the inputs and builds an application whose kind is the output. A
+//! Two kinds are defined here, because application is checked against them.
+//! The function kind, `FunctionKind(inputs, output, rest=None)`: calling an
+//! expression of a function kind checks the arguments against the inputs and
+//! builds an application whose kind is the output. And `AnyKind`, which
+//! means no particular kind: a position of kind AnyKind accepts an
+//! expression of any kind (but no Python value), and no other position
+//! accepts an expression of kind AnyKind. A kind is generic when it is
+//! AnyKind or a function kind with a generic input, rest or output; a
+//! function kind with a generic input or rest must also have a generic
+//! output, and a kind family refuses generic parameters. So an expression
+//! whose kind is not generic contains no generic part anywhere: what is
+//! written with AnyKind (a statement meant for Add, And and later sets
+//! alike) stays apart from what has a meaning. A
 //! declared constant, made by `declare_constant(name, kind)`, is a named leaf
 //! of any kind, equal only to itself. A declared function is a declared
 //! constant of a function kind, made by `declare_function`, and a leading
@@ -64,6 +73,9 @@ struct KindData {
     /// exact type. Declared with `declare_kind(name, literals=...)`; empty
     /// for any other kind.
     literals: Box<[Py<PyType>]>,
+    /// Whether the kind is AnyKind or a function kind with a generic input,
+    /// rest or output.
+    generic: bool,
 }
 
 /// The inputs, further arguments and output of a function kind.
@@ -82,6 +94,17 @@ fn same_kind(a: KindRef, b: KindRef) -> bool {
 
 static KIND_COUNT: AtomicUsize = AtomicUsize::new(0);
 
+/// AnyKind: no particular kind. A position of this kind accepts an
+/// expression of any kind.
+static ANY_KIND: LazyLock<KindRef> = LazyLock::new(|| {
+    new_kind_data("AnyKind".to_string(), None, Box::new([]), None, Box::new([]), true)
+});
+
+/// Whether `kind` is AnyKind.
+fn is_any(kind: KindRef) -> bool {
+    std::ptr::eq(kind, *ANY_KIND)
+}
+
 /// Make the record for a new kind. It is never freed.
 fn new_kind_data(
     name: String,
@@ -89,6 +112,7 @@ fn new_kind_data(
     params: Box<[KindRef]>,
     signature: Option<Signature>,
     literals: Box<[Py<PyType>]>,
+    generic: bool,
 ) -> KindRef {
     Box::leak(Box::new(KindData {
         id: KIND_COUNT.fetch_add(1, Ordering::Relaxed),
@@ -99,6 +123,7 @@ fn new_kind_data(
         params,
         signature,
         literals,
+        generic,
     }))
 }
 
@@ -237,6 +262,14 @@ impl Kind {
         self.data.signature.as_ref().map(|sig| kind_object(py, sig.output)).transpose()
     }
 
+    /// Whether this kind is generic: AnyKind, or a function kind with a
+    /// generic input, rest or output. An expression whose kind is not
+    /// generic contains no generic part.
+    #[getter]
+    fn generic(&self) -> bool {
+        self.data.generic
+    }
+
     /// The Python types whose values are literals of this kind, as a tuple:
     /// `NumberKind.literals` is `(int,)`. Empty if it accepts none.
     #[getter]
@@ -296,7 +329,7 @@ fn declare_kind(
     literals: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<Py<Kind>> {
     let literals = literal_types(&name, literals)?;
-    kind_object(py, new_kind_data(name, None, Box::new([]), None, literals))
+    kind_object(py, new_kind_data(name, None, Box::new([]), None, literals, false))
 }
 
 /// The function kinds made so far. The key is the id of the output, the id
@@ -324,6 +357,15 @@ fn function_kind(
     rest: Option<KindRef>,
     output: KindRef,
 ) -> PyResult<KindRef> {
+    let takes_generic = inputs.iter().any(|kind| kind.generic) || rest.is_some_and(|kind| kind.generic);
+    if takes_generic && !output.generic {
+        return Err(PyTypeError::new_err(format!(
+            "{} is refused: a function that takes a generic kind (AnyKind) must return \
+             one, so that an expression of any other kind contains no AnyKind",
+            function_kind_name(inputs, rest, output)
+        )));
+    }
+    let generic = takes_generic || output.generic;
     let mut key = Vec::with_capacity(inputs.len() + 2);
     key.push(output.id);
     key.push(rest.map_or(usize::MAX, |kind| kind.id));
@@ -343,6 +385,7 @@ fn function_kind(
                     Box::new([]),
                     Some(Signature { inputs: inputs.into(), rest, output }),
                     Box::new([]),
+                    generic,
                 );
                 table.insert(key.into_boxed_slice(), data);
                 data
@@ -430,7 +473,15 @@ impl KindFamily {
         }
         let mut kinds = Vec::with_capacity(given);
         for param in params.iter() {
-            kinds.push(expect_kind(&param)?);
+            let kind = expect_kind(&param)?;
+            if kind.generic {
+                return Err(PyTypeError::new_err(format!(
+                    "{} cannot take the generic kind {} as a parameter: an expression \
+                     of a kind that is not generic contains no AnyKind",
+                    family.name, kind.name
+                )));
+            }
+            kinds.push(kind);
         }
         let key: Box<[usize]> = kinds.iter().map(|kind| kind.id).collect();
         let data = {
@@ -448,6 +499,7 @@ impl KindFamily {
                     kinds.into_boxed_slice(),
                     None,
                     Box::new([]),
+                    false,
                 )
             })
         };
@@ -663,12 +715,20 @@ fn wrong_kind(py: Python<'_>, head: &Expr, expected: KindRef, arg: &Bound<'_, Py
             Ok(expr) => expr.get().kind.name.clone(),
             Err(_) => arg.get_type().name()?.to_string(),
         };
+        // AnyKind accepts no literals, since a value has no kind to take.
+        let note = if is_any(expected) && arg.cast_exact::<Expr>().is_err() {
+            "; AnyKind accepts an expression of any kind but no Python value, \
+             so make the literal first, as in NumberKind(0)"
+        } else {
+            ""
+        };
         Ok(format!(
-            "{} expects {}, got {}: {}",
+            "{} expects {}, got {}: {}{}",
             head.label(py)?,
             expected.name,
             got,
-            arg.repr()?
+            arg.repr()?,
+            note
         ))
     })();
     match text {
@@ -743,7 +803,10 @@ fn apply<'py>(head: &Bound<'py, Expr>, args: &Bound<'py, PyTuple>) -> PyResult<B
             None => sig.rest.unwrap(),
         };
         match arg.cast_exact::<Expr>() {
-            Ok(expr_arg) if same_kind(expr_arg.get().kind, expected) => {
+            // A position of kind AnyKind accepts an expression of any kind.
+            // Tested only when the kinds differ, so it costs nothing on the
+            // usual path.
+            Ok(expr_arg) if same_kind(expr_arg.get().kind, expected) || is_any(expected) => {
                 if let Some(converted) = converted.as_mut() {
                     converted.push(arg.to_owned());
                 }
@@ -1234,5 +1297,6 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(declare_function, m)?)?;
     m.add_function(wrap_pyfunction!(declare_constant, m)?)?;
     m.add_function(wrap_pyfunction!(set_operator, m)?)?;
+    m.add("AnyKind", kind_object(m.py(), *ANY_KIND)?)?;
     Ok(())
 }

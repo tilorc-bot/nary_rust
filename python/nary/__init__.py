@@ -1,9 +1,14 @@
 """Typed, inert expression trees.
 
 The compiled module ``nary._core`` provides ``Expr``, ``declare_kind``,
-``declare_kind_family``, ``FunctionKind``, ``declare_function``,
+``declare_kind_family``, ``FunctionKind``, ``AnyKind``, ``declare_function``,
 ``declare_constant``, ``Symbol`` and ``set_operator``, and knows nothing about
-any particular kind, function or constant other than function kinds. The
+any particular kind, function or constant other than function kinds and
+``AnyKind``. ``AnyKind`` means no particular kind: a position of kind
+``AnyKind`` accepts an expression of any kind, and no other position accepts
+one of kind ``AnyKind``. It is for statements written once for functions of
+different kinds, and what gives meaning (``nary.domains``, ``nary.rules``,
+``nary.rewriting``, ``nary.lean``) refuses it. The
 ``declare_function`` exported here is the one of ``nary.domains``, which
 calls the compiled one and also records the function's domain. The
 kinds are declared in ``nary.kinds``, and each function is declared in one of
@@ -22,6 +27,7 @@ here, so a new name only needs adding to that module.
 
 from . import arithmetic, constants, elementary, functions, kinds, relational
 from ._core import (
+    AnyKind,
     Expr,
     FunctionKind,
     Kind,
@@ -42,7 +48,7 @@ from .relational import *  # noqa: F403
 
 __all__ = [
     # the declaration machinery, from the compiled module and nary.domains
-    "Expr", "FunctionKind", "Kind", "KindFamily", "Symbol",
+    "AnyKind", "Expr", "FunctionKind", "Kind", "KindFamily", "Symbol",
     "declare_constant", "declare_function", "declare_kind", "declare_kind_family",
     "set_operator",
     # the kinds, functions and constants declared in the modules of this package

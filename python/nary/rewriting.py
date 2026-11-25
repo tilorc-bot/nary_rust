@@ -111,6 +111,9 @@ def rewrite(e, rules, known=None):
     """
     if not isinstance(e, Expr):
         raise TypeError(f"rewrite expects an expression, got {e!r}")
+    if e.kind.generic:
+        # An expression of any other kind contains no generic part.
+        raise TypeError(f"rewrite cannot rewrite {e!r}, of the generic kind {e.kind!r}")
     return _rewrite(e, tuple(rules), known or (lambda condition: False))
 
 

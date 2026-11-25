@@ -85,6 +85,7 @@ def declare_function(name, *parameters, rest=None, returns, domain):
     expression of its kind. ``domain`` is a ``BoolKind`` expression whose
     symbols are all parameters.
     """
+    _refuse_generic(name, parameters, rest, returns)
     symbols = [p for p in parameters if isinstance(p, Expr) and p.is_symbol]
     if symbols and len(symbols) != len(parameters):
         raise TypeError(
@@ -116,6 +117,18 @@ def declare_function(name, *parameters, rest=None, returns, domain):
     return function
 
 
+def _refuse_generic(name, parameters, rest, returns):
+    """Refuse a generic kind (``AnyKind``) anywhere in a declaration: a
+    function with a domain has a meaning, and a generic kind has none."""
+    for p in (*parameters, rest, returns):
+        kind = p.kind if isinstance(p, (Expr, _core.Symbol)) else p
+        if isinstance(kind, _core.Kind) and kind.generic:
+            raise TypeError(
+                f"{name} cannot be declared with the generic kind {kind!r}: a function "
+                f"with a domain has a meaning, and a generic kind has none"
+            )
+
+
 def _subexpressions(e):
     """``e`` and every expression inside it."""
     yield e
@@ -145,6 +158,8 @@ def domain_of(e):
     position, all at once. ``None`` where ``domain`` of the head is."""
     if not (isinstance(e, Expr) and _is_declared_function(e.head)):
         raise TypeError(f"domain_of expects an application of a declared function, got {e!r}")
+    if e.kind.generic:
+        raise TypeError(f"domain_of cannot give a domain for {e!r}, of the generic kind {e.kind!r}")
     condition = domain(e.head)
     if condition is None:
         return None

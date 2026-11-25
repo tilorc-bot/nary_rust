@@ -279,6 +279,15 @@ def _is_declared_function(e):
     return e.is_constant and e.kind.inputs is not None
 
 
+def _refuse_generic(e):
+    """Refuse an expression of a generic kind. One of any other kind
+    contains no generic part, so only the top is looked at."""
+    if isinstance(e, Expr) and e.kind.generic:
+        raise ValueError(
+            f"{e!r} is of the generic kind {e.kind!r}, which has no Lean definition"
+        )
+
+
 class _Printer:
     def __init__(self, rule=False):
         # Whether symbols are the variables of a rule, which print as
@@ -397,6 +406,7 @@ def to_lean(e):
 
     Raises ``ValueError`` if a part of ``e`` has no Lean definition.
     """
+    _refuse_generic(e)
     return _Printer().print(e)[0]
 
 
@@ -408,6 +418,7 @@ def to_lean_example(e):
     The variables are grouped by type (numbers, then propositions, then
     functions), each group in the order the symbols first appear in ``e``.
     """
+    _refuse_generic(e)
     printer = _Printer()
     term = printer.print(e)[0]
     if e.kind not in _RESULT_TYPES:
