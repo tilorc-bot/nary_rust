@@ -73,3 +73,50 @@ def test_engine(entry):
         assert reaches(entry), result_of(entry)
     elif not reaches(entry):
         pytest.xfail(f"needs {', '.join(entry.tags)}: got {result_of(entry)!r}")
+
+
+# ---- mismatches: cases where SymPy and nary do not line up ---------------
+
+from catalogue.mismatches import KINDS, MISMATCHES  # noqa: E402
+
+MISMATCH_IDS = [m.name for m in MISMATCHES]
+
+
+def _sympy_namespace():
+    namespace = vars(sympy).copy()
+    namespace.update(
+        {name: sympy.Symbol(name) for name in ("x", "y", "a", "b", "p", "q")},
+        n=sympy.Symbol("n", integer=True), r=sympy.Symbol("r", real=True))
+    return namespace
+
+
+def test_mismatch_names_are_unique():
+    assert len(set(MISMATCH_IDS)) == len(MISMATCH_IDS)
+    assert not set(MISMATCH_IDS) & set(IDS)
+
+
+@pytest.mark.parametrize("mismatch", MISMATCHES, ids=MISMATCH_IDS)
+def test_mismatch_sympy_gives(mismatch):
+    """What SymPy does is what the mismatch says it does."""
+    assert mismatch.kind in KINDS
+    try:
+        gives = repr(eval(mismatch.sympy, _sympy_namespace()))
+    except Exception as error:  # noqa: BLE001 - the exception is the result
+        gives = type(error).__name__
+    assert gives == mismatch.sympy_gives
+
+
+@pytest.mark.parametrize("mismatch", MISMATCHES, ids=MISMATCH_IDS)
+def test_mismatch_numeric(mismatch):
+    """The numerical check finds what the mismatch says it finds: wrong
+    values exactly for the rejected ones."""
+    if mismatch.no_value is not None:
+        assert numeric.evaluate(mismatch.no_value, {}) is None
+    if mismatch.claim is None:
+        assert mismatch.numeric is None and mismatch.kind != "rejected"
+        return
+    found = numeric.check(*mismatch.claim)
+    outcome = ("value" if found.value_counterexamples
+               else "definedness" if found.counterexamples else "none")
+    assert outcome == mismatch.numeric, found.counterexamples[:3]
+    assert (outcome == "value") == (mismatch.kind == "rejected")
