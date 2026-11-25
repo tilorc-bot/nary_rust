@@ -135,7 +135,7 @@ from ._core import Expr
 from .calculus import NumberFunction
 from .functions import is_lambda
 from .kinds import BoolKind, NumberKind
-from .rules import Rule, is_flat, is_unordered, specific_rule
+from .rules import Rule, _rename, is_flat, is_unordered, specific_rule
 
 __all__ = [
     "LEAN_NAMES", "to_lean", "to_lean_example", "to_lean_facts", "to_lean_identity",
@@ -503,7 +503,14 @@ GENERIC_DEFINITIONS = {
     identities.idempotent: "Nary.Idempotent",
     identities.absorbing: "Nary.Absorbing",
     identities.distributive: "Nary.Distributive",
+    identities.inverse: "Nary.Inverse",
+    identities.repeated: "Nary.Repeated",
 }
+
+# The generic identities whose parameters are expressions in the
+# placeholder a: each is printed as a Lean function of a, and so is the
+# condition, which they always take (``fun _ => True`` where there is none).
+_FUNCTIONS_OF_A = (identities.inverse, identities.repeated)
 
 
 def to_lean_identity(i):
@@ -526,6 +533,10 @@ def to_lean_identity(i):
         raise _not_in_table(i.function)
     name = _declaration_name(i.name, f"the identity {i!r}")
     parts = [GENERIC_DEFINITIONS[i.generic], LEAN_NAMES[i.function]]
+    if i.generic in _FUNCTIONS_OF_A:
+        return f"abbrev {name} : Prop :=\n  {' '.join(parts + _functions_of_a(i))}"
+    if i.when is not None:
+        raise _no_definition(i.generic, " with a condition")
     for p in (i.item.args if i.item.head is not None else ()):
         if _is_declared_function(p):
             if p not in LEAN_NAMES:
@@ -534,3 +545,37 @@ def to_lean_identity(i):
         else:
             parts.append(_Printer().argument(p))
     return f"abbrev {name} : Prop :=\n  {' '.join(parts)}"
+
+
+def _functions_of_a(i):
+    """The arguments of the Lean definition of ``inverse`` or ``repeated``
+    after the function: the placeholders filled from another identity of
+    the block (``e``), then each parameter and the condition as a Lean
+    function of ``a``."""
+    a = next((p for p in identities._symbols(i.lhs) if p.name == "a_"), None)
+    if a is None:
+        raise _no_definition(i.generic, f": {i.lhs!r} has no placeholder a_")
+    plain = {a: a.kind("a")}
+
+    def function_of_a(e):
+        printer = _Printer(rule=True)
+        text = printer.print(_rename(e, plain))[0]
+        if set(printer.free) - {"a"}:
+            raise _no_definition(i.generic, f": {e!r} has placeholders other than a_")
+        return f"(fun a => {text})"
+
+    _, right, _ = identities._sides(i.generic.definition)
+    parts = []
+    for p in i.generic.given:
+        # The value of e is the right side, as inverse is f(a, i) = e.
+        if right != p:
+            raise _no_definition(i.generic, f": {p!r} is not its right side")
+        parts.append(_Printer().argument(i.rhs))
+    parts.extend(function_of_a(v) for v in i.item.args)
+    if i.when is None:
+        parts.append("(fun _ => True)")
+    else:
+        printer = _Printer(rule=True)
+        condition = printer.argument(_rename(i.when, plain))
+        parts.append(f"(fun a => Nary.Holds {condition})")
+    return parts

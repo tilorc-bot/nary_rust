@@ -15,7 +15,8 @@ from .identities import (
     declare_identities,
     distributive,
     identity,
-    singleton,
+    inverse,
+    repeated,
 )
 from .kinds import NumberKind
 from .logic import Or, true
@@ -64,26 +65,27 @@ set_operator(NumberKind, "neg", _negate)
 
 
 # Everything that holds for each function, in one place (see nary.identities).
-_a = NumberKind("a_")
+a = NumberKind("a_")
 
 declare_identities(Add, [
     associative,
     commutative,
-    singleton,
     identity(0),
-    ("self", Equal(_a + _a, 2 * _a)),
-    ("neg_self", Equal(_a - _a, 0)),
+    inverse(Mul(-1, a)),          # a + (-1)*a = 0
+    repeated(Mul(2, a)),          # a + a = 2*a
 ])
+
 declare_identities(Mul, [
     associative,
     commutative,
-    singleton,
     identity(1),
     absorbing(0),
+    inverse(Pow(a, -1), when=Ne(a, 0)),
+    repeated(Pow(a, 2)),          # a * a = a**2
     distributive(Add),
-    ("inv_self", Equal(_a / _a, 1, when=Ne(_a, 0))),
 ])
+
 declare_identities(Pow, [
-    ("one", Equal(_a ** 1, _a)),
-    ("zero", Equal(_a ** 0, 1, when=Ne(_a, 0))),
+    Equal(Pow(a, 1), a, name="pow_one"),
+    Equal(Pow(a, 0), 1, when=Ne(a, 0), name="pow_zero"),
 ])

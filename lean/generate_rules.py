@@ -20,14 +20,14 @@ script would write now.
 
 from pathlib import Path
 
-from nary import Add, Mul, Pow, exp
+from nary import Add, Mul, Pow, exp, sin
 from nary.identities import identities
 from nary.lean import to_lean_identity, to_lean_rule
 from nary.logic import And, Or
 from nary.rules import Rule, identity_rules
 
 # The functions whose identities are stated, in this order.
-FUNCTIONS = (Add, Mul, Pow, exp, And, Or)
+FUNCTIONS = (Add, Mul, Pow, exp, sin, And, Or)
 
 PATH = Path(__file__).resolve().parent / "Nary" / "ArithmeticRules" / "Statements.lean"
 
@@ -39,7 +39,7 @@ and run
 
     .venv/bin/python lean/generate_rules.py
 
-The statement of each identity listed for Add, Mul, Pow, exp, And and Or,
+The statement of each identity listed for Add, Mul, Pow, exp, sin, And and Or,
 named <function>_<identity>, and of each rule the engine applies for an
 instance of a generic identity, named <function>_<identity>_rule. A generic
 identity is its definition in `Nary/Facts.lean` applied to the function and
@@ -60,7 +60,8 @@ def render():
     for f in FUNCTIONS:
         block = identities(f)
         for i in block:
-            declarations.append(f"/-- `{i.item!r}` listed for `{f!r}` -/\n{to_lean_identity(i)}")
+            when = f" when `{i.when!r}`" if i.generic is not None and i.when is not None else ""
+            declarations.append(f"/-- `{i.item!r}`{when} listed for `{f!r}` -/\n{to_lean_identity(i)}")
         derived = {i.name for i in block if i.generic is not None}
         for r in identity_rules(f):
             if r.name in derived:

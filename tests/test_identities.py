@@ -30,11 +30,13 @@ from nary.identities import (
     declare_identities,
     declare_identity,
     distributive,
-    f_,
+    f as f_,
     idempotent,
     identities,
     identity,
+    inverse,
     lists,
+    repeated,
     singleton,
 )
 from nary.lean import to_lean_identity
@@ -68,29 +70,25 @@ def test_placeholders_are_symbols_of_an_ordinary_kind():
         f_(x)
 
 
-def test_multi_argument_placeholders_are_given_explicitly():
-    # s__ stands for a run of arguments only when it is in multi=; the name
-    # is a convention for reading.
+def test_multi_argument_placeholders_follow_the_convention():
+    # A placeholder whose name ends in two underscores stands for a run of
+    # arguments; it fits only a position that takes any number of them.
     first = declare_identity("first", f_(a_, s__), a_)
-    assert first.multi == ()
-    P = declare_function("P5", NumberKind, NumberKind, returns=NumberKind)
-    declare_identities(P, [first])
-    assert repr(identities(P)[0].lhs) == "P5(a_, s__)"
-    # A multi-argument placeholder fits only a position that takes any
-    # number of arguments.
-    first_multi = declare_identity("first_multi", f_(a_, s__), a_, multi=(s__,))
+    assert [m.name for m in first.multi] == ["s__"]
     Q = declare_function("Q5", NumberKind, NumberKind, returns=NumberKind)
     with pytest.raises(TypeError, match="multi-argument placeholder s__ at position 1"):
-        declare_identities(Q, [first_multi])
+        declare_identities(Q, [first])
     R = declare_function("R5", NumberKind, rest=NumberKind, returns=NumberKind)
-    declare_identities(R, [first_multi])
+    declare_identities(R, [first])
     assert repr(identities(R)[0].lhs) == "R5(a_, s__)"
 
 
 def test_symbols_in_specific_identities_are_placeholders():
     F = declare_function("S3", NumberKind, returns=NumberKind)
-    declare_identities(F, [("zero", Equal(F(x), 0)), ("twice", Equal(F(F(NumberKind("a_"))), 0))])
+    declare_identities(F, [Equal(F(x), 0, name="s3_zero"), Equal(F(F(NumberKind("a_"))), 0)])
     zero, twice = identities(F)
+    # Without name=, the name is derived from the left side.
+    assert (zero.name, twice.name) == ("s3_zero", "s3_s3_a")
     assert (zero.lhs, zero.rhs, zero.item.kind) == (F(x), NumberKind(0), IdentityKind)
     # As a rule, a placeholder loses the trailing underscores of the
     # convention; a plain name is kept.
@@ -146,9 +144,7 @@ def test_declare_identity_refusals():
     with pytest.raises(ValueError, match="parameter"):
         declare_identity("bad3", f_(a_), a_, params=(b_,))
     with pytest.raises(ValueError, match="parameter"):
-        declare_identity("bad4", f_(s__, a_), a_, params=(s__,), multi=(s__,))
-    with pytest.raises(ValueError, match="multi-argument"):
-        declare_identity("bad5", f_(a_), a_, multi=(b_,))
+        declare_identity("bad4", f_(s__, a_), a_, params=(s__,))
     with pytest.raises(ValueError, match="identifier"):
         declare_identity("not a name", f_(a_), a_)
 
@@ -164,18 +160,20 @@ def test_a_generic_identity_with_parameters_must_be_called():
 # Blocks.
 
 def test_identities_of_a_function():
-    names = {F: [i.name for i in identities(F)] for F in (Add, Mul, Pow, exp, And, Or)}
-    assert names[Add] == ["add_associative", "add_commutative", "add_singleton",
-                          "add_identity", "add_self", "add_neg_self"]
-    assert names[Mul] == ["mul_associative", "mul_commutative", "mul_singleton",
-                          "mul_identity", "mul_absorbing", "mul_distributive", "mul_inv_self"]
+    names = {F: [i.name for i in identities(F)] for F in (Add, Mul, Pow, exp, sin, And, Or)}
+    # singleton is added after associative; it is not written in the blocks.
+    assert names[Add] == ["add_associative", "add_singleton", "add_commutative",
+                          "add_identity", "add_inverse", "add_repeated"]
+    assert names[Mul] == ["mul_associative", "mul_singleton", "mul_commutative",
+                          "mul_identity", "mul_absorbing", "mul_inverse", "mul_repeated",
+                          "mul_distributive"]
     assert names[Pow] == ["pow_one", "pow_zero"]
     assert names[exp] == ["exp_log"]
-    assert names[And] == ["and_associative", "and_commutative", "and_singleton",
+    assert names[sin] == ["sin_0", "sin_mul_neg1_a", "sin_add_a_mul_2_pi"]
+    assert names[And] == ["and_associative", "and_singleton", "and_commutative",
                           "and_idempotent", "and_identity", "and_absorbing"]
-    assert names[Or] == ["or_associative", "or_commutative", "or_singleton",
+    assert names[Or] == ["or_associative", "or_singleton", "or_commutative",
                          "or_idempotent", "or_identity", "or_absorbing"]
-    assert identities(sin) == []
 
 
 def test_instances_are_filled_and_typed():
@@ -187,9 +185,16 @@ def test_instances_are_filled_and_typed():
     d = by_name["mul_distributive"]
     assert repr(d.lhs) == "Mul(a_, Add(b_, c_))"
     assert repr(d.rhs) == "Add(Mul(a_, b_), Mul(a_, c_))"
-    s = by_name["mul_inv_self"]
     a = NumberKind("a_")
-    assert (s.generic, s.lhs, s.rhs, s.when) == (None, a / a, NumberKind(1), Ne(a, 0))
+    # The a in the parameter of inverse and repeated is the identity's a;
+    # the element of inverse comes from the identity(1) of the block.
+    s = by_name["mul_inverse"]
+    assert (s.generic, s.lhs, s.rhs, s.when) == (inverse, a / a, NumberKind(1), Ne(a, 0))
+    assert repr(s.item) == "inverse(Pow(a_, -1))"
+    r = by_name["mul_repeated"]
+    assert (r.generic, r.lhs, r.rhs, r.when) == (repeated, a * a, a ** 2, None)
+    add_inverse = identities(Add)[4]
+    assert (add_inverse.lhs, add_inverse.rhs) == (a - a, NumberKind(0))
     assert repr(identities(And)[5].lhs) == "And(s__, false, t__)"
     with pytest.raises(AttributeError):
         i.name = "other"
@@ -232,13 +237,15 @@ def test_refused_items():
     F = declare_function("F3", NumberKind, returns=NumberKind)
     a = NumberKind("a_")
     with pytest.raises(ValueError, match="function at the top of its left side"):
-        declare_identities(F, [("zero", Equal(sin(a), 0))])
-    with pytest.raises(TypeError, match="a pair"):
-        declare_identities(F, [Equal(F(a), 0)])
+        declare_identities(F, [Equal(sin(a), 0)])
+    with pytest.raises(TypeError, match="a generic identity, or Equal"):
+        declare_identities(F, [("zero", Equal(F(a), 0))])
     with pytest.raises(ValueError, match="must be in its left side"):
-        declare_identities(F, [("other", Equal(F(a), NumberKind("b_")))])
-    with pytest.raises(ValueError, match="two identities of F3 are named f3_zero"):
-        declare_identities(F, [("zero", Equal(F(a), 0)), ("zero", Equal(F(F(a)), 0))])
+        declare_identities(F, [Equal(F(a), NumberKind("b_"))])
+    with pytest.raises(ValueError, match="two identities of F3 are named f3_a"):
+        declare_identities(F, [Equal(F(a), 0), Equal(F(a), 1)])
+    with pytest.raises(ValueError, match="already named"):
+        Equal(F(a), 2, name="one"), Equal(F(a), 2, name="other")
     with pytest.raises(TypeError, match="declared function"):
         declare_identities(x, [])
     with pytest.raises(TypeError, match="NumberKind"):
@@ -270,11 +277,11 @@ def test_rules_come_from_the_blocks():
     a = NumberKind("a")
     assert [(r.name, r.pattern, r.replacement, r.condition) for r in rules] == [
         ("add_identity", a + 0, a, None),
-        ("add_self", a + a, 2 * a, None),
-        ("add_neg_self", a - a, NumberKind(0), None),
+        ("add_inverse", a - a, NumberKind(0), None),
+        ("add_repeated", a + a, 2 * a, None),
         ("mul_identity", a * 1, a, None),
         ("mul_absorbing", a * 0, NumberKind(0), None),
-        ("mul_inv_self", a / a, NumberKind(1), Ne(a, 0)),
+        ("mul_inverse", a / a, NumberKind(1), Ne(a, 0)),
         ("pow_one", a ** 1, a, None),
         ("pow_zero", a ** 0, NumberKind(1), Ne(a, 0)),
         ("exp_log", exp(log(a)), a, Ne(a, 0)),
@@ -283,8 +290,17 @@ def test_rules_come_from_the_blocks():
         return r.name, r.pattern, r.replacement, r.condition
 
     rebuilt = [r for F in (Add, Mul, Pow, exp) for r in identity_rules(F)]
-    assert list(map(fields, rules)) == list(map(fields, rebuilt))
-    assert identity_rules(sin) == []
+    # mul_repeated is given by the block of Mul but left out of the
+    # default rules: with it, x*x - x*x would no longer rewrite to 0.
+    [mul_repeated] = [r for r in rebuilt if r.name == "mul_repeated"]
+    assert fields(mul_repeated) == ("mul_repeated", a * a, a ** 2, None)
+    assert list(map(fields, rules)) == [fields(r) for r in rebuilt if r is not mul_repeated]
+    x2 = Mul(x, x)
+    assert rewrite(Add(x2, Mul(-1, x2)), rules) == NumberKind(0)
+    assert rewrite(Add(x2, Mul(-1, x2)), rules + [mul_repeated]) != NumberKind(0)
+    # The rules of sin are available, but not in the default rules.
+    assert [r.name for r in identity_rules(sin)] == ["sin_0", "sin_mul_neg1_a", "sin_add_a_mul_2_pi"]
+    assert not any(r.name.startswith("sin_") for r in rules)
 
 
 def test_rewrite_results_unchanged():

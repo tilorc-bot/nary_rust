@@ -52,7 +52,7 @@ combination of kinds), or the ``Equal``.
     >>> associative.definition
     Equal(f_(s__, f_(t__), u__), f_(s__, t__, u__))
     >>> [i.name for i in identities(Add)][:4]
-    ['add_associative', 'add_commutative', 'add_singleton', 'add_identity']
+    ['add_associative', 'add_singleton', 'add_commutative', 'add_identity']
     >>> i = identities(Add)[3]
     >>> i.item, i.lhs, i.rhs
     (identity(0), Add(s__, 0, t__), Add(s__, t__))
@@ -84,7 +84,7 @@ __all__ = [
     "Equal", "GenericIdentity", "Identity", "IdentityKind", "PatternKind",
     "declare_identities", "declare_identity", "identities", "is_equal", "lists",
     "absorbing", "associative", "commutative", "distributive", "idempotent", "identity",
-    "singleton",
+    "inverse", "repeated", "singleton", "derived_name",
 ]
 
 # The kind of the trees of the generic identities, and the kind of an
@@ -95,20 +95,24 @@ IdentityKind = declare_kind("IdentityKind")
 # The placeholders of the generic identities. A function placeholder takes
 # any number of PatternKind arguments.
 PatternFunction = FunctionKind((), PatternKind, rest=PatternKind)
-f_, g_ = PatternFunction("f_"), PatternFunction("g_")
-a_, b_, c_, e_, z_ = (PatternKind(name + "_") for name in "abcez")
-s__, t__, u__ = (PatternKind(name + "__") for name in "stu")
+f, g = PatternFunction("f_"), PatternFunction("g_")
+a, b, c, e, i, r, z = (PatternKind(name + "_") for name in "abceirz")
+s, t, u = (PatternKind(name + "__") for name in "stu")
 
 # The function named "Equal" for each kind, declared the first time it is
 # needed: it takes the two sides, of that kind, and at most one condition.
 _equal_functions = {}
+# The name given to an Equal with name=.
+_names = {}
 
 
-def Equal(lhs, rhs, when=None):
+def Equal(lhs, rhs, when=None, name=None):
     """The identity ``lhs = rhs``, where ``when`` holds: an expression of
     the kind ``IdentityKind``. ``rhs`` is of the kind of ``lhs``, or a
     Python value that becomes a literal of it; ``when`` is ``None`` or a
-    ``BoolKind`` expression."""
+    ``BoolKind`` expression. ``name`` is the name of the identity
+    (``pow_one``); without it, ``declare_identities`` derives one from the
+    left side."""
     if not isinstance(lhs, Expr):
         raise TypeError(f"the left side of an identity must be an expression, got {lhs!r}")
     kind = lhs.kind
@@ -116,7 +120,13 @@ def Equal(lhs, rhs, when=None):
         _equal_functions[kind] = _core.declare_function(
             "Equal", kind, kind, rest=BoolKind, returns=IdentityKind, names=("lhs", "rhs")
         )
-    return _equal_functions[kind](lhs, rhs, *(() if when is None else (when,)))
+    result = _equal_functions[kind](lhs, rhs, *(() if when is None else (when,)))
+    if name is not None:
+        if not isinstance(name, str) or not name.isidentifier():
+            raise ValueError(f"the name of an identity must be an identifier, got {name!r}")
+        if _names.setdefault(result, name) != name:
+            raise ValueError(f"{result!r} is already named {_names[result]}")
+    return result
 
 
 def is_equal(e):
@@ -154,22 +164,25 @@ class _Refused(Exception):
 class GenericIdentity:
     """A generic identity, as ``declare_identity`` returns it: the identity
     ``definition`` (an ``Equal`` of ``PatternKind`` trees), its
-    ``function`` placeholder, its ``params``, the placeholders in ``multi``
-    and ``normal``.
+    ``function`` placeholder, its ``params``, the placeholders ``multi``
+    that stand for a run of arguments (by the convention, those whose name
+    ends in two underscores), ``given`` (each placeholder of the right side
+    that is not in the left, with the generic identity whose parameter it
+    is) and ``normal``.
 
     One without parameters is listed as it is; one with parameters is
     called with them first, as in ``identity(0)``, which gives what
     ``declare_identities`` lists (not an expression: the kinds of the
     parameters are only known once the function is)."""
 
-    __slots__ = ("_constant", "_versions", "definition", "function", "multi", "name",
+    __slots__ = ("_constant", "_versions", "definition", "function", "given", "multi", "name",
                  "normal", "params")
 
-    def __init__(self, name, definition, function, params, multi, normal):
+    def __init__(self, name, definition, function, params, multi, given, normal):
         set_ = object.__setattr__
         for attribute, value in (
             ("name", name), ("definition", definition), ("function", function),
-            ("params", params), ("multi", multi), ("normal", normal),
+            ("params", params), ("multi", multi), ("given", given), ("normal", normal),
             # The expression listed for each combination of the kinds of
             # the parameters: a constant, or a function declared once for
             # each combination, the way nary.functions declares Lambda.
@@ -181,7 +194,7 @@ class GenericIdentity:
     def __setattr__(self, attribute, value):
         raise AttributeError("a GenericIdentity cannot be changed")
 
-    def __call__(self, *values):
+    def __call__(self, *values, when=None):
         if not self.params:
             raise TypeError(f"{self.name} takes no parameters, so it is listed without calling it")
         if len(values) != len(self.params):
@@ -189,7 +202,7 @@ class GenericIdentity:
                 f"{self.name} takes {len(self.params)} parameter(s) "
                 f"({', '.join(p.name for p in self.params)}), got {len(values)}"
             )
-        return _Listing(self, values)
+        return _Listing(self, values, when)
 
     def _item(self, values):
         """The expression of kind ``IdentityKind`` that lists this identity
@@ -212,27 +225,33 @@ class _Listing:
     """A generic identity called with its parameters, waiting for
     ``declare_identities`` to know the kinds."""
 
-    __slots__ = ("generic", "values")
+    __slots__ = ("generic", "values", "when")
 
-    def __init__(self, generic, values):
-        self.generic, self.values = generic, values
+    def __init__(self, generic, values, when=None):
+        self.generic, self.values, self.when = generic, values, when
 
     def __repr__(self):
-        return f"{self.generic.name}({', '.join(map(repr, self.values))})"
+        when = () if self.when is None else (f"when={self.when!r}",)
+        return f"{self.generic.name}({', '.join((*map(repr, self.values), *when))})"
 
 
-def declare_identity(name, left, right, params=(), multi=(), normal=None):
+# The generic identity whose parameter each placeholder is (e for identity).
+_parameter_of = {}
+
+
+def declare_identity(name, left, right, params=(), normal=None):
     """Declare the generic identity ``left = right`` and return it as a
     ``GenericIdentity``.
 
     ``left`` and ``right`` are ``PatternKind`` expressions, and every symbol
-    in them is a placeholder. The head of ``left`` must be a function
-    placeholder; it is filled with the function the identity is listed for.
-    ``params`` are placeholders of ``left`` filled where the identity is
-    listed; ``multi`` are the placeholders of ``left`` that stand for any
-    run of arguments (none of them a parameter). Every placeholder of
-    ``right`` must be in ``left``. ``normal`` is recorded as data; nothing
-    uses it yet.
+    in them is a placeholder; one whose name ends in two underscores
+    (``s__``) stands for any run of arguments. The head of ``left`` must be
+    a function placeholder; it is filled with the function the identity is
+    listed for. ``params`` are placeholders filled where the identity is
+    listed. Every placeholder of ``right`` must be in ``left``, be in
+    ``params``, or be the parameter of a generic identity declared before (``e`` of
+    ``identity``): it is then filled from that identity listed in the same
+    block. ``normal`` is recorded as data; nothing uses it yet.
     """
     if not isinstance(name, str) or not name.isidentifier():
         raise ValueError(f"the name of an identity must be an identifier, got {name!r}")
@@ -248,26 +267,27 @@ def declare_identity(name, left, right, params=(), multi=(), normal=None):
             f"the left side of a generic identity must apply a function placeholder, got {left!r}"
         )
     in_left = _symbols(left)
-    for p in _symbols(right):
-        if p not in in_left:
-            raise ValueError(
-                f"every placeholder of {name} must be in its left side, but {p!r} is not"
-            )
-    multi = tuple(multi)
-    for m in multi:
-        if not (isinstance(m, Expr) and m in in_left and m.kind is PatternKind):
-            raise ValueError(
-                f"a multi-argument placeholder of {name} must be a PatternKind placeholder "
-                f"of its left side, got {m!r}"
-            )
     params = tuple(params)
+    given = {}
+    for p in _symbols(right):
+        if p not in in_left and p not in params:
+            if p not in _parameter_of:
+                raise ValueError(
+                    f"every placeholder of {name} must be in its left side or be the parameter "
+                    f"of a generic identity, but {p!r} is neither"
+                )
+            given[p] = _parameter_of[p]
+    multi = tuple(p for p in in_left if p.kind is PatternKind and p.name.endswith("__"))
     for p in params:
-        if not (isinstance(p, Expr) and p in in_left) or p == function or p in multi:
+        if not (isinstance(p, Expr) and p in _symbols(definition)) or p == function or p in multi:
             raise ValueError(
-                f"a parameter of {name} must be a placeholder of its left side other than "
+                f"a parameter of {name} must be a placeholder of the identity other than "
                 f"{function!r} and not a multi-argument placeholder, got {p!r}"
             )
-    return GenericIdentity(name, definition, function, params, multi, normal)
+    generic = GenericIdentity(name, definition, function, params, multi, given, normal)
+    for p in params:
+        _parameter_of.setdefault(p, generic)
+    return generic
 
 
 def _fill(e, filled, kinds, expected, multi):
@@ -341,31 +361,58 @@ def _argument_kind(function):
     return kind.rest if kind.rest is not None else (kind.inputs or (None,))[0]
 
 
-def _instance(function, item):
+def _converted(function, values):
+    """The parameters ``values`` as expressions: a Python value becomes a
+    literal of the kind of ``function``'s arguments."""
+    converted = []
+    for value in values:
+        if isinstance(value, Expr):
+            converted.append(value)
+            continue
+        kind = _argument_kind(function)
+        if isinstance(value, str) or kind is None:
+            raise _Refused(f"{value!r} is not an expression")
+        try:
+            converted.append(kind(value))
+        except (TypeError, ValueError) as error:
+            raise _Refused(str(error)) from None
+    return converted
+
+
+def _instance(function, item, block):
     """The ``Identity`` that the generic identity ``item`` (a
     ``GenericIdentity`` or one called with its parameters) gives for
-    ``function``, checked with the ordinary kind checks."""
-    gen, values = (item.generic, item.values) if isinstance(item, _Listing) else (item, ())
+    ``function``, checked with the ordinary kind checks. ``block`` maps
+    each generic identity listed in the same block to its parameters, for
+    the placeholders the identity takes from another (``e`` of
+    ``identity`` for ``inverse``)."""
+    gen = item.generic if isinstance(item, _Listing) else item
+    when = item.when if isinstance(item, _Listing) else None
     try:
         if gen.params and not isinstance(item, _Listing):
             raise _Refused(
                 f"it takes the parameter(s) {', '.join(p.name for p in gen.params)}: list "
                 f"{gen.name}(...)"
             )
-        converted = []
-        for value in values:
-            if isinstance(value, Expr):
-                converted.append(value)
-                continue
-            kind = _argument_kind(function)
-            if isinstance(value, str) or kind is None:
-                raise _Refused(f"{value!r} is not an expression")
-            try:
-                converted.append(kind(value))
-            except (TypeError, ValueError) as error:
-                raise _Refused(str(error)) from None
+        converted = block[item]
         filled = {gen.function: function, **dict(zip(gen.params, converted))}
+        for p, other in gen.given.items():
+            source = next((k for k in block if _generic(k) is other), None)
+            if source is None:
+                raise _Refused(f"it needs {other.name}({p.name}) listed in the same block")
+            filled[p] = block[source][other.params.index(p)]
+        # A placeholder in a parameter or in when= is the placeholder of
+        # the identity of the same name.
+        names = {p.name for p in _symbols(gen.definition)} - {p.name for p in filled}
         kinds = {}
+        for value in [*converted, *(() if when is None else (when,))]:
+            for p in _symbols(value) if isinstance(value, Expr) else ():
+                if p.kind.inputs is not None:
+                    continue
+                if p.name not in names:
+                    raise _Refused(f"{p.name} is not a placeholder of {gen.name}")
+                if kinds.setdefault(p.name, p.kind) is not p.kind:
+                    raise _Refused(f"the placeholder {p.name} would be two kinds")
         left, right, _ = _sides(gen.definition)
         lhs = _fill(left, filled, kinds, None, gen.multi)
         rhs = _fill(right, filled, kinds, lhs.kind, gen.multi)
@@ -377,20 +424,42 @@ def _instance(function, item):
         raise TypeError(f"{item!r} cannot be listed for {function!r}: {why}") from None
     return Identity(
         f"{function.name.lower()}_{gen.name}", function, gen._item(converted), gen, lhs, rhs,
-        None,
+        when,
     )
 
 
-def _specific(function, item):
-    """The ``Identity`` of the pair ``(name, Equal(lhs, rhs, when))``."""
-    if not (isinstance(item, tuple) and len(item) == 2 and is_equal(item[1])):
+def _generic(item):
+    return item.generic if isinstance(item, _Listing) else item
+
+
+def _token(e):
+    """The part of a derived name that stands for ``e``."""
+    if e.is_literal:
+        if type(e.value) is not int:
+            raise ValueError(f"no name can be derived for the literal {e!r}: give name=")
+        return str(e.value) if e.value >= 0 else f"neg{-e.value}"
+    if e.head is None:
+        return (e.name.rstrip("_") or e.name).lower()
+    return "_".join([_token(e.head), *map(_token, e.args)])
+
+
+def derived_name(function, lhs):
+    """The name of an ``Equal`` listed for ``function`` without ``name=``:
+    ``lhs`` written in prefix order, each function and constant by its name
+    in lower case, each placeholder by its name without the underscores and
+    each integer by its digits (``neg`` before a negative one), joined by
+    underscores: ``sin(0)`` gives ``sin_0`` and ``sin(Mul(-1, a_))`` gives
+    ``sin_mul_neg1_a``. Another literal has no name: give ``name=``."""
+    return _token(lhs)
+
+
+def _specific(function, identity):
+    """The ``Identity`` of ``Equal(lhs, rhs, when, name)``."""
+    if not is_equal(identity):
         raise TypeError(
-            f"an identity listed for {function!r} is a generic identity, or a pair "
-            f"(name, Equal(left, right, when=None)), got {item!r}"
+            f"an identity listed for {function!r} is a generic identity, or "
+            f"Equal(left, right, when=None, name=None), got {identity!r}"
         )
-    name, identity = item
-    if not isinstance(name, str) or not name.isidentifier():
-        raise ValueError(f"the name of an identity must be an identifier, got {name!r}")
     lhs, rhs, when = _sides(identity)
     if lhs.head != function:
         raise ValueError(
@@ -403,7 +472,8 @@ def _specific(function, item):
             raise ValueError(
                 f"every placeholder of {identity!r} must be in its left side, but {p!r} is not"
             )
-    return Identity(f"{function.name.lower()}_{name}", function, identity, None, lhs, rhs, when)
+    name = _names.get(identity) or derived_name(function, lhs)
+    return Identity(name, function, identity, None, lhs, rhs, when)
 
 
 # The block of each function: a tuple of Identity records, and the set of
@@ -414,18 +484,30 @@ _listed = {}
 
 def declare_identities(function, items):
     """List everything that holds for the declared function ``function``:
-    generic identities (called with their parameters, if any) and pairs
-    ``(name, Equal(left, right, when=None))``. Each is checked; a listing
+    generic identities (called with their parameters, if any) and
+    ``Equal(left, right, when=None, name=None)``. Each is checked; a listing
     that makes no sense is refused, and so is a second block for the same
-    function."""
+    function. ``singleton`` is added after ``associative`` when the block
+    lists it (it is not written in the blocks; its instance is still
+    stated and proved)."""
     if not (isinstance(function, Expr) and function.is_constant and function.kind.inputs is not None):
         raise TypeError(f"declare_identities expects a declared function, got {function!r}")
     if function in _blocks:
         raise ValueError(f"the identities of {function!r} are already declared")
+    items = list(items)
+    if associative in items and singleton not in items:
+        items.insert(items.index(associative) + 1, singleton)
+    params = {}
+    for item in items:
+        if isinstance(item, (GenericIdentity, _Listing)):
+            try:
+                params[item] = _converted(function, getattr(item, "values", ()))
+            except _Refused as why:
+                raise TypeError(f"{item!r} cannot be listed for {function!r}: {why}") from None
     block = []
     for item in items:
         if isinstance(item, (GenericIdentity, _Listing)):
-            block.append(_instance(function, item))
+            block.append(_instance(function, item, params))
         else:
             block.append(_specific(function, item))
     names = [i.name for i in block]
@@ -452,23 +534,12 @@ def lists(function, generic_identity):
 # commutative would sort arguments into; nothing uses it yet.
 Sorted = "Sorted"
 
-associative = declare_identity(
-    "associative", f_(s__, f_(t__), u__), f_(s__, t__, u__), multi=(s__, t__, u__)
-)
-commutative = declare_identity(
-    "commutative", f_(s__, a_, t__, b_, u__), f_(s__, b_, t__, a_, u__),
-    multi=(s__, t__, u__), normal=Sorted,
-)
-singleton = declare_identity("singleton", f_(a_), a_)
-identity = declare_identity(
-    "identity", f_(s__, e_, t__), f_(s__, t__), params=(e_,), multi=(s__, t__)
-)
-idempotent = declare_identity(
-    "idempotent", f_(s__, a_, t__, a_, u__), f_(s__, a_, t__, u__), multi=(s__, t__, u__)
-)
-absorbing = declare_identity(
-    "absorbing", f_(s__, z_, t__), z_, params=(z_,), multi=(s__, t__)
-)
-distributive = declare_identity(
-    "distributive", f_(a_, g_(b_, c_)), g_(f_(a_, b_), f_(a_, c_)), params=(g_,), normal=None
-)
+associative  = declare_identity("associative",  f(s, f(t), u),      f(s, t, u))
+singleton    = declare_identity("singleton",    f(a),               a)
+identity     = declare_identity("identity",     f(s, e, t),         f(s, t),           params=(e,))
+idempotent   = declare_identity("idempotent",   f(s, a, t, a, u),   f(s, a, t, u))
+absorbing    = declare_identity("absorbing",    f(s, z, t),         z,                 params=(z,))
+commutative  = declare_identity("commutative",  f(s, a, t, b, u),   f(s, b, t, a, u),  normal=Sorted)
+distributive = declare_identity("distributive", f(a, g(b, c)),      g(f(a, b), f(a, c)), params=(g,), normal=None)
+inverse      = declare_identity("inverse",      f(a, i),            e,                 params=(i,))
+repeated     = declare_identity("repeated",     f(a, a),            r,                 params=(r,))

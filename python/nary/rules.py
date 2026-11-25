@@ -307,6 +307,12 @@ def specific_rule(i):
     ``a``)."""
     if i.generic is not None:
         raise ValueError(f"{i!r} is an instance of a generic identity, not a specific one")
+    return _plain_rule(i)
+
+
+def _plain_rule(i):
+    """The rule ``lhs -> rhs`` (where ``when`` holds) of the identity
+    ``i``, named after it, its placeholders without the convention."""
     symbols = [p for p in _symbols(i.lhs) if p.kind.inputs is None]
     lhs, rhs = (_without_convention(side, symbols) for side in (i.lhs, i.rhs))
     when = None if i.when is None else _without_convention(i.when, symbols)
@@ -323,7 +329,9 @@ def identity_rules(f):
     with ``a`` a variable of the kind of ``f``'s arguments, ``identity(e)``
     gives ``f(a, e) -> a`` and ``idempotent`` gives ``f(a, a) -> a``, both
     only if ``singleton`` is listed too, and ``absorbing(z)`` gives
-    ``f(a, z) -> z``. The engine applies such a rule to some of the
+    ``f(a, z) -> z``; ``inverse(i)`` gives ``f(a, i) -> e``, with ``e``
+    from the ``identity(e)`` of the block, and ``repeated(r)`` gives
+    ``f(a, a) -> r`` (each where its ``when=`` holds). The engine applies such a rule to some of the
     arguments of a longer application when ``f`` is associative and
     commutative. ``associative`` and ``commutative`` give no rule (the
     engine uses them while matching, through ``is_flat`` and
@@ -347,4 +355,6 @@ def identity_rules(f):
         elif i.generic is _identities.absorbing:
             [z] = i.item.args
             rules.append(Rule(f(a, z), z, name=i.name))
+        elif i.generic in (_identities.inverse, _identities.repeated):
+            rules.append(_plain_rule(i))
     return rules

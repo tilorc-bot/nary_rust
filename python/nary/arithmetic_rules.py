@@ -22,6 +22,11 @@ hand in ``lean/Nary/ArithmeticRules.lean``.
     >>> [(r, r.erased) for r in rules if r.pattern == a * 0]
     [(Rule(Mul(a, 0), 0, name='mul_absorbing'), (a,))]
 
+``mul_repeated`` (``a * a -> a**2``) is listed, stated and proved but not
+in ``rules``: with it, ``x*x - x*x`` would no longer rewrite to 0, since
+both sides become ``Pow(x, 2)`` and ``Pow(x, 2) - Pow(x, 2)`` does not
+rewrite with these rules.
+
 ``a ** 0 -> 1`` needs ``Ne(a, 0)`` because ``0**0`` has no value here: there
 is no separate power with a natural-number exponent yet.
 """
@@ -30,4 +35,12 @@ from .arithmetic import Add, Mul, Pow
 from .elementary import exp
 from .rules import identity_rules
 
-rules = identity_rules(Add) + identity_rules(Mul) + identity_rules(Pow) + identity_rules(exp)
+# The rules left out of the default set, by name (see above).
+LEFT_OUT = ("mul_repeated",)
+
+rules = [
+    r
+    for f in (Add, Mul, Pow, exp)
+    for r in identity_rules(f)
+    if r.name not in LEFT_OUT
+]

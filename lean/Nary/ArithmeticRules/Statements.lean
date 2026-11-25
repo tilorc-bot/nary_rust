@@ -5,7 +5,7 @@ and run
 
     .venv/bin/python lean/generate_rules.py
 
-The statement of each identity listed for Add, Mul, Pow, exp, And and Or,
+The statement of each identity listed for Add, Mul, Pow, exp, sin, And and Or,
 named <function>_<identity>, and of each rule the engine applies for an
 instance of a generic identity, named <function>_<identity>_rule. A generic
 identity is its definition in `Nary/Facts.lean` applied to the function and
@@ -24,41 +24,49 @@ namespace Nary.ArithmeticRules.Statement
 abbrev add_associative : Prop :=
   Nary.Flat Nary.Add
 
-/-- `commutative` listed for `Add` -/
-abbrev add_commutative : Prop :=
-  Nary.Unordered Nary.Add
-
 /-- `singleton` listed for `Add` -/
 abbrev add_singleton : Prop :=
   Nary.Singleton Nary.Add
+
+/-- `commutative` listed for `Add` -/
+abbrev add_commutative : Prop :=
+  Nary.Unordered Nary.Add
 
 /-- `identity(0)` listed for `Add` -/
 abbrev add_identity : Prop :=
   Nary.Identity Nary.Add (Nary.lit 0)
 
-/-- `Equal(Add(a_, a_), Mul(2, a_))` listed for `Add` -/
-abbrev add_self : Prop :=
-  ∀ (a : Nary.Number), Nary.Add [a, a] = Nary.Mul [Nary.lit 2, a]
+/-- `inverse(Mul(-1, a_))` listed for `Add` -/
+abbrev add_inverse : Prop :=
+  Nary.Inverse Nary.Add (Nary.lit 0) (fun a => Nary.Mul [Nary.lit (-1), a]) (fun _ => True)
 
-/-- `Equal(Add(a_, Mul(-1, a_)), 0)` listed for `Add` -/
-abbrev add_neg_self : Prop :=
-  ∀ (a : Nary.Number), a ≠ none → Nary.Add [a, Nary.Mul [Nary.lit (-1), a]] = Nary.lit 0
+/-- `repeated(Mul(2, a_))` listed for `Add` -/
+abbrev add_repeated : Prop :=
+  Nary.Repeated Nary.Add (fun a => Nary.Mul [Nary.lit 2, a]) (fun _ => True)
 
 /-- `Rule(Add(a, 0), a, name='add_identity')` -/
 abbrev add_identity_rule : Prop :=
   ∀ (a : Nary.Number), Nary.Add [a, Nary.lit 0] = a
 
+/-- `Rule(Add(a, Mul(-1, a)), 0, name='add_inverse')` -/
+abbrev add_inverse_rule : Prop :=
+  ∀ (a : Nary.Number), a ≠ none → Nary.Add [a, Nary.Mul [Nary.lit (-1), a]] = Nary.lit 0
+
+/-- `Rule(Add(a, a), Mul(2, a), name='add_repeated')` -/
+abbrev add_repeated_rule : Prop :=
+  ∀ (a : Nary.Number), Nary.Add [a, a] = Nary.Mul [Nary.lit 2, a]
+
 /-- `associative` listed for `Mul` -/
 abbrev mul_associative : Prop :=
   Nary.Flat Nary.Mul
 
-/-- `commutative` listed for `Mul` -/
-abbrev mul_commutative : Prop :=
-  Nary.Unordered Nary.Mul
-
 /-- `singleton` listed for `Mul` -/
 abbrev mul_singleton : Prop :=
   Nary.Singleton Nary.Mul
+
+/-- `commutative` listed for `Mul` -/
+abbrev mul_commutative : Prop :=
+  Nary.Unordered Nary.Mul
 
 /-- `identity(1)` listed for `Mul` -/
 abbrev mul_identity : Prop :=
@@ -68,13 +76,17 @@ abbrev mul_identity : Prop :=
 abbrev mul_absorbing : Prop :=
   Nary.Absorbing Nary.Mul (Nary.lit 0)
 
+/-- `inverse(Pow(a_, -1))` when `Ne(a_, 0)` listed for `Mul` -/
+abbrev mul_inverse : Prop :=
+  Nary.Inverse Nary.Mul (Nary.lit 1) (fun a => Nary.Pow a (Nary.lit (-1))) (fun a => Nary.Holds (Nary.Ne a (Nary.lit 0)))
+
+/-- `repeated(Pow(a_, 2))` listed for `Mul` -/
+abbrev mul_repeated : Prop :=
+  Nary.Repeated Nary.Mul (fun a => Nary.Pow a (Nary.lit 2)) (fun _ => True)
+
 /-- `distributive(Add)` listed for `Mul` -/
 abbrev mul_distributive : Prop :=
   Nary.Distributive Nary.Mul Nary.Add
-
-/-- `Equal(Mul(a_, Pow(a_, -1)), 1, Ne(a_, 0))` listed for `Mul` -/
-abbrev mul_inv_self : Prop :=
-  ∀ (a : Nary.Number), Nary.Holds (Nary.Ne a (Nary.lit 0)) → a ≠ none → Nary.Mul [a, Nary.Pow a (Nary.lit (-1))] = Nary.lit 1
 
 /-- `Rule(Mul(a, 1), a, name='mul_identity')` -/
 abbrev mul_identity_rule : Prop :=
@@ -83,6 +95,14 @@ abbrev mul_identity_rule : Prop :=
 /-- `Rule(Mul(a, 0), 0, name='mul_absorbing')` -/
 abbrev mul_absorbing_rule : Prop :=
   ∀ (a : Nary.Number), a ≠ none → Nary.Mul [a, Nary.lit 0] = Nary.lit 0
+
+/-- `Rule(Mul(a, Pow(a, -1)), 1, when=Ne(a, 0), name='mul_inverse')` -/
+abbrev mul_inverse_rule : Prop :=
+  ∀ (a : Nary.Number), Nary.Holds (Nary.Ne a (Nary.lit 0)) → a ≠ none → Nary.Mul [a, Nary.Pow a (Nary.lit (-1))] = Nary.lit 1
+
+/-- `Rule(Mul(a, a), Pow(a, 2), name='mul_repeated')` -/
+abbrev mul_repeated_rule : Prop :=
+  ∀ (a : Nary.Number), Nary.Mul [a, a] = Nary.Pow a (Nary.lit 2)
 
 /-- `Equal(Pow(a_, 1), a_)` listed for `Pow` -/
 abbrev pow_one : Prop :=
@@ -96,17 +116,29 @@ abbrev pow_zero : Prop :=
 abbrev exp_log : Prop :=
   ∀ (a : Nary.Number), Nary.Holds (Nary.Ne a (Nary.lit 0)) → Nary.exp (Nary.log a) = a
 
+/-- `Equal(sin(0), 0)` listed for `sin` -/
+abbrev sin_0 : Prop :=
+  Nary.sin (Nary.lit 0) = Nary.lit 0
+
+/-- `Equal(sin(Mul(-1, a_)), Mul(-1, sin(a_)))` listed for `sin` -/
+abbrev sin_mul_neg1_a : Prop :=
+  ∀ (a : Nary.Number), Nary.sin (Nary.Mul [Nary.lit (-1), a]) = Nary.Mul [Nary.lit (-1), Nary.sin a]
+
+/-- `Equal(sin(Add(a_, Mul(2, pi))), sin(a_))` listed for `sin` -/
+abbrev sin_add_a_mul_2_pi : Prop :=
+  ∀ (a : Nary.Number), Nary.sin (Nary.Add [a, Nary.Mul [Nary.lit 2, Nary.pi]]) = Nary.sin a
+
 /-- `associative` listed for `And` -/
 abbrev and_associative : Prop :=
   Nary.Flat Nary.And
 
-/-- `commutative` listed for `And` -/
-abbrev and_commutative : Prop :=
-  Nary.Unordered Nary.And
-
 /-- `singleton` listed for `And` -/
 abbrev and_singleton : Prop :=
   Nary.Singleton Nary.And
+
+/-- `commutative` listed for `And` -/
+abbrev and_commutative : Prop :=
+  Nary.Unordered Nary.And
 
 /-- `idempotent` listed for `And` -/
 abbrev and_idempotent : Prop :=
@@ -136,13 +168,13 @@ abbrev and_absorbing_rule : Prop :=
 abbrev or_associative : Prop :=
   Nary.Flat Nary.Or
 
-/-- `commutative` listed for `Or` -/
-abbrev or_commutative : Prop :=
-  Nary.Unordered Nary.Or
-
 /-- `singleton` listed for `Or` -/
 abbrev or_singleton : Prop :=
   Nary.Singleton Nary.Or
+
+/-- `commutative` listed for `Or` -/
+abbrev or_commutative : Prop :=
+  Nary.Unordered Nary.Or
 
 /-- `idempotent` listed for `Or` -/
 abbrev or_idempotent : Prop :=
@@ -176,27 +208,35 @@ namespace Nary.ArithmeticRules
 fails if a statement has no proof there or a proof no longer fits. -/
 structure Proved : Prop where
   add_associative : Statement.add_associative
-  add_commutative : Statement.add_commutative
   add_singleton : Statement.add_singleton
+  add_commutative : Statement.add_commutative
   add_identity : Statement.add_identity
-  add_self : Statement.add_self
-  add_neg_self : Statement.add_neg_self
+  add_inverse : Statement.add_inverse
+  add_repeated : Statement.add_repeated
   add_identity_rule : Statement.add_identity_rule
+  add_inverse_rule : Statement.add_inverse_rule
+  add_repeated_rule : Statement.add_repeated_rule
   mul_associative : Statement.mul_associative
-  mul_commutative : Statement.mul_commutative
   mul_singleton : Statement.mul_singleton
+  mul_commutative : Statement.mul_commutative
   mul_identity : Statement.mul_identity
   mul_absorbing : Statement.mul_absorbing
+  mul_inverse : Statement.mul_inverse
+  mul_repeated : Statement.mul_repeated
   mul_distributive : Statement.mul_distributive
-  mul_inv_self : Statement.mul_inv_self
   mul_identity_rule : Statement.mul_identity_rule
   mul_absorbing_rule : Statement.mul_absorbing_rule
+  mul_inverse_rule : Statement.mul_inverse_rule
+  mul_repeated_rule : Statement.mul_repeated_rule
   pow_one : Statement.pow_one
   pow_zero : Statement.pow_zero
   exp_log : Statement.exp_log
+  sin_0 : Statement.sin_0
+  sin_mul_neg1_a : Statement.sin_mul_neg1_a
+  sin_add_a_mul_2_pi : Statement.sin_add_a_mul_2_pi
   and_associative : Statement.and_associative
-  and_commutative : Statement.and_commutative
   and_singleton : Statement.and_singleton
+  and_commutative : Statement.and_commutative
   and_idempotent : Statement.and_idempotent
   and_identity : Statement.and_identity
   and_absorbing : Statement.and_absorbing
@@ -204,8 +244,8 @@ structure Proved : Prop where
   and_identity_rule : Statement.and_identity_rule
   and_absorbing_rule : Statement.and_absorbing_rule
   or_associative : Statement.or_associative
-  or_commutative : Statement.or_commutative
   or_singleton : Statement.or_singleton
+  or_commutative : Statement.or_commutative
   or_idempotent : Statement.or_idempotent
   or_identity : Statement.or_identity
   or_absorbing : Statement.or_absorbing

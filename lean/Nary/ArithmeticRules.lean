@@ -47,13 +47,19 @@ theorem add_identity : Statement.add_identity := by
 theorem add_identity_rule : Statement.add_identity_rule :=
   add_identity.rule add_singleton
 
-theorem add_self : Statement.add_self := by
-  intro a; cases a <;> simp [Add, Mul, lit, two_mul]
-
-theorem add_neg_self : Statement.add_neg_self := by
-  intro a h
+theorem add_inverse : Statement.add_inverse := by
+  intro a _ h
   obtain ⟨z, rfl⟩ := Option.ne_none_iff_exists'.mp h
   simp [Add, Mul, lit]
+
+theorem add_inverse_rule : Statement.add_inverse_rule :=
+  fun a h => add_inverse a trivial h
+
+theorem add_repeated : Statement.add_repeated := by
+  intro a _; cases a <;> simp [Add, Mul, lit, two_mul]
+
+theorem add_repeated_rule : Statement.add_repeated_rule :=
+  fun a => add_repeated a trivial
 
 /-! ### `Mul` -/
 
@@ -86,12 +92,29 @@ theorem mul_distributive : Statement.mul_distributive := by
   intro a b c
   cases a <;> cases b <;> cases c <;> simp [Mul, Add, mul_add]
 
-theorem mul_inv_self : Statement.mul_inv_self := by
+theorem mul_inverse : Statement.mul_inverse := by
   intro a h _
   obtain ⟨z, rfl, hz⟩ := holds_ne_zero h
   have : z * Complex.exp (-Complex.log z) = 1 := by
     rw [Complex.exp_neg, Complex.exp_log hz, mul_inv_cancel₀ hz]
   simp [Mul, Pow, withDomain₂, powDomain, powTotal, lit, hz, this]
+
+theorem mul_inverse_rule : Statement.mul_inverse_rule :=
+  mul_inverse
+
+theorem mul_repeated : Statement.mul_repeated := by
+  intro a _
+  cases a with
+  | none => simp [Mul, Pow, withDomain₂]
+  | some z =>
+    by_cases hz : z = 0
+    · simp [Mul, Pow, withDomain₂, powDomain, powTotal, lit, hz]
+    · have : Complex.exp (2 * Complex.log z) = z * z := by
+        rw [two_mul, Complex.exp_add, Complex.exp_log hz]
+      simp [Mul, Pow, withDomain₂, powDomain, powTotal, lit, hz, this]
+
+theorem mul_repeated_rule : Statement.mul_repeated_rule :=
+  fun a => mul_repeated a trivial
 
 /-! ### `Pow` and `exp` -/
 
@@ -113,6 +136,17 @@ theorem exp_log : Statement.exp_log := by
   intro a h
   obtain ⟨z, rfl, hz⟩ := holds_ne_zero h
   simp [exp, log, withDomain, logDomain, hz, Complex.exp_log hz]
+
+/-! ### `sin` -/
+
+theorem sin_0 : Statement.sin_0 := by
+  simp [Statement.sin_0, sin, lit]
+
+theorem sin_mul_neg1_a : Statement.sin_mul_neg1_a := by
+  intro a; cases a <;> simp [sin, Mul, lit, Complex.sin_neg]
+
+theorem sin_add_a_mul_2_pi : Statement.sin_add_a_mul_2_pi := by
+  intro a; cases a <;> simp [sin, Add, Mul, lit, pi, Complex.sin_add_two_pi]
 
 /-! ### `Add` and `Mul`: associative and commutative -/
 
@@ -341,27 +375,35 @@ theorem or_absorbing_rule : Statement.or_absorbing_rule := or_absorbing.rule
 theorem proved : Proved := by
   exact {
     add_associative := add_associative
-    add_commutative := add_commutative
     add_singleton := add_singleton
+    add_commutative := add_commutative
     add_identity := add_identity
-    add_self := add_self
-    add_neg_self := add_neg_self
+    add_inverse := add_inverse
+    add_repeated := add_repeated
     add_identity_rule := add_identity_rule
+    add_inverse_rule := add_inverse_rule
+    add_repeated_rule := add_repeated_rule
     mul_associative := mul_associative
-    mul_commutative := mul_commutative
     mul_singleton := mul_singleton
+    mul_commutative := mul_commutative
     mul_identity := mul_identity
     mul_absorbing := mul_absorbing
+    mul_inverse := mul_inverse
+    mul_repeated := mul_repeated
     mul_distributive := mul_distributive
-    mul_inv_self := mul_inv_self
     mul_identity_rule := mul_identity_rule
     mul_absorbing_rule := mul_absorbing_rule
+    mul_inverse_rule := mul_inverse_rule
+    mul_repeated_rule := mul_repeated_rule
     pow_one := pow_one
     pow_zero := pow_zero
     exp_log := exp_log
+    sin_0 := sin_0
+    sin_mul_neg1_a := sin_mul_neg1_a
+    sin_add_a_mul_2_pi := sin_add_a_mul_2_pi
     and_associative := and_associative
-    and_commutative := and_commutative
     and_singleton := and_singleton
+    and_commutative := and_commutative
     and_idempotent := and_idempotent
     and_identity := and_identity
     and_absorbing := and_absorbing
@@ -369,8 +411,8 @@ theorem proved : Proved := by
     and_identity_rule := and_identity_rule
     and_absorbing_rule := and_absorbing_rule
     or_associative := or_associative
-    or_commutative := or_commutative
     or_singleton := or_singleton
+    or_commutative := or_commutative
     or_idempotent := or_idempotent
     or_identity := or_identity
     or_absorbing := or_absorbing

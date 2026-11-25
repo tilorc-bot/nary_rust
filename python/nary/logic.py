@@ -30,7 +30,6 @@ from .identities import (
     declare_identities,
     idempotent,
     identity,
-    singleton,
 )
 from .kinds import BoolKind
 
@@ -46,8 +45,16 @@ Not = declare_function("Not", BoolKind, returns=BoolKind, domain=true)
 
 # Everything that holds for each function, in one place (see nary.identities).
 declare_identities(And, [
-    associative, commutative, singleton, idempotent, identity(true), absorbing(false),
+    associative,
+    commutative,
+    idempotent,
+    identity(true),
+    absorbing(false),
 ])
 declare_identities(Or, [
-    associative, commutative, singleton, idempotent, identity(false), absorbing(true),
+    associative,
+    commutative,
+    idempotent,
+    identity(false),
+    absorbing(true),
 ])

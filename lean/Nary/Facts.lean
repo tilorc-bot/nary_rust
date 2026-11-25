@@ -11,7 +11,7 @@ rewriting engine (`python/nary/rewriting.py`) relies on them when it matches
 some of the arguments of a longer `Add` or `Mul`.
 
 As for a rule, an identity is claimed where the placeholders it erases (in its left
-side and not its right) have a value; only `Absorbing` erases any.
+side and not its right) have a value; only `Absorbing` and `Inverse` erase any.
 -/
 import Mathlib.Data.List.Perm.Basic
 
@@ -49,6 +49,18 @@ def Absorbing {β : Type*} (f : List (Option β) → Option β) (z : Option β) 
 /-- `distributive(g)`: `f(a, g(b, c)) = g(f(a, b), f(a, c))`. -/
 def Distributive {α : Type*} (f g : List α → α) : Prop :=
   ∀ a b c : α, f [a, g [b, c]] = g [f [a, b], f [a, c]]
+
+/-- `inverse(i)`: `f(a, i) = e`, where `e` is the identity element of `f` (from
+`identity(e)` in the same block), `i` is an expression in `a` and the condition
+holds, and where `a`, which the right side erases, has a value. -/
+def Inverse {β : Type*} (f : List (Option β) → Option β) (e : Option β)
+    (inv : Option β → Option β) (cond : Option β → Prop) : Prop :=
+  ∀ a : Option β, cond a → a ≠ none → f [a, inv a] = e
+
+/-- `repeated(r)`: `f(a, a) = r`, where `r` is an expression in `a` and the
+condition holds. -/
+def Repeated {α : Type*} (f : List α → α) (r : α → α) (cond : α → Prop) : Prop :=
+  ∀ a : α, cond a → f [a, a] = r a
 
 /-! The rules that `nary.rules.identity_rules` gives the engine for these
 identities follow from them. -/
