@@ -85,8 +85,8 @@ import nary as nr
 from nary.logic import And
 from nary.rules import rule
 
-__all__ = ["AREAS", "ASSUMPTIONS", "Entry", "KINDS", "NUMERIC", "STATUSES", "TAGS", "entry",
-           "rejected", "undecided"]
+__all__ = ["AREAS", "ASSUMPTIONS", "Entry", "KINDS", "NO_CONDITION", "NUMERIC", "STATUSES",
+           "Source", "TAGS", "entry", "generated", "rejected", "undecided"]
 
 STATUSES = ("accepted", "rejected", "undecided")
 
@@ -96,8 +96,9 @@ STATUSES = ("accepted", "rejected", "undecided")
 # input, output or assumption. ``comparison``: what "reaches expected" should
 # mean. ``representation``. ``assumptions``: translating SymPy's assumptions.
 # ``wrong-value``: SymPy's result is wrong (the rejected entries).
+# ``precision``: the numerical check cannot decide it at any of its precisions.
 KINDS = ("condition", "off-domain", "vocabulary", "comparison", "representation",
-         "assumptions", "wrong-value")
+         "assumptions", "wrong-value", "precision")
 
 NUMERIC = ("value", "definedness", "none")
 
@@ -140,6 +141,37 @@ ASSUMPTIONS = {
     ("real", True): lambda s: nr.Eq(nr.re(s), s),
 }
 
+# SymPy assumptions that every nary number symbol in an entry already has
+# (it stands for a complex number): kept in ``assume``, so that SymPy sees
+# them, with no nary condition.
+NO_CONDITION = {("complex", True)}
+
+
+@dataclass(frozen=True)
+class Source:
+    """An assert statement of a SymPy test file that an entry comes from:
+    ``file`` is the path in the SymPy repository, ``line`` to ``end_line``
+    the lines of the assert, ``position`` its index among the asserts that
+    start on that line."""
+    file: str
+    function: str
+    line: int
+    end_line: int
+    position: int = 0
+
+    @property
+    def id(self):
+        """The ledger id: file, test function, line (and position)."""
+        suffix = f".{self.position}" if self.position else ""
+        return f"{self.file}::{self.function}::L{self.line}{suffix}"
+
+    @property
+    def url(self):
+        """A permalink to the assert at the pinned SymPy commit."""
+        from .sympy_check import SYMPY_COMMIT
+        lines = f"L{self.line}" if self.end_line == self.line else f"L{self.line}-L{self.end_line}"
+        return f"https://github.com/sympy/sympy/blob/{SYMPY_COMMIT}/{self.file}#{lines}"
+
 
 @dataclass(frozen=True)
 class Entry:
@@ -161,6 +193,9 @@ class Entry:
     question: str = ""
     numeric: str = None
     no_value: object = None
+    sources: tuple = ()
+    generated: bool = False
+    cause: str = None
 
     @property
     def has_nary_form(self):
@@ -177,6 +212,8 @@ class Entry:
                 symbols.setdefault(s.name, s)
         for name, facts in self.assume.items():
             for fact in facts.items():
+                if fact in NO_CONDITION:
+                    continue
                 if fact not in ASSUMPTIONS:
                     raise ValueError(f"{self.name}: no nary condition for the SymPy "
                                      f"assumption {fact} on {name}")
@@ -262,3 +299,25 @@ def undecided(name, kind, input=None, expected=None, *, area, sympy_source, symp
                          sympy_source=sympy_source, sympy_gives=sympy_gives,
                          semantics=semantics, options=options, question=question,
                          numeric=numeric, no_value=no_value, tags=tags, note=note)
+
+
+def generated(name, input, expected, *, status, sympy, area, sources, assume=None, tags=(),
+              kind=None, cause=None):
+    """Make an ``Entry`` generated from SymPy's tests by
+    ``catalogue.from_tests``. ``sympy`` is the SymPy call for all statuses
+    (the generator checked that SymPy, so called, gives ``expected``). A
+    rejected entry has ``numeric="value"``; an undecided one has ``cause``,
+    its class in ``catalogue.from_tests.rules.UNDECIDED_CLASSES``, and
+    ``numeric="definedness"``, or ``"none"`` when its kind is
+    ``"precision"`` (the check found no counterexample it could decide)."""
+    _check_tags_area(name, tags, area)
+    if status not in STATUSES:
+        raise ValueError(f"{name}: unknown status {status!r}")
+    numeric = {"accepted": None, "rejected": "value", "undecided": "definedness"}[status]
+    if kind == "precision":
+        numeric = "none"
+    if (cause is not None) != (status == "undecided"):
+        raise ValueError(f"{name}: give a cause exactly for an undecided entry")
+    return Entry(name, status, input, _literal(expected), area, tuple(tags), dict(assume or {}),
+                 sympy=sympy, kind=kind, numeric=numeric, sources=tuple(sources),
+                 generated=True, cause=cause)

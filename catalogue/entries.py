@@ -29,6 +29,8 @@ written as nary has to write them today: 1/2 is ``Pow(2, -1)`` and 3/2 is
 ``Mul(3, Pow(2, -1))``.
 """
 
+from dataclasses import replace
+
 import nary as nr
 from nary import E, I, Lambda, Pow, cos, exp, log, pi, re, sin, tan
 from nary.calculus import Derivative
@@ -62,7 +64,7 @@ _CONDITION_OPTIONS = (
     "C: leave it out",
 )
 
-ENTRIES = [
+HAND_WRITTEN = [
     # ---- arithmetic: identities, literals, like terms -------------------
     entry("add_zero", x + 0, x, sympy="auto", tags=["rule"], area="arithmetic"),
     entry("mul_one", x * 1, x, sympy="auto", tags=["rule"], area="arithmetic"),
@@ -476,6 +478,16 @@ ENTRIES = [
         options=("A: keep the translation table in catalogue/entry.py as it is",),
         question="Is the table ASSUMPTIONS in catalogue/entry.py the translation you want?"),
 ]
+
+
+# The entries generated from SymPy's test files by catalogue.from_tests (see
+# catalogue/from_tests/power.py), after the hand-written ones. A generated
+# entry that equals a hand-written one is not repeated: the hand-written
+# entry gains its sources (LINKS).
+from .from_tests.power import ENTRIES as _POWER, LINKS as _POWER_LINKS  # noqa: E402
+
+ENTRIES = [replace(e, sources=_POWER_LINKS[e.name]) if e.name in _POWER_LINKS else e
+           for e in HAND_WRITTEN] + _POWER
 
 
 def with_status(*statuses):

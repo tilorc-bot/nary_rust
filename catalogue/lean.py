@@ -17,8 +17,10 @@ those with a ``Lambda``, which ``nary.rules`` does not accept as rules.
 Rejected and undecided entries are not stated: a statement here is a claim to
 prove, and theirs are false (rejected) or not yet wanted (undecided).
 
-Some of the statements are proved by hand in ``lean/Nary/Catalogue.lean``
-(``proved()`` lists them); the rest are stated only. ``lake build`` checks
+Some of the statements are proved: hand-written entries by hand in
+``lean/Nary/Catalogue.lean``, generated ones by a fixed list of tactics in
+``lean/Nary/Catalogue/Tactics.lean`` (``catalogue.lean_tactics``);
+``proved()`` lists both. The rest are stated only. ``lake build`` checks
 that every statement is well-typed and every proof fits.
 
 Run it after changing an entry, with the Python that has ``nary``
@@ -44,6 +46,7 @@ __all__ = ["PATH", "PROOFS", "proved", "render", "statement"]
 _LEAN = Path(__file__).resolve().parent.parent / "lean"
 PATH = _LEAN / "Nary" / "Catalogue" / "Statements.lean"
 PROOFS = _LEAN / "Nary" / "Catalogue.lean"
+TACTIC_PROOFS = _LEAN / "Nary" / "Catalogue" / "Tactics.lean"
 
 _TYPES = {nr.NumberKind: "ℂ", nr.BoolKind: "Prop"}
 _IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
@@ -92,11 +95,18 @@ def render():
             + "\n\nend Nary.Catalogue.Statement\n")
 
 
-def proved():
-    """The names of the accepted entries proved in ``lean/Nary/Catalogue.lean``: each
-    ``theorem <name> : Statement.<name>`` there."""
-    text = PROOFS.read_text(encoding="utf-8")
-    return [m.group(1) for m in re.finditer(r"^theorem (\w+) : Statement\.\1\b", text, re.M)]
+def proved(by_hand=True, by_tactic=True):
+    """The names of the accepted entries proved in Lean: each ``theorem
+    <name> : Statement.<name>`` in ``lean/Nary/Catalogue.lean`` (by hand) and
+    in ``lean/Nary/Catalogue/Tactics.lean`` (generated entries, by the fixed
+    tactics of ``catalogue.lean_tactics``)."""
+    paths = ([PROOFS] if by_hand else []) + ([TACTIC_PROOFS] if by_tactic else [])
+    names = []
+    for path in paths:
+        text = path.read_text(encoding="utf-8")
+        names += [m.group(1) for m in re.finditer(r"^theorem (\w+) : Statement\.\1\b", text,
+                                                  re.M)]
+    return names
 
 
 if __name__ == "__main__":

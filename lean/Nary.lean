@@ -4,3 +4,4 @@ import Nary.Calculus
 import Nary.Facts
 import Nary.ArithmeticRules
 import Nary.Catalogue
+import Nary.Catalogue.Tactics

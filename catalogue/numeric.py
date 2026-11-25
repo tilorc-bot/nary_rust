@@ -19,15 +19,33 @@ What it establishes: no counterexample among the points tried. The points
 are chosen to include the exact places where the functions of main lose
 their value (0, and points where ``cos`` is 0) and the branch cut of
 ``log`` (the negative reals), as well as random real and complex points.
-It is evidence, not a proof. Its weak spots, said plainly:
+It is evidence, not a proof.
 
-- "Is zero" is decided with a tolerance (``ZERO``), at 50 digits, so a
-  value that is not 0 but smaller than ``1e-30`` counts as 0, and the
+"Is zero" (the domain of ``Pow``, ``log`` and ``tan``, and comparing the
+two sides) is decided with a tolerance that depends on the working
+precision: at ``d`` digits a number counts as 0 when it is smaller than
+``10**-(3*d//5)`` (``zero_tolerance``), so 1e-30 at 50 digits. A number
+that is 0 but computed with rounding (``cos(pi/2)``, with pi rounded) is
+about ``10**-d``, below the tolerance at every precision; a number that is
+not 0 stays the same size, so at a high enough precision it is above the
+tolerance. ``check`` therefore decides each point at the precisions of
+``PRECISIONS`` in turn and takes the first verdict that a higher precision
+repeats: a tiny non-zero value (such as ``exp(-3*pi**2/log(sqrt(2)))``,
+about 8e-38, which 50 digits took for 0) gets its true verdict at 100 and
+200 digits. A point where no two consecutive precisions agree is
+``unsure``: neither a counterexample nor a confirmation, and reported
+apart. Its other weak spots, said plainly:
+
+- A value that is not 0 but smaller than the tolerance at the highest
+  precision (``10**-120``) still counts as 0 at every precision, and the
   domain of ``tan`` at a point like pi/2, which cannot be written exactly in
-  floating point, is decided by that tolerance.
-- A point very close to the branch cut, but not on it, can land on either
-  side after rounding. The points tried are either exactly on the cut or
-  far from it.
+  floating point, is decided this way.
+- A value whose real or imaginary part counts as 0 by that rule (relative
+  to the size of the value) is made exactly 0 (``_snap``), so a value that
+  is real but computed with rounding lies on the branch cut of ``log``
+  rather than on the side the rounding error picks. A value truly off the
+  cut by less than the tolerance is put on it. The points tried are either
+  exactly on the cut or far from it.
 - ``Derivative(f)(a)`` is computed with mpmath's numerical differentiation,
   and "``f`` has a value near ``a``" is tested at eight points on a small
   circle around ``a``. It is only used for functions that are
@@ -46,16 +64,28 @@ from nary.calculus import Derivative
 from nary.functions import is_lambda
 from nary.logic import And, Not, Or, false, true
 
-__all__ = ["ZERO", "check", "evaluate", "points", "same"]
+__all__ = ["PRECISIONS", "check", "evaluate", "points", "same", "zero_tolerance"]
 
 mpmath.mp.dps = 50
 
-# Below this, a number counts as 0, both in domains and in comparing sides.
-ZERO = mpmath.mpf("1e-30")
+# The working precisions (decimal digits) at which check decides a point, in
+# order; the verdict is the first one the next precision repeats.
+PRECISIONS = (50, 100, 200)
+
+_TOLERANCES = {}
+
+
+def zero_tolerance():
+    """Below this, a number counts as 0, in domains and in comparing sides:
+    ``10**-(3*d//5)`` at the working precision of ``d`` digits."""
+    dps = mpmath.mp.dps
+    if dps not in _TOLERANCES:
+        _TOLERANCES[dps] = mpmath.mpf(10) ** -(3 * dps // 5)
+    return _TOLERANCES[dps]
 
 
 def _is_zero(z):
-    return abs(z) < ZERO
+    return abs(z) < zero_tolerance()
 
 
 def _strict(f):
@@ -122,12 +152,13 @@ _FUNCTIONS = {
     Or: _or,
 }
 
+# Functions, so that pi and e are computed at the working precision.
 _CONSTANTS = {
-    nr.pi: mpmath.mpc(mpmath.pi),
-    nr.E: mpmath.mpc(mpmath.e),
-    nr.I: mpmath.mpc(0, 1),
-    true: True,
-    false: False,
+    nr.pi: lambda: mpmath.mpc(mpmath.pi),
+    nr.E: lambda: mpmath.mpc(mpmath.e),
+    nr.I: lambda: mpmath.mpc(0, 1),
+    true: lambda: True,
+    false: lambda: False,
 }
 
 # Where "f has a value near a" is tested for Derivative(f)(a).
@@ -165,13 +196,26 @@ def evaluate(e, values):
         return mpmath.mpc(e.value)
     if e.is_constant:
         if e in _CONSTANTS:
-            return _CONSTANTS[e]
+            return _CONSTANTS[e]()
         raise ValueError(f"no numerical meaning for the constant {e!r}")
     args = [evaluate(a, values) for a in e.args]
     if e.head in _FUNCTIONS:
-        return _FUNCTIONS[e.head](*args)
+        return _snap(_FUNCTIONS[e.head](*args))
     (arg,) = args
-    return None if arg is None else _function(e.head, values)(arg)
+    return None if arg is None else _snap(_function(e.head, values)(arg))
+
+
+def _snap(z):
+    """``z`` with a real or imaginary part that counts as 0 (relative to
+    ``|z|``, as in ``same``) made exactly 0, so that a value that is real
+    but computed with rounding (``1/(1 - sqrt(2))``) is on the branch cut
+    of ``log``, not on a side chosen by the sign of the rounding error."""
+    if not isinstance(z, mpmath.mpc):
+        return z
+    small = zero_tolerance() * max(1, abs(z))
+    real = 0 if abs(z.real) < small else z.real
+    imag = 0 if abs(z.imag) < small else z.imag
+    return z if (real, imag) == (z.real, z.imag) else mpmath.mpc(real, imag)
 
 
 def same(a, b):
@@ -180,18 +224,27 @@ def same(a, b):
         return a is None and b is None
     if isinstance(a, bool) or isinstance(b, bool):
         return a is b
-    return abs(a - b) <= ZERO * max(1, abs(a), abs(b))
+    return abs(a - b) <= zero_tolerance() * max(1, abs(a), abs(b))
 
 
-# Values tried for each number symbol: the places where the functions of
-# main lose their value or change branch, small integers, and random points.
-_pi = mpmath.pi
-_SPECIAL = [mpmath.mpc(z) for z in (
-    0, 1, -1, 2, -2, 3, mpmath.mpf(1) / 2, -mpmath.mpf(1) / 2,
-    1j, -1j, 2j, 1 + 1j, -1 - 2j, mpmath.mpc(-3, 0),
-    _pi / 2, -_pi / 2, _pi, 3 * _pi / 2, _pi / 4,
-    mpmath.mpc(0, _pi), mpmath.mpc(0, 2 * _pi), mpmath.mpc(_pi, 1),
-)]
+_SPECIALS = {}
+
+
+def _special():
+    """Values tried for each number symbol: the places where the functions of
+    main lose their value or change branch, small integers. Computed at the
+    working precision, so that pi/2 is as close to pi/2 as that precision
+    allows."""
+    dps = mpmath.mp.dps
+    if dps not in _SPECIALS:
+        pi = mpmath.pi
+        _SPECIALS[dps] = [mpmath.mpc(z) for z in (
+            0, 1, -1, 2, -2, 3, mpmath.mpf(1) / 2, -mpmath.mpf(1) / 2,
+            1j, -1j, 2j, 1 + 1j, -1 - 2j, mpmath.mpc(-3, 0),
+            pi / 2, -pi / 2, pi, 3 * pi / 2, pi / 4,
+            mpmath.mpc(0, pi), mpmath.mpc(0, 2 * pi), mpmath.mpc(pi, 1),
+        )]
+    return _SPECIALS[dps]
 
 
 def _random_values(rng, n):
@@ -205,13 +258,16 @@ def _random_values(rng, n):
 def points(symbols, seed=0, limit=400):
     """Points at which to evaluate an entry with these symbols (a list of
     ``(name, kind)``): dictionaries from name to value. Every combination
-    of the special values when there are few, then random points."""
+    of the special values when there are few, then random points. The
+    points are the same at every precision (the random ones are floats,
+    the special ones are computed at the working precision)."""
     rng = random.Random(seed)
     number = [name for name, kind in symbols if kind is nr.NumberKind]
     boolean = [name for name, kind in symbols if kind is nr.BoolKind]
-    pool = _SPECIAL + _random_values(rng, 20)
+    specials = _special()
+    pool = specials + _random_values(rng, 20)
     result = []
-    special = _SPECIAL if len(number) <= 2 else _SPECIAL[:8]
+    special = specials if len(number) <= 2 else specials[:8]
     for combo in itertools.product(special, repeat=len(number)):
         result.append(dict(zip(number, combo)))
     while len(result) < limit and number:
@@ -251,13 +307,18 @@ def symbols_of(*exprs):
 class Result:
     """What ``check`` found: the points tried, those where the condition
     held, those where both sides had no value, and the counterexamples,
-    each as ``(point, input value, expected value)``."""
+    each as ``(point, input value, expected value)``, at the precision that
+    decided the point. ``unsure``: the points (as ``(point, verdicts by
+    precision)``) where no two consecutive precisions agree; ``revised``:
+    how many points the first precision got wrong, as a higher one showed."""
 
     def __init__(self):
         self.tried = 0
         self.held = 0
         self.both_none = 0
         self.counterexamples = []
+        self.unsure = []
+        self.revised = 0
 
     @property
     def value_counterexamples(self):
@@ -267,21 +328,60 @@ class Result:
 
     def __repr__(self):
         return (f"Result(tried={self.tried}, held={self.held}, both_none={self.both_none}, "
-                f"counterexamples={len(self.counterexamples)})")
+                f"counterexamples={len(self.counterexamples)}, unsure={len(self.unsure)}, "
+                f"revised={self.revised})")
+
+
+def _verdict(input, expected, condition, point):
+    """``(verdict, input value, expected value)`` at the working precision;
+    the verdict is ``"skipped"`` (the condition does not hold),
+    ``"both-none"``, ``"same"``, ``"definedness"`` (one side has no value)
+    or ``"value"`` (different values)."""
+    if condition is not None and evaluate(condition, point) is not True:
+        return "skipped", None, None
+    a, b = evaluate(input, point), evaluate(expected, point)
+    if a is None and b is None:
+        return "both-none", a, b
+    if same(a, b):
+        return "same", a, b
+    return ("definedness" if a is None or b is None else "value"), a, b
 
 
 def check(input, expected, condition=None, seed=0):
     """Evaluate ``input`` and ``expected`` at the points of ``points`` where
-    ``condition`` holds (is ``True``), and collect the counterexamples."""
+    ``condition`` holds (is ``True``), and collect the counterexamples. Each
+    point is decided at the precisions of ``PRECISIONS`` in turn, until two
+    consecutive ones agree (see the module docstring)."""
+    symbols = symbols_of(input, expected, condition)
     result = Result()
-    for point in points(symbols_of(input, expected, condition), seed=seed):
+    pending = None  # indices of the points not decided yet
+    verdicts = {}   # index -> [(verdict, point, a, b) by precision]
+    decided = {}    # index -> (verdict, point, a, b)
+    for dps in PRECISIONS:
+        with mpmath.workdps(dps):
+            found = points(symbols, seed=seed)
+            for i in (range(len(found)) if pending is None else pending):
+                verdict, a, b = _verdict(input, expected, condition, found[i])
+                history = verdicts.setdefault(i, [])
+                history.append((verdict, found[i], a, b))
+                if len(history) >= 2 and history[-1][0] == history[-2][0]:
+                    decided[i] = history[-1]
+        pending = [i for i in verdicts if i not in decided]
+        if not pending:
+            break
+    for i in sorted(verdicts):
         result.tried += 1
-        if condition is not None and evaluate(condition, point) is not True:
+        if i not in decided:
+            result.unsure.append((verdicts[i][0][1], [v[0] for v in verdicts[i]]))
+            continue
+        verdict, point, a, b = decided[i]
+        if verdict != verdicts[i][0][0]:
+            result.revised += 1
+        if verdict == "skipped":
             continue
         result.held += 1
-        a, b = evaluate(input, point), evaluate(expected, point)
-        if a is None and b is None:
+        if verdict == "both-none":
             result.both_none += 1
-        if not same(a, b):
+        if verdict in ("definedness", "value"):
             result.counterexamples.append((point, a, b))
     return result
