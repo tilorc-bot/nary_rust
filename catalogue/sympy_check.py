@@ -22,11 +22,16 @@ from nary.calculus import Derivative
 from nary.functions import is_lambda
 from nary.logic import And, Not, Or, false, true
 
-__all__ = ["CALLS", "SYMPY_VERSION", "run", "to_sympy"]
+__all__ = ["CALLS", "SYMPY_COMMIT", "SYMPY_VERSION", "run", "to_sympy"]
 
 # The SymPy version the catalogue was checked against. tests/test_catalogue.py
 # refuses to run the SymPy checks with any other.
 SYMPY_VERSION = "1.14.0"
+
+# The commit of that release in github.com/sympy/sympy: the target of the
+# annotated tag sympy-1.14.0, "release sympy 1.14.0 final". Links to SymPy's
+# tests point at it.
+SYMPY_COMMIT = "16fa855354eb7bcabd3fe10993841e03b1382692"
 
 CALLS = {
     "auto": lambda e: e,
@@ -46,6 +51,8 @@ CALLS = {
     "simplify_logic": sympy.simplify_logic,
     "to_nnf": sympy.to_nnf,
     "doit": lambda e: e.doit(),
+    "expand_multinomial": sympy.expand_multinomial,
+    "rewrite_exp": lambda e: e.rewrite(sympy.exp),
 }
 
 _FUNCTIONS = {
