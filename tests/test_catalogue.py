@@ -120,3 +120,20 @@ def test_mismatch_numeric(mismatch):
                else "definedness" if found.counterexamples else "none")
     assert outcome == mismatch.numeric, found.counterexamples[:3]
     assert (outcome == "value") == (mismatch.kind == "rejected")
+
+
+# ---- Lean ------------------------------------------------------------------
+
+
+def test_lean_statements_are_current():
+    from catalogue import lean
+    assert lean.PATH.read_text(encoding="utf-8") == lean.render(), (
+        "lean/Nary/Catalogue/Statements.lean is out of date: run "
+        ".venv/bin/python -m catalogue.lean")
+
+
+def test_lean_proofs_name_entries():
+    from catalogue.lean import proved
+    names = proved()
+    assert len(set(names)) == len(names)
+    assert set(names) <= set(IDS)
