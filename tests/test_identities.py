@@ -21,12 +21,12 @@ def test_doctests():
 
 def test_the_rules_are_those_listed_before_the_blocks():
     before = [
-        rule(a + 0, a, name="add_zero"),
-        rule(a * 1, a, name="mul_one"),
-        rule(a * 0, 0, name="mul_zero"),
+        rule(a + 0, a, name="add_identity"),
+        rule(a * 1, a, name="mul_identity"),
+        rule(a * 0, 0, name="mul_absorbing"),
         rule(a + a, 2 * a, name="add_self"),
-        rule(a - a, 0, name="sub_self"),
-        rule(a / a, 1, when=Ne(a, 0), name="div_self"),
+        rule(a - a, 0, name="add_inverse"),
+        rule(a / a, 1, when=Ne(a, 0), name="mul_inverse"),
         rule(a ** 1, a, name="pow_one"),
         rule(a ** 0, 1, when=Ne(a, 0), name="pow_zero"),
         rule(exp(log(a)), a, when=Ne(a, 0), name="exp_log"),
@@ -52,8 +52,16 @@ def test_refused_blocks_record_nothing():
     P = declare_function("P", NumberKind, NumberKind, returns=NumberKind)
     with pytest.raises(ValueError, match="needs an identity"):
         declare_identities(P, [inverse(a, name="p_inverse")])
-    with pytest.raises(ValueError, match="needs a name="):
-        declare_identities(P, [identity(0)])
+    with pytest.raises(ValueError, match="same name"):
+        declare_identities(P, [identity(0), identity(1)])
+    with pytest.raises(ValueError, match="same name"):
+        declare_identities(P, [identity(0), Equal(P(a, 1), a, name="p_identity")])
     with pytest.raises(ValueError, match="needs a name="):
         declare_identities(P, [Equal(P(a, 0), a)])
     assert identities(P) == []
+
+
+def test_generated_names_and_override():
+    Q = declare_function("Q", NumberKind, NumberKind, returns=NumberKind)
+    made = declare_identities(Q, [identity(0), inverse(Q(a, a), name="q_self")])
+    assert [r.name for r in made] == ["q_identity", "q_self"]

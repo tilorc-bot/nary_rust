@@ -74,8 +74,9 @@ def declare_identities(F, items):
     ``associative`` and ``commutative`` record ``flat(F)`` and
     ``unordered(F)``. ``identity(e)``, ``absorbing(z)`` and ``inverse(i)``
     give the rules ``F(a, e) -> a``, ``F(a, z) -> z`` and ``F(a, i) -> e``
-    (``a`` is ``NumberKind("a")``, ``e`` from the block's ``identity``), each
-    with its ``when=`` and ``name=``, as is each ``Equal``.
+    (``a`` is ``NumberKind("a")``, ``e`` from the block's ``identity``),
+    named ``<function>_<law>`` (``add_identity``) unless given ``name=``. An
+    ``Equal`` needs its ``name=``. Two rules with one name are refused.
     """
     if F in _blocks:
         raise ValueError(f"the identities of {F!r} are already declared")
@@ -86,7 +87,10 @@ def declare_identities(F, items):
     for item in items:
         if not isinstance(item, (Law, Equal)):
             raise TypeError(f"{item!r} cannot be listed")
-        if item.name is None and (isinstance(item, Equal) or item.params):
+        if isinstance(item, Law) and item.params and item.name is None:
+            name = f"{F.name.lower()}_{item.title}"
+            item = Law(item.title, item.statement, item.params, item.args, item.when, name)
+        if isinstance(item, Equal) and item.name is None:
             raise ValueError(f"{item!r} in the block of {F!r} needs a name=")
         if isinstance(item, Equal):
             rules.append(rule(item.lhs, item.rhs, when=item.when, name=item.name))
@@ -102,6 +106,9 @@ def declare_identities(F, items):
             if not units:
                 raise ValueError(f"inverse needs an identity in the block of {F!r}")
             rules.append(rule(F(x, item.args[0]), units[0], when=item.when, name=item.name))
+    names = [r.name for r in rules]
+    if len(set(names)) < len(names):
+        raise ValueError(f"two rules in the block of {F!r} have the same name")
     for fact in facts:
         fact(F)
     _blocks[F] = list(items)

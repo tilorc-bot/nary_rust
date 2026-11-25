@@ -13,7 +13,7 @@ both have the same value (see ``nary.rules``). The Lean statements are
 printed from this file: ``lean/generate_rules.py`` writes them to
 ``lean/Nary/ArithmeticRules/Statements.lean``, and the proofs are written by
 hand in ``lean/Nary/ArithmeticRules.lean``. The name of a rule is the name
-of its theorem, ``Nary.ArithmeticRules.add_zero`` and so on, and every rule
+of its theorem, ``Nary.ArithmeticRules.pow_one`` and so on, and every rule
 here needs one. After changing or adding a rule, run that script and prove
 the new statement; until then ``tests/test_lean.py`` fails (the script was
 not run) or ``lake build`` fails (a statement has no proof that fits).
@@ -26,7 +26,7 @@ not run) or ``lake build`` fails (a statement has no proof that fits).
     (True, True, False)
     >>> a = NumberKind("a")
     >>> [(r, r.erased) for r in rules if r.pattern == a * 0]
-    [(Rule(Mul(a, 0), 0, name='mul_zero'), (a,))]
+    [(Rule(Mul(a, 0), 0, name='mul_absorbing'), (a,))]
 
 ``a ** 0 -> 1`` needs ``Ne(a, 0)`` because ``0**0`` has no value here: there
 is no separate power with a natural-number exponent yet.
@@ -45,16 +45,16 @@ a = NumberKind("a")
 add = declare_identities(Add, [
     associative,
     commutative,
-    identity(0, name="add_zero"),
+    identity(0),
     Equal(a + a, 2 * a, name="add_self"),
-    inverse(Mul(-1, a), name="sub_self"),
+    inverse(Mul(-1, a)),
 ])
 mul = declare_identities(Mul, [
     associative,
     commutative,
-    identity(1, name="mul_one"),
-    absorbing(0, name="mul_zero"),
-    inverse(Pow(a, -1), when=Ne(a, 0), name="div_self"),
+    identity(1),
+    absorbing(0),
+    inverse(Pow(a, -1), when=Ne(a, 0)),
 ])
 power = declare_identities(Pow, [
     Equal(a ** 1, a, name="pow_one"),

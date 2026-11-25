@@ -116,9 +116,9 @@ both have no value or both have the same value. On `Nary.Number` that is
 plain equality, so `nary.lean.to_lean_rule` prints a rule as: for all values
 of the variables, `Nary.Holds <condition>` → each erased variable `≠ none` →
 `<pattern> = <replacement>`. For
-`rule(a / a, 1, when=Ne(a, 0), name="div_self")` it prints
+`rule(a / a, 1, when=Ne(a, 0), name="mul_inverse")` it prints
 
-    abbrev div_self : Prop :=
+    abbrev mul_inverse : Prop :=
       ∀ (a : Nary.Number), Nary.Holds (Nary.Ne a (Nary.lit 0)) → a ≠ none → Nary.Mul [a, Nary.Pow a (Nary.lit (-1))] = Nary.lit 1
 
 A variable of a rule stands for any expression of its kind, including one
@@ -132,10 +132,11 @@ value at some points). `Nary.Holds c` is false where `c` has no value. A
 rule without a condition has no `Nary.Holds` hypothesis, and one that erases
 no variable has no `≠ none` hypothesis.
 
-The name given with `rule(..., name="div_self")` is the name of the
-statement, `Nary.ArithmeticRules.Statement.div_self`, and of its theorem,
-`Nary.ArithmeticRules.div_self`. The namespace keeps them apart from
-Mathlib's `add_zero`, `div_self` and so on. A rule without a name, or whose
+The name of a rule (its `name=`, or `<function>_<law>` for a law listed
+in a block of `nary.identities`, here `mul_inverse`) is the name of the
+statement, `Nary.ArithmeticRules.Statement.mul_inverse`, and of its theorem,
+`Nary.ArithmeticRules.mul_inverse`. The namespace keeps them apart from
+Mathlib's `pow_one`, `pow_zero` and so on. A rule without a name, or whose
 name is not a plain identifier, cannot be printed as a theorem.
 
 The facts are printed as `Nary.Unordered Nary.Add`, `Nary.Flat Nary.Add`
