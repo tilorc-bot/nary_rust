@@ -130,14 +130,17 @@ from ``nary``.
 
 import re as _re
 
-from . import arithmetic, calculus, constants, elementary, logic, relational
+from . import arithmetic, calculus, constants, elementary, identities, logic, relational
 from ._core import Expr
 from .calculus import NumberFunction
 from .functions import is_lambda
 from .kinds import BoolKind, NumberKind
-from .rules import Rule, is_flat, is_unordered
+from .rules import Rule, is_flat, is_unordered, specific_rule
 
-__all__ = ["LEAN_NAMES", "to_lean", "to_lean_example", "to_lean_facts", "to_lean_rule"]
+__all__ = [
+    "LEAN_NAMES", "to_lean", "to_lean_example", "to_lean_facts", "to_lean_identity",
+    "to_lean_rule",
+]
 
 # The Lean definition of each declared function and constant, keyed by the
 # declared object itself. A function is printed as its Lean definition only
@@ -336,6 +339,11 @@ class _Printer:
         needs no parentheses as an argument)."""
         if not isinstance(e, Expr):
             raise TypeError(f"to_lean expects an expression, got {e!r}")
+        if e.is_hole:
+            raise ValueError(
+                f"the hole {e!r} has no Lean definition: an identity with holes is "
+                f"printed with to_lean_identity"
+            )
 
         if e.is_symbol:
             name = self.symbol(e)
@@ -497,3 +505,48 @@ def to_lean_facts(f):
         f"  {lean_fact} {LEAN_NAMES[f]}"
         for fact, lean_fact, recorded in facts if recorded
     ]
+
+
+# The Lean definition of each generic identity, in lean/Nary/Facts.lean. It
+# takes the function, then the parameters of the identity. Nary.Unordered
+# says what commutative says (swapping two arguments generates every
+# reordering), and Nary.Flat what associative says.
+GENERIC_DEFINITIONS = {
+    identities.associative: "Nary.Flat",
+    identities.commutative: "Nary.Unordered",
+    identities.singleton: "Nary.Singleton",
+    identities.identity: "Nary.Identity",
+    identities.idempotent: "Nary.Idempotent",
+    identities.absorbing: "Nary.Absorbing",
+    identities.distributive: "Nary.Distributive",
+}
+
+
+def to_lean_identity(i):
+    """The statement of the identity ``i`` listed for a function (an
+    ``nary.identities.Identity``) as a Lean declaration named after it.
+
+    An instance of a generic identity is the Lean definition of the generic
+    identity (``GENERIC_DEFINITIONS``) applied to the function and the
+    parameters: ``abbrev add_identity : Prop := Nary.Identity Nary.Add
+    (Nary.lit 0)``. A specific identity is stated as the rule it gives
+    (``nary.rules.specific_rule``), with ``to_lean_rule``.
+    """
+    if not isinstance(i, identities.Identity):
+        raise TypeError(f"to_lean_identity expects an Identity, got {i!r}")
+    if i.generic is None:
+        return to_lean_rule(specific_rule(i))
+    if i.generic not in GENERIC_DEFINITIONS:
+        raise _no_definition(i.generic, ": it is not in nary.lean.GENERIC_DEFINITIONS")
+    if i.function not in LEAN_NAMES:
+        raise _not_in_table(i.function)
+    name = _declaration_name(i.name, f"the identity {i!r}")
+    parts = [GENERIC_DEFINITIONS[i.generic], LEAN_NAMES[i.function]]
+    for p in (i.item.args if i.item.head is not None else ()):
+        if _is_declared_function(p):
+            if p not in LEAN_NAMES:
+                raise _not_in_table(p)
+            parts.append(LEAN_NAMES[p])
+        else:
+            parts.append(_Printer().argument(p))
+    return f"abbrev {name} : Prop :=\n  {' '.join(parts)}"

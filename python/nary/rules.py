@@ -82,7 +82,8 @@ from .functions import is_lambda
 from .kinds import BoolKind
 
 __all__ = [
-    "Rule", "flat", "identity_rules", "is_flat", "is_unordered", "rule", "unordered",
+    "Rule", "flat", "identity_rules", "is_flat", "is_unordered", "rule", "specific_rule",
+    "unordered",
 ]
 
 # The declared functions recorded with unordered() and with flat().
@@ -293,6 +294,17 @@ def _to_symbols(e, function):
     return _to_symbols(e.head, function)(*(_to_symbols(arg, function) for arg in e.args))
 
 
+def specific_rule(i):
+    """The rule ``lhs -> rhs`` (where ``when`` holds) of the specific
+    identity ``i``, an ``nary.identities.Identity``, with its holes as
+    symbols and the name of the identity."""
+    if i.generic is not None:
+        raise ValueError(f"{i!r} is an instance of a generic identity, not a specific one")
+    when = None if i.when is None else _to_symbols(i.when, i.function)
+    return Rule(_to_symbols(i.lhs, i.function), _to_symbols(i.rhs, i.function),
+                when=when, name=i.name)
+
+
 def identity_rules(f):
     """The rewrite rules that the identities listed for ``f`` (see
     ``nary.identities``) give the engine, in the order listed, each named
@@ -316,9 +328,7 @@ def identity_rules(f):
     rules = []
     for i in block:
         if i.generic is None:
-            rules.append(Rule(_to_symbols(i.lhs, f), _to_symbols(i.rhs, f),
-                              when=None if i.when is None else _to_symbols(i.when, f),
-                              name=i.name))
+            rules.append(specific_rule(i))
             continue
         a = position("a") if isinstance(position, Kind) else None
         if i.generic is _identities.identity and single:
