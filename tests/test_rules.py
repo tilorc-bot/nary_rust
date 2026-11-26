@@ -1,6 +1,6 @@
 import nary.arithmetic_rules
 import pytest
-from nary import Add, BoolKind, Lambda, Mul, Ne, NumberKind, Pow, declare_function
+from nary import Add, BoolKind, Lambda, Many, Mul, Ne, NumberKind, Pow, declare_function
 from nary.logic import And, true
 from nary.rules import flat, is_flat, is_unordered, rule, unordered
 
@@ -44,6 +44,9 @@ def test_refusals():
         rule(Ne(a, 0), BoolKind("a"))
     with pytest.raises(ValueError, match="cannot contain a Lambda yet"):
         rule(Lambda(b, b)(a), a)
+    rest, more = Many(NumberKind)("rest"), Many(NumberKind)("more")
+    with pytest.raises(ValueError, match="can have one run variable"):
+        rule(Add(rest, a, more), a)
     with pytest.raises(ValueError, match="already recorded as unordered"):
         unordered(Add)
     with pytest.raises(ValueError, match="arguments all have one kind"):
@@ -52,3 +55,9 @@ def test_refusals():
         flat(Pow)
     with pytest.raises(TypeError, match="expects a declared function, got a"):
         is_flat(a)
+
+
+def test_run_variable():
+    rest = Many(NumberKind)("rest")
+    r = rule(Mul(0, rest), 0)
+    assert r.variables == (rest,) and r.erased == (rest,)

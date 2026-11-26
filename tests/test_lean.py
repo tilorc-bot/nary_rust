@@ -68,6 +68,18 @@ def test_to_lean_rule():
     )
 
 
+def test_run_variables():
+    rest, more = nr.Many(nr.NumberKind)("rest"), nr.Many(nr.NumberKind)("more")
+    r = rule(nr.sin(nr.Add(x, rest, nr.Mul(more, y))), nr.sin(nr.Add(rest)), name="run")
+    assert to_lean_rule(r) == (
+        "abbrev run : Prop :=\n  ∀ (x y : Nary.Number) (rest more : List Nary.Number), "
+        "x ≠ none → (∀ x ∈ more, x ≠ none) → y ≠ none → "
+        "Nary.sin (Nary.Add ([x] ++ rest ++ [Nary.Mul (more ++ [y])])) = Nary.sin (Nary.Add rest)"
+    )
+    with pytest.raises(ValueError, match="only symbols of NumberKind"):
+        to_lean(nr.Add(x, rest))
+
+
 def test_to_lean_rule_refused():
     with pytest.raises(ValueError, match="has no name"):
         to_lean_rule(rule(x + 0, x))
@@ -80,10 +92,10 @@ def test_generated_lean_file_is_current():
     spec = importlib.util.spec_from_file_location("generate_rules", script)
     generate = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(generate)
-    assert generate.PATH.read_text(encoding="utf-8") == generate.render(), (
-        "lean/Nary/ArithmeticRules/Statements.lean is out of date: run "
-        ".venv/bin/python lean/generate_rules.py, then prove any new statement"
-    )
+    for path, text in generate.render().items():
+        assert path.exists() and path.read_text(encoding="utf-8") == text, (
+            f"{path} is out of date: run .venv/bin/python lean/generate_rules.py"
+        )
 
 
 LEAN = Path(__file__).resolve().parents[1] / "lean"

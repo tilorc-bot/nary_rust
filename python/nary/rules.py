@@ -23,6 +23,13 @@ A rule can have a name.
     >>> rule(Not(Not(p)), p, name="double negation")
     Rule(Not(Not(p)), p, name='double negation')
 
+A run variable stands for any number of arguments.
+
+    >>> from nary import Add, Many
+    >>> rest = Many(NumberKind)("rest")
+    >>> rule(Add(a, 0, rest), Add(a, rest)).variables
+    (a, rest)
+
 Every symbol of the replacement must be in the pattern.
 
     >>> rule(a + 0, a + NumberKind("b"))
@@ -36,7 +43,7 @@ from ._core import Expr, Kind
 from .functions import is_lambda
 from .kinds import BoolKind, Many
 
-__all__ = ["Rule", "flat", "is_flat", "is_unordered", "rule", "unordered"]
+__all__ = ["Rule", "flat", "is_flat", "is_run", "is_unordered", "rule", "unordered"]
 
 _unordered = set()
 _flat = set()
@@ -93,6 +100,9 @@ class Rule:
         if name is not None and not isinstance(name, str):
             raise TypeError(f"the name of a rule must be a str or None, got {name!r}")
 
+        for sub in _subexpressions(pattern):
+            if sub.head is not None and sum(map(is_run, sub.args)) > 1:
+                raise ValueError(f"an argument list of a pattern can have one run variable, got {sub!r}")
         variables = _symbols(pattern)
         in_replacement = _symbols(replacement)
         in_condition = _symbols(when) if when is not None else []
@@ -130,6 +140,10 @@ class Rule:
         if self.name is not None:
             parts.append(f"name={self.name!r}")
         return f"Rule({', '.join(parts)})"
+
+
+def is_run(e):
+    return e.is_symbol and e.kind.family is Many
 
 
 def rule(pattern, replacement, when=None, name=None):

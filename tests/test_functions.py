@@ -91,10 +91,11 @@ def test_a_run_variable_is_a_symbol_of_a_run_kind():
     assert (Shift(x, y, 1).by, Shift(x, y, 1).values) == (x, (y, NumberKind(1)))
 
 
-def test_a_run_variable_is_not_an_argument():
+def test_a_run_variable_is_an_argument_only_at_a_run_position():
     terms = Many(NumberKind)("terms")
-    with pytest.raises(TypeError, match=r"^Add expects NumberKind, got Many\(NumberKind\): terms$"):
-        nr.Add(x, terms)
+    assert nr.Add(x, terms).args == (x, terms) and nr.Add(terms).args == (terms,)
+    with pytest.raises(TypeError, match=r"^Add expects NumberKind, got Many\(BoolKind\): p$"):
+        nr.Add(x, Many(BoolKind)("p"))
     with pytest.raises(TypeError, match=r"^Ne expects NumberKind, got Many\(NumberKind\): terms$"):
         nr.Ne(terms, 0)
 

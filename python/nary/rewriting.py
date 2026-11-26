@@ -1,8 +1,9 @@
 """rewrite applies the rules until none applies.
 
-    >>> from nary import NumberKind, log, sin
+    >>> from nary import Add, Gt, Many, Ne, NumberKind, log, pi, sin
     >>> from nary.arithmetic_rules import rules
-    >>> from nary.rewriting import rewrite
+    >>> from nary.rewriting import beta, has_a_value, holds, rewrite
+    >>> from nary.rules import rule
     >>> x, y = NumberKind("x"), NumberKind("y")
     >>> rewrite((x + 0) * 1 + y * 0, rules)
     x
@@ -19,46 +20,149 @@ It does not apply when the erased part may have no value.
 
 A condition holds when known returns True for it.
 
-    >>> rewrite(x / x, rules), rewrite(x / x, rules, known=lambda c: True)
+    >>> rewrite(x / x, rules), rewrite(x / x, rules, known=lambda c: c == Ne(x, 0))
     (Mul(x, Pow(x, -1)), 1)
+
+A run variable matches the arguments that are left, at any depth.
+
+    >>> a, rest = NumberKind("a"), Many(NumberKind)("rest")
+    >>> period = rule(sin(Add(a, 2 * pi, rest)), sin(Add(a, rest)))
+    >>> rewrite(sin(Add(y, 2 * pi, x)) + 1, [period])
+    Add(sin(Add(y, x)), 1)
+
+A normal form is applied at each node before the rules.
+
+    >>> rewrite(sin(x + 0), rules, normal=lambda e, known: x if e == x + 0 else e)
+    sin(x)
+
+holds also follows implications from known facts.
+
+    >>> holds(Ne(x, 0), lambda c: c == Gt(x, 0)), has_a_value(log(x), None)
+    (True, False)
+
+beta puts the argument of a lambda in place of its variable.
+
+    >>> from nary import Lambda
+    >>> beta(Lambda(y, y + 1)(x))
+    Add(x, 1)
 """
 
 from ._core import Expr
 from .domains import domain_of
 from .functions import is_lambda
-from .logic import true
-from .rules import is_flat, is_unordered
+from .kinds import NumberKind
+from .logic import And, Or, true
+from .relational import Eq, Ge, Gt, Le, Lt, Ne, re
+from ._identities import Law, identities
+from .rules import _is_declared_function, is_flat, is_run, is_unordered
 
-__all__ = ["rewrite"]
+__all__ = ["beta", "has_a_value", "holds", "implications", "rewrite"]
+
+a, b = NumberKind("a"), NumberKind("b")
+
+implications = [
+    (Gt(a, b), Ne(a, b)),
+    (Lt(a, b), Ne(a, b)),
+    (Gt(b, a), Ne(a, b)),
+    (Lt(b, a), Ne(a, b)),
+    (Ne(b, a), Ne(a, b)),
+    (Gt(a, 0), Ge(a, 0)),
+    (Lt(a, 0), Le(a, 0)),
+    (Gt(a, 0), Eq(re(a), a)),
+    (Lt(a, 0), Eq(re(a), a)),
+    (Ge(a, 0), Eq(re(a), a)),
+    (Le(a, 0), Eq(re(a), a)),
+    (Gt(re(a), 0), Ne(a, 0)),
+    (Lt(re(a), 0), Ne(a, 0)),
+]
 
 
-def rewrite(e, rules, known=None):
+def rewrite(e, rules, known=None, normal=None):
     if not isinstance(e, Expr):
         raise TypeError(f"rewrite expects an expression, got {e!r}")
-    return _rewrite(e, tuple(rules), known or (lambda condition: False))
+    return _Rewriting(tuple(rules), known, normal, 1).rewrite(e)
 
 
-def _rewrite(e, rules, known):
-    if e.head is None or is_lambda(e):
+def holds(c, known=None, depth=2):
+    if c == true or (known is not None and known(c) is True):
+        return True
+    if c.head == And:
+        return all(holds(arg, known, depth) for arg in c.args)
+    if c.head == Or:
+        return any(holds(arg, known, depth) for arg in c.args)
+    return depth > 0 and any(
+        holds(_substitute(premise, bindings), known, depth - 1)
+        for premise, conclusion in implications for bindings in _match(conclusion, c, {})
+    )
+
+
+def has_a_value(e, known=None):
+    if e.is_symbol or e.is_literal or e.is_constant:
+        return True
+    if not _is_declared_function(e.head):
+        return False
+    condition = domain_of(e)
+    if condition is None:
+        return False
+    return all(has_a_value(arg, known) for arg in e.args) and holds(condition, known)
+
+
+def beta(e):
+    if e.head is None or not is_lambda(e.head):
         return e
-    head = _rewrite(e.head, rules, known)
-    args = tuple(_rewrite(arg, rules, known) for arg in e.args)
-    if head != e.head or args != e.args:
-        e = head(*args)
-    flat_e = _flatten(e)
-    for rule in rules:
-        result = _apply(rule, flat_e, known)
-        if result is not None and result != flat_e:
-            return _rewrite(result, rules, known)
-    return e
+    *variables, body = e.head.args
+    stack = [body]
+    while stack:
+        sub = stack.pop()
+        if is_lambda(sub):
+            return e
+        if sub.head is not None:
+            stack.extend((sub.head, *sub.args))
+    return _substitute(body, dict(zip(variables, e.args)))
+
+
+class _Rewriting:
+    def __init__(self, rules, known, normal, depth):
+        self.rules, self.known, self.normal, self.done = rules, known, normal, {}
+        self.inner = _Rewriting(rules, known, normal, depth - 1) if depth else None
+
+    def ask(self, c):
+        if self.known is not None and self.known(c) is True:
+            return True
+        return self.inner is not None and self.inner.rewrite(c) == true
+
+    def rewrite(self, e):
+        if e not in self.done:
+            self.done[e] = e
+            self.done[e] = self._rewrite(e)
+        return self.done[e]
+
+    def _rewrite(self, e):
+        if e.head is None or is_lambda(e):
+            return e
+        head = self.rewrite(e.head)
+        args = tuple(map(self.rewrite, e.args))
+        if head != e.head or args != e.args:
+            e = _flatten(head(*args))
+        if self.normal is not None:
+            result = self.normal(e, self.ask)
+            if result != e:
+                return self.rewrite(result)
+        flat_e = _flatten(e)
+        for rule in self.rules:
+            result = _apply(rule, flat_e, self.ask)
+            if result is not None and result != flat_e:
+                return self.rewrite(result)
+        return e
 
 
 def _apply(rule, e, known):
     for bindings, used in _match_top(rule.pattern, e):
         condition = rule.condition
-        if condition is not None and not _holds(_substitute(condition, bindings), known):
+        if condition is not None and not holds(_substitute(condition, bindings), known):
             continue
-        if not all(_has_a_value(bindings[v], known) for v in rule.erased):
+        erased = (bindings[v] if is_run(v) else (bindings[v],) for v in rule.erased)
+        if not all(has_a_value(arg, known) for args in erased for arg in args):
             continue
         replacement = _substitute(rule.replacement, bindings)
         if used is None:
@@ -70,43 +174,25 @@ def _apply(rule, e, known):
     return None
 
 
-def _holds(condition, known):
-    return condition == true or known(condition) is True
-
-
-def _has_a_value(e, known):
-    if e.is_symbol or e.is_literal or e.is_constant:
-        return True
-    if not _is_declared(e.head):
-        return False
-    condition = domain_of(e)
-    if condition is None:
-        return False
-    return all(_has_a_value(arg, known) for arg in e.args) and _holds(condition, known)
-
-
 def _flatten(e):
-    if not (_is_declared(e.head) and is_flat(e.head)):
-        return e
-    if not any(arg.head == e.head for arg in e.args):
+    if not (_is_declared_function(e.head) and is_flat(e.head)):
         return e
     args = []
     for arg in e.args:
         args.extend(arg.args if arg.head == e.head else (arg,))
-    return e.head(*args)
-
-
-def _is_declared(head):
-    return head is not None and head.is_constant
+    unit = _unit(e.head)
+    if unit is not None and len(args) < 2:
+        return args[0] if args else unit
+    return e if args == list(e.args) else e.head(*args)
 
 
 def _match_top(pattern, e):
     head = pattern.head
-    if not (_is_declared(head) and is_unordered(head) and is_flat(head)):
+    if any(map(is_run, pattern.args)) or e.head != head or len(e.args) < len(pattern.args) or not (
+        is_unordered(head) and is_flat(head)
+    ):
         for bindings in _match(pattern, e, {}):
             yield bindings, None
-        return
-    if e.head != head:
         return
     for bindings, used in _match_unordered(pattern.args, e.args, {}, ()):
         if len(used) == len(e.args):
@@ -126,14 +212,49 @@ def _match(pattern, e, bindings):
     elif pattern.head is None:
         if pattern == e:
             yield bindings
+    elif e.head != pattern.head and _unit(pattern.head) is not None:
+        fixed = [p for p in pattern.args if not is_run(p)]
+        if len(fixed) == 1:
+            for new in _match(fixed[0], e, bindings):
+                yield from _bind_runs([p for p in pattern.args if is_run(p)], new)
     elif e.head is not None:
         for with_head in _match(pattern.head, e.head, bindings):
-            if _is_declared(pattern.head) and is_unordered(pattern.head):
-                for new, used in _match_unordered(pattern.args, e.args, with_head, ()):
-                    if len(used) == len(e.args):
-                        yield new
-            elif len(pattern.args) == len(e.args):
-                yield from _match_in_order(pattern.args, e.args, with_head)
+            yield from _match_args(pattern, e.args, with_head)
+
+
+def _unit(head):
+    if not (_is_declared_function(head) and is_flat(head)):
+        return None
+    units = [law.args[0] for law in identities(head) if isinstance(law, Law) and law.title == "identity"]
+    if not units:
+        return None
+    return units[0] if isinstance(units[0], Expr) else head.kind.output(units[0])
+
+
+def _match_args(pattern, args, bindings):
+    runs = [p for p in pattern.args if is_run(p)]
+    fixed = [p for p in pattern.args if not is_run(p)]
+    if _is_declared_function(pattern.head) and is_unordered(pattern.head):
+        for new, used in _match_unordered(fixed, args, bindings, ()):
+            yield from _bind_run(runs, tuple(a for i, a in enumerate(args) if i not in used), new)
+    elif len(fixed) <= len(args) and (runs or len(fixed) == len(args)):
+        start = pattern.args.index(runs[0]) if runs else len(args)
+        end = start + len(args) - len(fixed)
+        for new in _match_in_order(fixed, args[:start] + args[end:], bindings):
+            yield from _bind_run(runs, args[start:end], new)
+
+
+def _bind_runs(runs, bindings):
+    if all(bindings.get(run, ()) == () for run in runs):
+        yield {**bindings, **{run: () for run in runs}}
+
+
+def _bind_run(runs, rest, bindings):
+    if not runs:
+        if not rest:
+            yield bindings
+    elif bindings.get(runs[0], rest) == rest:
+        yield {**bindings, runs[0]: rest}
 
 
 def _match_in_order(patterns, args, bindings):
@@ -159,4 +280,7 @@ def _substitute(e, bindings):
         return bindings.get(e, e)
     if e.head is None:
         return e
-    return _substitute(e.head, bindings)(*(_substitute(arg, bindings) for arg in e.args))
+    args = []
+    for arg in e.args:
+        args.extend(bindings.get(arg, (arg,)) if is_run(arg) else (_substitute(arg, bindings),))
+    return _flatten(_substitute(e.head, bindings)(*args))

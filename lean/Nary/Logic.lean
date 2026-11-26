@@ -51,4 +51,18 @@ def Or (args : List Boolean) : Boolean :=
   else if none ∈ args then none
   else some False
 
+theorem holds_and (ps : List Boolean) : Holds (And ps) ↔ ∀ p ∈ ps, Holds p := by
+  unfold And
+  split_ifs with h₁ h₂
+  · obtain ⟨p, hp, hn⟩ := h₁
+    simp only [Holds, false_iff, not_forall]
+    exact ⟨some p, hp, hn⟩
+  · simp only [Holds, false_iff, not_forall]
+    exact ⟨none, h₂, id⟩
+  · simp only [Holds, true_iff]
+    intro q hq
+    cases q with
+    | none => exact absurd hq h₂
+    | some p => by_contra hn; exact h₁ ⟨p, hq, hn⟩
+
 end Nary

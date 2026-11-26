@@ -8,12 +8,12 @@
 """
 
 from ._core import FunctionKind, declare_kind
-from .kinds import Many, NumberKind
+from .kinds import Many
 from .rules import flat, rule, unordered
 
 __all__ = [
     "Equal", "absorbing", "associative", "commutative", "declare_identities",
-    "identities", "identity", "inverse",
+    "idempotent", "identities", "identity", "inverse",
 ]
 
 
@@ -65,6 +65,7 @@ commutative = Law("commutative", Equal(f(s, a, t, b, u), f(s, b, t, a, u)))
 identity = Law("identity", Equal(f(s, e, t), f(s, t)), (e,))
 absorbing = Law("absorbing", Equal(f(s, z, t), z), (z,))
 inverse = Law("inverse", Equal(f(a, i), e), (i,))
+idempotent = Law("idempotent", Equal(f(s, a, t, a, u), f(s, a, t, u)))
 
 _blocks = {}
 
@@ -82,12 +83,12 @@ def declare_identities(F, items):
         raise ValueError(f"the identities of {F!r} are already declared")
     laws = [item for item in items if isinstance(item, Law)]
     units = [law.args[0] for law in laws if law.title == "identity"]
-    x = NumberKind("a")
+    x = F.kind.output("a")
     rules, facts = [], []
     for item in items:
         if not isinstance(item, (Law, Equal)):
             raise TypeError(f"{item!r} cannot be listed")
-        if isinstance(item, Law) and item.params and item.name is None:
+        if isinstance(item, Law) and item.name is None:
             name = f"{F.name.lower()}_{item.title}"
             item = Law(item.title, item.statement, item.params, item.args, item.when, name)
         if isinstance(item, Equal) and item.name is None:
@@ -102,6 +103,8 @@ def declare_identities(F, items):
             rules.append(rule(F(x, item.args[0]), x, when=item.when, name=item.name))
         elif item.title == "absorbing":
             rules.append(rule(F(x, item.args[0]), item.args[0], when=item.when, name=item.name))
+        elif item.title == "idempotent":
+            rules.append(rule(F(x, x), x, when=item.when, name=item.name))
         elif item.title == "inverse":
             if not units:
                 raise ValueError(f"inverse needs an identity in the block of {F!r}")

@@ -28,8 +28,77 @@ abbrev pow_one : Prop :=
 abbrev pow_zero : Prop :=
   ∀ (a : Nary.Number), Nary.Holds (Nary.Ne a (Nary.lit 0)) → a ≠ none → Nary.Pow a (Nary.lit 0) = Nary.lit 1
 
+abbrev one_pow : Prop :=
+  ∀ (a : Nary.Number), a ≠ none → Nary.Pow (Nary.lit 1) a = Nary.lit 1
+
+abbrev zero_pow : Prop :=
+  ∀ (a : Nary.Number), Nary.Holds (Nary.Gt (Nary.re a) (Nary.lit 0)) → a ≠ none → Nary.Pow (Nary.lit 0) a = Nary.lit 0
+
+abbrev pow_e : Prop :=
+  ∀ (a : Nary.Number), Nary.Pow Nary.E a = Nary.exp a
+
+abbrev pow_pow : Prop :=
+  ∀ (a b c : Nary.Number), Nary.Holds (Nary.And [Nary.Gt a (Nary.lit 0), Nary.Eq (Nary.re b) b]) → Nary.Pow (Nary.Pow a b) c = Nary.Pow a (Nary.Mul [b, c])
+
+abbrev pow_complex : Prop :=
+  ∀ (a b : Nary.Number), Nary.Holds (Nary.And [Nary.Ne a (Nary.lit 0), Nary.Ne (Nary.re b) b]) → Nary.Pow a b = Nary.exp (Nary.Mul [b, Nary.log a])
+
+abbrev pow_positive_factor : Prop :=
+  ∀ (a c b : Nary.Number) (rest : List Nary.Number), Nary.Holds (Nary.Gt a (Nary.lit 0)) → Nary.Pow (Nary.Mul ([a, c] ++ rest)) b = Nary.Mul [Nary.Pow a b, Nary.Pow (Nary.Mul ([c] ++ rest)) b]
+
 abbrev exp_log : Prop :=
   ∀ (a : Nary.Number), Nary.Holds (Nary.Ne a (Nary.lit 0)) → Nary.exp (Nary.log a) = a
+
+abbrev exp_log_power : Prop :=
+  ∀ (a : Nary.Number) (cs : List Nary.Number), Nary.Holds (Nary.And [Nary.Ne a (Nary.lit 0), Nary.Eq (Nary.re (Nary.Mul cs)) (Nary.Mul cs)]) → Nary.exp (Nary.Mul ([Nary.log a] ++ cs)) = Nary.Pow a (Nary.Mul cs)
+
+abbrev exp_zero : Prop :=
+  Nary.exp (Nary.lit 0) = Nary.lit 1
+
+abbrev exp_one : Prop :=
+  Nary.exp (Nary.lit 1) = Nary.E
+
+abbrev exp_product : Prop :=
+  ∀ (a b : Nary.Number), Nary.Mul [Nary.exp a, Nary.exp b] = Nary.exp (Nary.Add [a, b])
+
+abbrev exp_pow : Prop :=
+  ∀ (a b : Nary.Number), Nary.Holds (Nary.Eq (Nary.re a) a) → Nary.Pow (Nary.exp a) b = Nary.exp (Nary.Mul [a, b])
+
+abbrev exp_period_down : Prop :=
+  ∀ (cs rest : List Nary.Number), Nary.Holds (Nary.Gt (Nary.Mul cs) (Nary.lit 1)) → Nary.exp (Nary.Add ([Nary.Mul ([Nary.I, Nary.pi] ++ cs)] ++ rest)) = Nary.exp (Nary.Add ([Nary.Mul [Nary.Add [Nary.Mul cs, Nary.Mul [Nary.lit (-1), Nary.lit 2]], Nary.I, Nary.pi]] ++ rest))
+
+abbrev exp_period_up : Prop :=
+  ∀ (cs rest : List Nary.Number), Nary.Holds (Nary.Le (Nary.Mul cs) (Nary.lit (-1))) → Nary.exp (Nary.Add ([Nary.Mul ([Nary.I, Nary.pi] ++ cs)] ++ rest)) = Nary.exp (Nary.Add ([Nary.Mul [Nary.Add [Nary.Mul cs, Nary.lit 2], Nary.I, Nary.pi]] ++ rest))
+
+abbrev exp_i_pi : Prop :=
+  ∀ (rest : List Nary.Number), Nary.exp (Nary.Add ([Nary.Mul [Nary.I, Nary.pi]] ++ rest)) = Nary.Mul [Nary.lit (-1), Nary.exp (Nary.Add rest)]
+
+abbrev exp_half_i_pi : Prop :=
+  ∀ (rest : List Nary.Number), Nary.exp (Nary.Add ([Nary.Mul [Nary.Pow (Nary.lit 2) (Nary.lit (-1)), Nary.I, Nary.pi]] ++ rest)) = Nary.Mul [Nary.I, Nary.exp (Nary.Add rest)]
+
+abbrev exp_minus_half_i_pi : Prop :=
+  ∀ (rest : List Nary.Number), Nary.exp (Nary.Add ([Nary.Mul [Nary.lit (-1), Nary.Pow (Nary.lit 2) (Nary.lit (-1)), Nary.I, Nary.pi]] ++ rest)) = Nary.Mul [Nary.Mul [Nary.lit (-1), Nary.I], Nary.exp (Nary.Add rest)]
+
+abbrev log_one : Prop :=
+  Nary.log (Nary.lit 1) = Nary.lit 0
+
+abbrev log_e : Prop :=
+  Nary.log Nary.E = Nary.lit 1
+
+abbrev log_exp : Prop :=
+  ∀ (a : Nary.Number), Nary.Holds (Nary.Eq (Nary.re a) a) → Nary.log (Nary.exp a) = a
+
+abbrev log_negative : Prop :=
+  ∀ (a : Nary.Number), Nary.Holds (Nary.Lt a (Nary.lit 0)) → Nary.log a = Nary.Add [Nary.log (Nary.Mul [Nary.lit (-1), a]), Nary.Mul [Nary.I, Nary.pi]]
+
+abbrev log_negative_product : Prop :=
+  ∀ (a : Nary.Number), Nary.Holds (Nary.Gt a (Nary.lit 0)) → Nary.log (Nary.Mul [Nary.lit (-1), a]) = Nary.Add [Nary.log a, Nary.Mul [Nary.I, Nary.pi]]
+
+abbrev log_i : Prop :=
+  Nary.log Nary.I = Nary.Mul [Nary.Pow (Nary.lit 2) (Nary.lit (-1)), Nary.I, Nary.pi]
+
+abbrev log_pow : Prop :=
+  ∀ (a b : Nary.Number), Nary.Holds (Nary.And [Nary.Gt a (Nary.lit 0), Nary.Eq (Nary.re b) b]) → Nary.log (Nary.Pow a b) = Nary.Mul [b, Nary.log a]
 
 abbrev add_unordered : Prop :=
   Nary.Unordered Nary.Add
@@ -44,22 +113,3 @@ abbrev mul_flat : Prop :=
   Nary.Flat Nary.Mul
 
 end Nary.ArithmeticRules.Statement
-
-namespace Nary.ArithmeticRules
-
-structure Proved : Prop where
-  add_identity : Statement.add_identity
-  add_self : Statement.add_self
-  add_inverse : Statement.add_inverse
-  mul_identity : Statement.mul_identity
-  mul_absorbing : Statement.mul_absorbing
-  mul_inverse : Statement.mul_inverse
-  pow_one : Statement.pow_one
-  pow_zero : Statement.pow_zero
-  exp_log : Statement.exp_log
-  add_unordered : Statement.add_unordered
-  add_flat : Statement.add_flat
-  mul_unordered : Statement.mul_unordered
-  mul_flat : Statement.mul_flat
-
-end Nary.ArithmeticRules

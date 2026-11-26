@@ -1,10 +1,25 @@
+from importlib import import_module
 from pathlib import Path
 
 from nary import Add, Mul
-from nary.arithmetic_rules import rules
 from nary.lean import to_lean_facts, to_lean_rule
+from nary.logic import And, Or
 
-PATH = Path(__file__).resolve().parent / "Nary" / "ArithmeticRules" / "Statements.lean"
+NARY = Path(__file__).resolve().parent / "Nary"
+
+SOURCES = {
+    "ArithmeticRules": ("nary.arithmetic_rules", "rules", (Add, Mul)),
+    "ElementaryRules": ("nary.elementary_rules", "rules", ()),
+    "LogicRules": ("nary.logic_rules", "rules", (And, Or)),
+    "Normal": ("nary.normal", "laws", ()),
+    "Expand": ("nary.strategies", "expand", ()),
+    "ExpandLog": ("nary.strategies", "expand_log", ()),
+    "Logcombine": ("nary.strategies", "logcombine", ()),
+    "ExpandTrig": ("nary.strategies", "expand_trig", ()),
+    "Trigsimp": ("nary.strategies", "trigsimp", ()),
+    "Together": ("nary.strategies", "together", ()),
+    "Powsimp": ("nary.strategies", "powsimp", ()),
+}
 
 HEADER = """\
 import Nary.Calculus
@@ -13,23 +28,30 @@ import Nary.Logic
 """
 
 
-def render():
+def render_one(name, module, attribute, functions):
+    rules = getattr(import_module(module), attribute)
     declarations = [to_lean_rule(r) for r in rules]
-    declarations += [d for f in (Add, Mul) for d in to_lean_facts(f)]
+    declarations += [d for f in functions for d in to_lean_facts(f)]
     names = [d.split("abbrev ", 1)[1].split()[0] for d in declarations]
     duplicates = sorted({n for n in names if names.count(n) > 1})
     if duplicates:
-        raise ValueError(f"two statements have the same name: {', '.join(duplicates)}")
-    fields = "".join(f"\n  {name} : Statement.{name}" for name in names)
+        raise ValueError(f"two statements in {module} have the same name: {', '.join(duplicates)}")
     return (
-        f"{HEADER}\nnamespace Nary.ArithmeticRules.Statement\n\n"
+        f"{HEADER}\nnamespace Nary.{name}.Statement\n\n"
         + "\n\n".join(declarations)
-        + "\n\nend Nary.ArithmeticRules.Statement\n\nnamespace Nary.ArithmeticRules\n\n"
-        f"structure Proved : Prop where{fields}\n\nend Nary.ArithmeticRules\n"
+        + f"\n\nend Nary.{name}.Statement\n"
     )
 
 
+def render():
+    return {
+        NARY / name / "Statements.lean": render_one(name, *source)
+        for name, source in SOURCES.items()
+    }
+
+
 if __name__ == "__main__":
-    PATH.parent.mkdir(exist_ok=True)
-    PATH.write_text(render(), encoding="utf-8")
-    print(f"wrote {PATH}")
+    for path, text in render().items():
+        path.parent.mkdir(exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        print(f"wrote {path}")
