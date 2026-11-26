@@ -25,7 +25,7 @@ def test_integral_of_a_lambda_a_declared_and_an_unknown_function():
     square = Lambda(x, x * x)
     for integrand in (square, sin, f):
         integral = Integral(integrand, a, b)
-        assert integral.function == integrand
+        assert integral.integrand == integrand
         assert (integral.lower, integral.upper) == (a, b)
     assert repr(Integral(square, a, b)) == "Integral(Lambda(x, Mul(x, x)), a, b)"
 
@@ -35,7 +35,7 @@ def test_derivative_at_a_point_and_second_derivative():
     assert repr(at_a) == "Derivative(f)(a)"
     assert at_a.head == Derivative(f) and at_a.kind is NumberKind
     second = Derivative(Derivative(f))
-    assert second.arg == Derivative(f)
+    assert second.function == Derivative(f)
     assert second.kind is NumberFunction
 
 

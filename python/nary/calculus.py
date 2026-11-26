@@ -9,7 +9,7 @@
 
 The arguments are named, and the result is a number.
 
-    >>> Integral(sin, a, b).function, Integral(f, a, b).kind
+    >>> Integral(sin, a, b).integrand, Integral(f, a, b).kind
     (sin, NumberKind)
 
 Derivative(f) is a function, so it can be applied or differentiated again.
@@ -47,12 +47,13 @@ __all__ = [
 
 NumberFunction = FunctionKind((NumberKind,), NumberKind)
 
-function, arg = NumberFunction("function"), NumberFunction("arg")
+integrand, summand = NumberFunction("integrand"), NumberFunction("summand")
+factor, function = NumberFunction("factor"), NumberFunction("function")
 lower, upper, point = NumberKind("lower"), NumberKind("upper"), NumberKind("point")
 
-Integral = declare_function("Integral", function, lower, upper, returns=NumberKind, domain=None)
-Sum = declare_function("Sum", function, lower, upper, returns=NumberKind, domain=None)
-Product = declare_function("Product", function, lower, upper, returns=NumberKind, domain=None)
+Integral = declare_function("Integral", integrand, lower, upper, returns=NumberKind, domain=None)
+Sum = declare_function("Sum", summand, lower, upper, returns=NumberKind, domain=None)
+Product = declare_function("Product", factor, lower, upper, returns=NumberKind, domain=None)
 Limit = declare_function("Limit", function, point, returns=NumberKind, domain=None)
-Derivative = declare_function("Derivative", arg, returns=NumberFunction, domain=true)
-Antiderivative = declare_function("Antiderivative", arg, returns=NumberFunction, domain=true)
+Derivative = declare_function("Derivative", function, returns=NumberFunction, domain=true)
+Antiderivative = declare_function("Antiderivative", function, returns=NumberFunction, domain=true)
