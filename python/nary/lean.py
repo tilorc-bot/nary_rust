@@ -59,7 +59,7 @@ from . import arithmetic, calculus, constants, elementary, logic, relational
 from ._core import Expr
 from .calculus import NumberFunction
 from .functions import is_lambda
-from .kinds import BoolKind, NumberKind
+from .kinds import BoolKind, Many, NumberKind
 from .rules import Rule, is_flat, is_unordered
 
 __all__ = ["LEAN_NAMES", "to_lean", "to_lean_example", "to_lean_facts", "to_lean_rule"]
@@ -274,9 +274,11 @@ class _Printer:
             if head not in LEAN_NAMES:
                 raise _not_in_table(head)
             name = LEAN_NAMES[head]
-            fixed = len(head.kind.inputs)
+            inputs = head.kind.inputs
+            run = bool(inputs) and inputs[-1].family is Many
+            fixed = len(inputs) - run
             parts = [name] + [self.argument(a) for a in e.args[:fixed]]
-            if head.kind.rest is not None:
+            if run:
                 rest = ", ".join(self.print(a)[0] for a in e.args[fixed:])
                 parts.append(f"[{rest}]")
             if len(parts) == 1:
@@ -345,7 +347,7 @@ def to_lean_rule(r):
 def to_lean_facts(f):
     if not _is_declared_function(f) or f not in LEAN_NAMES:
         raise _not_in_table(f)
-    if f.kind.inputs or f.kind.rest is None:
+    if len(f.kind.inputs) != 1 or f.kind.inputs[0].family is not Many:
         raise ValueError(
             f"the facts about {f!r} cannot be stated in Lean: Nary.Unordered and "
             f"Nary.Flat are defined only for a function that takes a list"

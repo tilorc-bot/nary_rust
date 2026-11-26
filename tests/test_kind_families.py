@@ -103,7 +103,7 @@ def test_an_instantiated_kind_in_signatures():
     assert repr(p) == "Piece(x, Lt(x, y))"
     assert (p.expr, p.condition) == (x, x < y)
     Matrix = MatrixKind(NumberKind)
-    MatAdd = declare_function("MatAdd", rest=Matrix, returns=Matrix, domain=true)
+    MatAdd = declare_function("MatAdd", nr.Many(Matrix), returns=Matrix, domain=true)
     Trace = declare_function("Trace", Matrix, returns=NumberKind, domain=true)
     First = declare_function("First", Pair, returns=NumberKind, domain=true)
     A, B = Matrix("A"), Matrix("B")
@@ -116,14 +116,13 @@ def test_an_instantiated_kind_in_signatures():
 
 def test_a_function_shows_what_was_declared():
     Matrix = MatrixKind(NumberKind)
-    MatAdd = declare_function("MatAdd", Matrix, rest=Matrix, returns=Matrix, domain=true)
+    MatAdd = declare_function("MatAdd", Matrix, nr.Many(Matrix), returns=Matrix, domain=true)
     assert MatAdd.name == "MatAdd"
-    assert len(MatAdd.kind.inputs) == 1 and MatAdd.kind.inputs[0] is Matrix
-    assert MatAdd.kind.rest is Matrix and MatAdd.kind.output is Matrix
+    assert MatAdd.kind.inputs == (Matrix, nr.Many(Matrix)) and MatAdd.kind.output is Matrix
     assert MatAdd.names == ()
-    assert Piece.kind.inputs == (NumberKind, BoolKind) and Piece.kind.rest is None
+    assert Piece.kind.inputs == (NumberKind, BoolKind)
     assert Piece.kind.output is Pair and Piece.names == ("expr", "condition")
-    assert nr.Add.kind.inputs == () and nr.Add.kind.rest is NumberKind
+    assert nr.Add.kind.inputs == (nr.Many(NumberKind),)
     with pytest.raises(AttributeError):
         Piece.names = ()
 
@@ -142,13 +141,13 @@ def test_an_instantiated_kind_is_checked():
 
 
 def test_the_result_kind_is_the_declared_one():
-    Wrap = declare_function("Wrap", rest=MatrixKind(NumberKind), returns=Pair, domain=true)
+    Wrap = declare_function("Wrap", nr.Many(MatrixKind(NumberKind)), returns=Pair, domain=true)
     assert Wrap(MatrixKind(NumberKind)("A")).kind is Pair
 
 
 def test_an_instantiated_kind_has_its_own_operators():
     Matrix = MatrixKind(declare_kind("Scalar"))
-    MatMul = declare_function("MatMul", rest=Matrix, returns=Matrix, domain=true)
+    MatMul = declare_function("MatMul", nr.Many(Matrix), returns=Matrix, domain=true)
     set_operator(Matrix, "*", MatMul)
     A, B = Matrix("A"), MatrixKind(Matrix.params[0])("B")
     assert repr(A * B) == "MatMul(A, B)"

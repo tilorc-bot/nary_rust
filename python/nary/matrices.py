@@ -22,7 +22,7 @@ A number is not accepted where a matrix is expected.
 
 from ._core import declare_kind_family, set_operator
 from .domains import declare_function
-from .kinds import NumberKind
+from .kinds import Many, NumberKind
 
 __all__ = [
     "MatrixKind", "Matrix",
@@ -33,8 +33,8 @@ MatrixKind = declare_kind_family("MatrixKind", params=1)
 
 Matrix = MatrixKind(NumberKind)
 
-MatAdd = declare_function("MatAdd", rest=Matrix, returns=Matrix, domain=None)
-MatMul = declare_function("MatMul", rest=Matrix, returns=Matrix, domain=None)
+MatAdd = declare_function("MatAdd", Many(Matrix), returns=Matrix, domain=None)
+MatMul = declare_function("MatMul", Many(Matrix), returns=Matrix, domain=None)
 Transpose = declare_function("Transpose", Matrix, returns=Matrix, domain=None)
 Inverse = declare_function("Inverse", Matrix, returns=Matrix, domain=None)
 Determinant = declare_function("Determinant", Matrix, returns=NumberKind, domain=None)

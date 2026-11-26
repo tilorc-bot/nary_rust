@@ -5,7 +5,7 @@ from nary.logic import true
 
 SetKind = declare_kind("SetKind")
 
-Union = declare_function("Union", rest=SetKind, returns=SetKind, domain=true)
+Union = declare_function("Union", nr.Many(SetKind), returns=SetKind, domain=true)
 Interval = declare_function("Interval", NumberKind("start"), NumberKind("end"), returns=SetKind, domain=true)
 Contains = declare_function("Contains", NumberKind, SetKind, returns=BoolKind, domain=true)
 set_operator(SetKind, "+", Union)
@@ -16,7 +16,7 @@ x, y = NumberKind("x"), NumberKind("y")
 def test_the_compiled_module_defines_no_kind_and_no_function():
     public = {name for name in dir(_core) if not name.startswith("_")}
     assert public == {
-        "Expr", "FunctionKind", "Kind", "KindFamily", "Symbol",
+        "Expr", "FunctionKind", "Kind", "KindFamily", "Many", "Symbol",
         "declare_constant", "declare_function", "declare_kind", "declare_kind_family",
         "set_operator",
     }
@@ -152,7 +152,7 @@ def test_only_a_kind_is_accepted_where_a_kind_is_expected():
         with pytest.raises(TypeError, match=f"^expected a kind, got {text}$"):
             declare_function("f", not_a_kind, returns=NumberKind, domain=true)
         with pytest.raises(TypeError, match=f"^expected a kind, got {text}$"):
-            declare_function("f", rest=not_a_kind, returns=NumberKind, domain=true)
+            nr.Many(not_a_kind)
         with pytest.raises(ValueError, match=f"^returns must be a kind, got {text}$"):
             declare_function("f", NumberKind, returns=not_a_kind, domain=true)
         with pytest.raises(TypeError, match=f"^expected a kind, got {text}$"):

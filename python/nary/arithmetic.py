@@ -1,15 +1,26 @@
+"""
+    >>> from nary import Add, Many, NumberKind
+    >>> x, y = NumberKind("x"), NumberKind("y")
+    >>> terms = Many(NumberKind)("terms")
+    >>> terms.kind, Add.kind
+    (Many(NumberKind), FunctionKind((Many(NumberKind),), NumberKind))
+    >>> Add(x, y, 1).terms
+    (x, y, 1)
+"""
+
 from ._core import set_operator
 from .domains import declare_function
-from .kinds import NumberKind
+from .kinds import Many, NumberKind
 from .logic import Or, true
 from .relational import Gt, Ne, re
 
 __all__ = ["Add", "Mul", "Pow", "NegativeOne"]
 
 base, exponent = NumberKind("base"), NumberKind("exp")
+terms, factors = Many(NumberKind)("terms"), Many(NumberKind)("factors")
 
-Add = declare_function("Add", rest=NumberKind, returns=NumberKind, domain=true)
-Mul = declare_function("Mul", rest=NumberKind, returns=NumberKind, domain=true)
+Add = declare_function("Add", terms, returns=NumberKind, domain=true)
+Mul = declare_function("Mul", factors, returns=NumberKind, domain=true)
 Pow = declare_function(
     "Pow", base, exponent, returns=NumberKind,
     domain=Or(Ne(base, 0), Gt(re(exponent), 0)),

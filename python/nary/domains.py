@@ -40,7 +40,7 @@ _AWAITING_A_DECISION = {
 }
 
 
-def declare_function(name, *parameters, rest=None, returns, domain):
+def declare_function(name, *parameters, returns, domain):
     symbols = [p for p in parameters if isinstance(p, Expr) and p.is_symbol]
     if symbols and len(symbols) != len(parameters):
         raise TypeError(
@@ -65,7 +65,7 @@ def declare_function(name, *parameters, rest=None, returns, domain):
     if symbols:
         parameters = [symbol.kind for symbol in symbols]
     function = _core.declare_function(
-        name, *parameters, rest=rest, returns=returns, names=tuple(names)
+        name, *parameters, returns=returns, names=tuple(names)
     )
     if domain is not None:
         _domains[function] = domain
