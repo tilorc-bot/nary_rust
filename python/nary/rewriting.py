@@ -75,6 +75,32 @@ def _holds(condition, known):
 
 
 def _has_a_value(e, known):
+    """A symbol, a literal and a constant have a value.
+
+    >>> from nary import Lambda, Ne, NumberKind, log, pi, sin
+    >>> from nary.calculus import Integral
+    >>> x, y = NumberKind("x"), NumberKind("y")
+    >>> nothing = lambda condition: False
+    >>> _has_a_value(x, nothing), _has_a_value(NumberKind(2), nothing), _has_a_value(pi, nothing)
+    (True, True, True)
+
+    An application has a value when its arguments do and its domain holds.
+
+    >>> _has_a_value(sin(x), nothing), _has_a_value(log(x), nothing), _has_a_value(sin(log(x)), nothing)
+    (True, False, False)
+    >>> _has_a_value(log(x), lambda condition: condition == Ne(x, 0))
+    True
+
+    It is not known to have one when its head is not declared or has no domain.
+
+    >>> _has_a_value(Lambda(y, y)(x), nothing), _has_a_value(Integral(sin, 0, x), nothing)
+    (False, False)
+
+    A lambda has a value when its body does.
+
+    >>> _has_a_value(Lambda(y, sin(y)), nothing), _has_a_value(Lambda(y, log(y)), nothing)
+    (True, False)
+    """
     if e.is_symbol or e.is_literal or e.is_constant:
         return True
     if not _is_declared(e.head):
