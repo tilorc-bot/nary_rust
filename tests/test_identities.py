@@ -4,6 +4,7 @@ from nary import Add, Mul, NumberKind, exp, log
 from nary._core import declare_function
 from nary._identities import Equal, declare_identities, identities, identity, inverse
 from nary.arithmetic_rules import rules
+from nary.logic import true
 from nary.relational import Ne
 from nary.rules import is_flat, is_unordered, rule
 
@@ -49,6 +50,10 @@ def test_refused_blocks_record_nothing():
         declare_identities(P, [identity(0), Equal(P(a, 1), a, name="p_identity")])
     with pytest.raises(ValueError, match="needs a name="):
         declare_identities(P, [Equal(P(a, 0), a)])
+    with pytest.raises(TypeError, match="cannot be listed"):
+        declare_identities(P, [identity])
+    with pytest.raises(TypeError, match="identity expects NumberKind, got BoolKind"):
+        declare_identities(P, [identity(true)])
     assert identities(P) == []
 
 
