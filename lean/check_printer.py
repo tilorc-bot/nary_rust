@@ -20,6 +20,8 @@ EXAMPLES = [
     x / 2,
     nr.Pow(nr.E, nr.I * nr.pi) + nr.log(nr.sin(x) + nr.cos(y) * nr.tan(x)),
     nr.exp(nr.re(x)) ** -3,
+    nr.sinh(x) + nr.cosh(x) * nr.tanh(nr.im(y)),
+    nr.Abs(nr.arg(x)) * nr.conjugate(nr.sign(y)) - nr.floor(x) + nr.ceiling(nr.re(y)),
     nr.Add() * nr.Mul(),
     And(nr.Eq(x, 0), Or(p, Not(q)), nr.Ne(x, y), true),
     Or(x < y, x <= y, x > y, x >= y, false),
