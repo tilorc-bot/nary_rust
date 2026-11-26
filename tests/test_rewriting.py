@@ -1,10 +1,11 @@
-from nary import Add, Lambda, Mul, Ne, NumberKind, cos, log, sin, tan
+from nary import Add, Lambda, Mul, Ne, NumberKind, Pow, cos, log, sin, tan
 from nary.arithmetic_rules import rules
 from nary.calculus import Integral, NumberFunction
 from nary.rewriting import rewrite
 from nary.rules import rule
 
 x, y, z, a = NumberKind("x"), NumberKind("y"), NumberKind("z"), NumberKind("a")
+b = NumberKind("b")
 f = NumberFunction("f")
 
 
@@ -80,3 +81,42 @@ def test_erased_function_variable():
     assert rewrite(sin(0), [erase]) == NumberKind(0)
     assert rewrite(Lambda(y, sin(y))(0), [erase]) == NumberKind(0)
     assert rewrite(Lambda(y, log(y))(0), [erase]) == Lambda(y, log(y))(0)
+
+
+def test_a_conditional_rule_is_not_applied_inside_a_lambda():
+    inside = Lambda(x, x / x)
+    assert rewrite(inside, rules, known=lambda condition: condition == Ne(x, 0)) == inside
+
+
+def test_known_is_asked_about_the_variable_of_a_lambda():
+    asked = []
+    rewrite(Lambda(y, log(y))(0), [rule(f(0), 0)], known=asked.append)
+    assert asked == [Ne(y, 0)]
+
+
+def test_a_nested_pattern_is_not_flattened():
+    assert rewrite(Add(Add(x, y), x), [rule(a + b + a, a)]) == Add(Add(x, y), x)
+    cancel = rule(a * b / b, a, when=Ne(b, 0))
+    assert rewrite(x * y / y, [cancel], known=lambda condition: True) == x * y / y
+
+
+def test_a_condition_is_not_evaluated():
+    assert rewrite(Pow(2, -1) * 0, rules) == Pow(2, -1) * 0
+
+
+def test_the_next_way_of_matching_is_tried():
+    assert rewrite(Mul(log(x), 0, 0), rules) == Mul(log(x), 0)
+
+
+def test_an_erased_variable_is_checked_when_the_condition_holds():
+    cancel = rule(Mul(a, b, Pow(b, -1)), a, when=Ne(b, 0))
+    e = Mul(x, log(y), Pow(log(y), -1))
+    assert rewrite(e, [cancel], known=lambda condition: condition == Ne(log(y), 0)) == e
+
+
+def test_part_of_the_arguments_is_matched_only_at_the_top_of_a_pattern():
+    assert rewrite(sin(Add(x, 0, y)), [rule(sin(a + 0), sin(a))]) == sin(Add(x, 0, y))
+
+
+def test_the_result_of_a_partial_match_is_flattened():
+    assert rewrite(Add(sin(x), cos(x), y), [rule(Add(sin(a), cos(a)), Add(a, 1))]) == Add(x, 1, y)

@@ -33,6 +33,7 @@ fn same_kind(a: KindRef, b: KindRef) -> bool {
 
 static KIND_COUNT: AtomicUsize = AtomicUsize::new(0);
 
+/// Make the record for a new kind. It is never freed.
 fn new_kind_data(
     name: String,
     family: Option<Py<KindFamily>>,
@@ -233,6 +234,8 @@ fn function_kind(
     key.push(rest.map_or(usize::MAX, |kind| kind.id));
     key.extend(inputs.iter().map(|kind| kind.id));
     let data = {
+        // No Python code runs while the table is locked, so the lock cannot
+        // be asked for again by this thread before it is released.
         let mut table = FUNCTION_KINDS
             .lock_py_attached(py)
             .unwrap_or_else(PoisonError::into_inner);
@@ -251,6 +254,8 @@ fn function_kind(
             }
         }
     };
+    // Made outside the lock, since allocating a Python object can run
+    // Python code.
     data.object.get_or_try_init(py, || Py::new(py, Kind { data }))?;
     Ok(data)
 }
@@ -317,6 +322,8 @@ impl KindFamily {
         }
         let key: Box<[usize]> = kinds.iter().map(|kind| kind.id).collect();
         let data = {
+            // No Python code runs while the table is locked, so the lock
+            // cannot be asked for again by this thread before it is released.
             let mut instances = family
                 .instances
                 .lock_py_attached(py)

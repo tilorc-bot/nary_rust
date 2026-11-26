@@ -105,6 +105,11 @@ _RULE_VARIABLE_TYPES = {
 
 _IDENTIFIER = _re.compile(r"[A-Za-z_][A-Za-z0-9_']*\Z")
 
+# Words that Lean reads as keywords once Mathlib is imported, so they cannot
+# be a plain variable name: every identifier-like token in the token table
+# after `import Mathlib` (Lean v4.34.1), plus _ and a few tactic words.
+# Writing an ordinary name between « and » does no harm, so a word too many
+# here only makes the output less pretty.
 _KEYWORDS = frozenset("""
     _ abbrev add_aesop_rules add_decl_doc alias assert_no_sorry
     assert_not_exists assert_not_imported assumeInstancesCommuteDummy at

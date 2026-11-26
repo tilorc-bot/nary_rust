@@ -5,7 +5,7 @@ import nary as nr
 import pytest
 from nary.arithmetic_rules import rules
 from nary.calculus import Derivative, Integral, NumberFunction
-from nary.lean import to_lean, to_lean_example, to_lean_rule
+from nary.lean import to_lean, to_lean_example, to_lean_facts, to_lean_rule
 from nary.logic import And, Not, true
 from nary.matrices import Matrix, Trace
 from nary.rules import rule
@@ -84,3 +84,32 @@ def test_generated_lean_file_is_current():
         "lean/Nary/ArithmeticRules/Statements.lean is out of date: run "
         ".venv/bin/python lean/generate_rules.py, then prove any new statement"
     )
+
+
+LEAN = Path(__file__).resolve().parents[1] / "lean"
+
+
+def test_names_that_are_quoted_or_refused():
+    assert to_lean(nr.NumberKind("θ")) == "some «θ»"
+    for name in ("", "none", "Nary", "a»"):
+        with pytest.raises(ValueError):
+            to_lean(nr.NumberKind(name))
+    with pytest.raises(ValueError):
+        to_lean(nr.Lambda(x, NumberFunction("x")(y)))
+    with pytest.raises(ValueError):
+        to_lean_rule(rule(x + 0, x, name="fun"))
+
+
+def test_facts_are_refused_for_a_function_that_does_not_take_a_list():
+    for function in (nr.Pow, Integral):
+        with pytest.raises(ValueError):
+            to_lean_facts(function)
+
+
+def test_no_proof_is_left_as_sorry():
+    assert not [path.name for path in LEAN.joinpath("Nary").rglob("*.lean") if "sorry" in path.read_text(encoding="utf-8")]
+
+
+def test_mathlib_is_the_version_of_the_lean_toolchain():
+    version = LEAN.joinpath("lean-toolchain").read_text(encoding="utf-8").strip().split(":")[1]
+    assert f'rev = "{version}"' in LEAN.joinpath("lakefile.toml").read_text(encoding="utf-8")

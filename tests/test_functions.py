@@ -1,3 +1,5 @@
+import threading
+
 import nary as nr
 import pytest
 from nary import (
@@ -174,3 +176,34 @@ def test_set_operator_takes_any_expression_of_a_function_kind():
     assert repr(P + Q) == "join(P, Q)" and (P + Q).head is join
     with pytest.raises(TypeError, match=r"^set_operator expects an expression of a function kind, got x$"):
         nr.set_operator(Point, "*", x)
+
+
+def test_the_same_function_kind_from_many_threads():
+    Fresh = nr.declare_kind("Fresh")
+    barrier = threading.Barrier(8)
+    made = []
+
+    def make():
+        barrier.wait()
+        made.append([FunctionKind((Fresh, NumberKind), Fresh, rest=Fresh) for _ in range(200)])
+
+    threads = [threading.Thread(target=make) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert len(made) == 8 and all(kind is made[0][0] for batch in made for kind in batch)
+
+
+def test_a_declared_constant_of_a_function_kind_is_a_function_without_names():
+    c = nr.declare_constant("c", FunctionKind((NumberKind,), NumberKind))
+    x = NumberKind("x")
+    assert c.is_constant and c.names == () and c.params == (NumberKind,)
+    assert repr(c(x)) == "c(x)"
+
+
+def test_pow_with_a_modulus_is_refused():
+    with pytest.raises(TypeError, match="modulus"):
+        pow(2, NumberKind("x"), 3)
+    with pytest.raises(TypeError, match="modulus"):
+        pow(NumberKind("x"), 2, 3)
