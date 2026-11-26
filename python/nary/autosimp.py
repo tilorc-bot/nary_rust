@@ -426,9 +426,75 @@ def _pow(args, known):
         return node(exp, [node(Mul, [x, base.args[0]], known)], known)
     if base.head == Mul and n:
         return node(Mul, [node(Pow, [f, x], known) for f in base.args], known)
+    if base.head == Mul and rational(x) is not None and _coeff(base)[1] == I:
+        value = _imaginary_power(_coeff(base)[0], rational(x), known)
+        if value is not None:
+            return value
     if base.head == Mul and rational(x) is not None:
         return _split_power(base, x, known)
+    if _gaussian(base) and rational(x) is not None:
+        value = _gaussian_power(*_gaussian(base), rational(x), known)
+        if value is not None:
+            return value
     return Pow(base, x)
+
+
+def _gaussian(e):
+    if e.head != Add or len(e.args) != 2 or rational(e.args[0]) is None:
+        return None
+    c, rest = _coeff(e.args[1])
+    return (rational(e.args[0]), c) if rest == I else None
+
+
+def _complex(z, known):
+    return node(Add, [number(z[0]), node(Mul, [number(z[1]), I], known)], known)
+
+
+def _times(z, n):
+    out = (Fraction(1), Fraction(0))
+    for _ in range(n):
+        out = (out[0] * z[0] - out[1] * z[1], out[0] * z[1] + out[1] * z[0])
+    return out
+
+
+def _square_root(r):
+    p, q = _root(r.numerator, 2), _root(r.denominator, 2)
+    return Fraction(p, q) if p * p == r.numerator and q * q == r.denominator else None
+
+
+def _complex_power(scale, z, p, known):
+    if p > 0:
+        return node(Mul, [scale, _complex(_times(z, p), known)], known)
+    w = _times(z, -p)
+    conjugate = _times((z[0], -z[1]), -p)
+    return node(Mul, [scale, number(1 / (w[0] ** 2 + w[1] ** 2)), _complex(conjugate, known)], known)
+
+
+def _gaussian_power(r, i, s, known):
+    """
+    >>> node(Pow, [3 + 4 * I, HALF]), node(Pow, [3 + I, -1])
+    (Add(2, I), Add(Mul(3, Pow(10, -1)), Mul(-1, Pow(10, -1), I)))
+    """
+    if s == -1:
+        return _complex_power(ONE, (r, i), -1, known)
+    d = _square_root(r * r + i * i)
+    if s.denominator != 2 or d is None:
+        return None
+    scale = node(Pow, [number((d - r) / 2), number(s)], known)
+    return _complex_power(scale, ((d + r) / abs(i), Fraction(1 if i > 0 else -1)), s.numerator, known)
+
+
+def _imaginary_power(c, s, known):
+    """
+    >>> node(Pow, [2 * I, HALF]), node(Pow, [-8 * I, HALF])
+    (Add(1, I), Add(2, Mul(-2, I)))
+    """
+    r = _square_root(abs(c) / 2)
+    if s.denominator != 2 or r is None:
+        return None
+    unit = _complex((1, 1 if c > 0 else -1), known)
+    return node(Mul, [node(Pow, [number(r), number(s.numerator)], known),
+                      node(Pow, [unit, number(s.numerator)], known)], known)
 
 
 def _nested(inner, y, x, known):

@@ -78,8 +78,8 @@ FUNCTIONS = {
 }
 
 CONSTANTS = {
-    nr.pi: mpmath.mpc(mpmath.pi), nr.E: mpmath.mpc(mpmath.e), nr.I: mpmath.mpc(0, 1),
-    true: True, false: False,
+    nr.pi: lambda: mpmath.mpc(mpmath.pi), nr.E: lambda: mpmath.mpc(mpmath.e),
+    nr.I: lambda: mpmath.mpc(0, 1), true: lambda: True, false: lambda: False,
 }
 
 
@@ -89,7 +89,7 @@ def evaluate(e, values):
     if e.is_literal:
         return mpmath.mpc(e.value)
     if e.is_constant:
-        return CONSTANTS[e]
+        return CONSTANTS[e]()
     return FUNCTIONS[e.head](*(evaluate(a, values) for a in e.args))
 
 
@@ -140,5 +140,8 @@ def counterexamples(lhs, rhs, known=()):
         if all(evaluate(c, point) is True for c in known):
             left, right = evaluate(lhs, point), evaluate(rhs, point)
             if not same(left, right):
-                found.append((point, left, right))
+                with mpmath.workdps(200):
+                    left, right = evaluate(lhs, point), evaluate(rhs, point)
+                    if not same(left, right):
+                        found.append((point, left, right))
     return found

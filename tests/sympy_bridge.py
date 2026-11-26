@@ -154,6 +154,8 @@ def classify(e, given=()):
         return "not yet", str(reason)
     if counterexamples(e, theirs, given):
         return "different", "unsound"
+    if ordered(sympy_result(theirs, given)) == ordered(autosimp(e, given)):
+        return "different", "SymPy changes its own result"
     return "not yet", ""
 
 

@@ -88,9 +88,23 @@ FROM_SYMPY_TESTS = [
         Mul(-1, Mul(-1, Pow(Add(Pow(5, Pow(2, -1)), Mul(-1, 1)), Pow(2, -1)))), Pow(123, 789),
         Pow(1, I), Pow(-2, -5),
         Pow(Mul(Mul(-1, Pow(3, Pow(2, -1))), Add(1, Mul(2, I))), Pow(2, -1)),
-        (Pow(Pow(p, 2), Pow(3, -1)), [Gt(p, 0)]), Pow(Mul(2, Pow(3, -1)), Mul(3, Pow(2, -1))),
-        Pow(Pow(6, -1), Mul(9, Pow(4, -1))), Pow(Mul(3, Pow(7, -1)), Mul(7, Pow(3, -1))),
-        Pow(2, 3), Pow(Pow(I, Pow(2, -1)), Mul(9, Pow(2, -1))),
+        (Pow(Pow(p, 2), Pow(3, -1)), [Gt(p, 0)]), Pow(Add(3, Mul(4, I)), Pow(2, -1)),
+        Pow(Add(3, Mul(-1, Mul(4, I))), Pow(2, -1)), Pow(Add(-3, Mul(-1, Mul(4, I))), Pow(2, -1)),
+        Pow(Add(-3, Mul(4, I)), Pow(2, -1)), Pow(Add(32, Mul(24, I)), Pow(2, -1)),
+        Pow(Add(32, Mul(-1, Mul(24, I))), Pow(2, -1)),
+        Pow(Add(-32, Mul(-1, Mul(24, I))), Pow(2, -1)), Pow(Add(-32, Mul(24, I)), Pow(2, -1)),
+        Pow(Mul(Add(3, Mul(4, I)), Pow(4, -1)), Pow(2, -1)),
+        Pow(Mul(Add(8, Mul(15, I)), Pow(8, -1)), Pow(2, -1)),
+        Pow(Mul(Add(3, Mul(-1, Mul(4, I))), Pow(25, -1)), Pow(2, -1)),
+        Pow(Mul(Add(3, Mul(-1, Mul(4, I))), Pow(26, -1)), Pow(2, -1)),
+        Pow(Mul(2, Pow(Add(3, Mul(4, I)), -1)), Pow(2, -1)),
+        Pow(Mul(1, Pow(Add(3, Mul(I, 4)), -1)), Pow(2, -1)),
+        Pow(Pow(Add(3, Mul(4, I)), Pow(2, -1)), 3), Pow(Add(3, Mul(4, I)), Mul(3, Pow(2, -1))),
+        Pow(Add(6, Mul(8, I)), Mul(3, Pow(2, -1))), Pow(Mul(2, I), Pow(2, -1)),
+        Pow(Mul(2, I), Mul(3, Pow(2, -1))), Pow(Mul(Mul(-9, Pow(2, -1)), I), Mul(3, Pow(2, -1))),
+        Pow(Mul(2, Pow(3, -1)), Mul(3, Pow(2, -1))), Pow(Pow(6, -1), Mul(9, Pow(4, -1))),
+        Pow(Mul(3, Pow(7, -1)), Mul(7, Pow(3, -1))), Pow(2, 3),
+        Pow(Pow(I, Pow(2, -1)), Mul(9, Pow(2, -1))),
     ]),
     ("test_power", "same once assumed", [
         Mul(1, Pow(Pow(x, y), -1)), Pow(0, Mul(2, x)), Pow(0, Mul(Mul(2, x), y)),
@@ -105,23 +119,10 @@ FROM_SYMPY_TESTS = [
         Pow(Mul(1, Pow(Add(1, Mul(-1, Pow(2, Pow(2, -1)))), -1)), Mul(-1, Pow(2, -1))),
         (Pow(Pow(Add(p, I), Mul(4, Pow(3, -1))), Pow(2, -1)), [Gt(p, 0)]),
         Pow(Pow(Add(1, Mul(I, Pow(5, -1))), 5), Pow(2, -1)),
-        Pow(Pow(Add(1, Mul(I, Pow(5, -1))), 6), Pow(2, -1)), Pow(Add(3, Mul(4, I)), Pow(2, -1)),
-        Pow(Add(3, Mul(-1, Mul(4, I))), Pow(2, -1)), Pow(Add(-3, Mul(-1, Mul(4, I))), Pow(2, -1)),
-        Pow(Add(-3, Mul(4, I)), Pow(2, -1)), Pow(Add(32, Mul(24, I)), Pow(2, -1)),
-        Pow(Add(32, Mul(-1, Mul(24, I))), Pow(2, -1)),
-        Pow(Add(-32, Mul(-1, Mul(24, I))), Pow(2, -1)), Pow(Add(-32, Mul(24, I)), Pow(2, -1)),
-        Pow(Mul(Add(3, Mul(4, I)), Pow(4, -1)), Pow(2, -1)),
-        Pow(Mul(Add(8, Mul(15, I)), Pow(8, -1)), Pow(2, -1)),
-        Pow(Mul(Add(3, Mul(-1, Mul(4, I))), Pow(25, -1)), Pow(2, -1)),
-        Pow(Mul(Add(3, Mul(-1, Mul(4, I))), Pow(26, -1)), Pow(2, -1)),
+        Pow(Pow(Add(1, Mul(I, Pow(5, -1))), 6), Pow(2, -1)),
         Pow(Mul(Add(3, Mul(4, I)), Pow(Add(3, Mul(-1, Mul(4, I))), -1)), Pow(2, -1)),
-        Pow(Mul(2, Pow(Add(3, Mul(4, I)), -1)), Pow(2, -1)),
         Pow(Mul(-2, Pow(Add(3, Mul(4, I)), -1)), Pow(2, -1)),
-        Pow(Mul(1, Pow(Add(3, Mul(I, 4)), -1)), Pow(2, -1)),
         Pow(Mul(1, Pow(Add(3, Mul(-1, I)), -1)), Pow(2, -1)),
-        Pow(Pow(Add(3, Mul(4, I)), Pow(2, -1)), 3), Pow(Add(3, Mul(4, I)), Mul(3, Pow(2, -1))),
-        Pow(Add(6, Mul(8, I)), Mul(3, Pow(2, -1))), Pow(Mul(2, I), Pow(2, -1)),
-        Pow(Mul(2, I), Mul(3, Pow(2, -1))), Pow(Mul(Mul(-9, Pow(2, -1)), I), Mul(3, Pow(2, -1))),
         Pow(Mul(1, Pow(tan(Add(1, I)), -1)), Pow(2, -1)),
     ]),
     ("test_trigonometric", "same", [
@@ -173,6 +174,12 @@ FROM_SYMPY_TESTS = [
 def test_case_from_sympy_tests(source, category, case):
     e, given = case if isinstance(case, tuple) else (case, [])
     assert classify(e, given)[0] == category
+    assert not counterexamples(e, autosimp(e, given), given)
+
+
+@pytest.mark.parametrize("e", [Pow(3 + I, -1), Pow(-8 * I, H), Pow(2 * I, -H)], ids=repr)
+def test_sympy_result_that_sympy_changes_when_evaluated_again(e):
+    assert classify(e) == ("different", "SymPy changes its own result")
 
 
 def test_refusal_and_lambda():
