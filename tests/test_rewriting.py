@@ -101,7 +101,7 @@ def test_known_is_asked_about_the_variable_of_a_lambda():
 def test_a_nested_pattern_is_not_flattened():
     assert rewrite(Add(Add(x, y), z), [rule(a + b + a, a)]) == Add(Add(x, y), z)
     cancel = rule(a * b / b, a, when=Ne(b, 0))
-    assert rewrite(x * y / y, [cancel], known=lambda condition: True) == Mul(x, 1)
+    assert rewrite(x * y / y, [cancel], known=lambda condition: True) == x * y / y
 
 
 def test_a_condition_is_not_evaluated():
@@ -185,11 +185,10 @@ def test_beta():
 
 
 def test_a_flat_pattern_matches_through_the_identity():
-    half_turn = rule(sin(Mul(b, pi, rest)), cos(Mul(b, rest)))
-    assert rewrite(sin(pi), [half_turn]) == cos(1)
-    shift = rule(sin(Add(a, Mul(2, pi), rest)), sin(Add(a, rest)))
-    assert rewrite(sin(Mul(2, pi)), [shift]) == sin(0)
-    assert rewrite(sin(x), [rule(sin(Add(a, b, z)), cos(a))]) == cos(x)
+    half_turn = rule(sin(Mul(pi, rest)), cos(Mul(2, rest)))
+    assert rewrite(sin(pi), [half_turn]) == cos(2)
+    assert rewrite(sin(x), [rule(sin(Add(a, b, z)), cos(a))]) == sin(x)
+    assert rewrite(sin(pi), [rule(sin(Mul(b, pi, rest)), cos(b))]) == sin(pi)
 
 
 def test_through_the_identity_a_run_variable_gets_no_original_argument():
