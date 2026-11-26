@@ -43,24 +43,33 @@ to_lean_rule writes the claim of a rule as a Lean proposition.
     abbrev div_self : Prop :=
       ∀ (a : Nary.Number), Nary.Holds (Nary.Ne a (Nary.lit 0)) → a ≠ none → Nary.Mul [a, Nary.Pow a (Nary.lit (-1))] = Nary.lit 1
 
-to_lean_facts writes the facts recorded for a function.
+to_lean_facts states the laws declared for a function.
 
     >>> for statement in to_lean_facts(Add):
     ...     print(statement)
-    abbrev add_unordered : Prop :=
-      Nary.Unordered Nary.Add
     abbrev add_flat : Prop :=
       Nary.Flat Nary.Add
+    abbrev add_unordered : Prop :=
+      Nary.Unordered Nary.Add
+    abbrev add_identity_law : Prop :=
+      Nary.Identity Nary.Add (Nary.lit 0)
+    abbrev add_repeats_law : Prop :=
+      Nary.Repeats Nary.Add (fun a n => Nary.Mul [n, a])
 """
 
 import re as _re
 
 from . import arithmetic, calculus, constants, elementary, logic, relational
+from . import arithmetic_rules, logic_rules  # noqa: F401
 from ._core import Expr
+from ._identities import (
+    Law, absorbing, associative, commutative, idempotent, identities, identity, involution,
+    repeats,
+)
 from .calculus import NumberFunction
 from .functions import is_lambda
 from .kinds import BoolKind, Many, NumberKind
-from .rules import Rule, is_flat, is_unordered
+from .rules import Rule
 
 __all__ = ["LEAN_NAMES", "to_lean", "to_lean_example", "to_lean_facts", "to_lean_rule"]
 
@@ -347,14 +356,33 @@ def to_lean_rule(r):
 def to_lean_facts(f):
     if not _is_declared_function(f) or f not in LEAN_NAMES:
         raise _not_in_table(f)
-    if len(f.kind.inputs) != 1 or f.kind.inputs[0].family is not Many:
-        raise ValueError(
-            f"the facts about {f!r} cannot be stated in Lean: Nary.Unordered and "
-            f"Nary.Flat are defined only for a function that takes a list"
-        )
-    facts = [("unordered", "Nary.Unordered", is_unordered(f)), ("flat", "Nary.Flat", is_flat(f))]
-    return [
-        f"abbrev {_declaration_name(f'{f.name.lower()}_{fact}', repr(f))} : Prop :=\n"
-        f"  {lean_fact} {LEAN_NAMES[f]}"
-        for fact, lean_fact, recorded in facts if recorded
-    ]
+    laws = [item for item in identities(f) if isinstance(item, Law) and item.of in _LAW_CLAIMS]
+    if not laws:
+        raise ValueError(f"the facts about {f!r} cannot be stated in Lean: it declares no laws")
+    printer = _Printer(rule=True)
+    statements = []
+    for law in laws:
+        fact, claim = _LAW_CLAIMS[law.of]
+        parts = [claim, LEAN_NAMES[f]]
+        if law.of is repeats:
+            form, count = law.args
+            base = next(arg for arg in form.args if arg != count)
+            variables = f"{printer.symbol(base)} {printer.symbol(count)}"
+            parts.append(f"(fun {variables} => {printer.print(form)[0]})")
+        elif law.args:
+            (value,) = law.args
+            parts.append(printer.argument(value if isinstance(value, Expr) else f.kind.output(value)))
+        name = _declaration_name(f"{f.name.lower()}_{fact}", repr(f))
+        statements.append(f"abbrev {name} : Prop :=\n  {' '.join(parts)}")
+    return statements
+
+
+_LAW_CLAIMS = {
+    associative: ("flat", "Nary.Flat"),
+    commutative: ("unordered", "Nary.Unordered"),
+    identity: ("identity_law", "Nary.Identity"),
+    absorbing: ("absorbing_law", "Nary.Absorbing"),
+    idempotent: ("idempotent_law", "Nary.Idempotent"),
+    involution: ("involution_law", "Nary.Involution"),
+    repeats: ("repeats_law", "Nary.Repeats"),
+}

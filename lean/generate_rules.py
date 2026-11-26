@@ -3,6 +3,7 @@ from pathlib import Path
 from nary import Add, Mul
 from nary.arithmetic_rules import rules
 from nary.lean import to_lean_facts, to_lean_rule
+from nary.logic import And, Not, Or
 
 PATH = Path(__file__).resolve().parent / "Nary" / "ArithmeticRules" / "Statements.lean"
 
@@ -15,7 +16,7 @@ import Nary.Logic
 
 def render():
     declarations = [to_lean_rule(r) for r in rules]
-    declarations += [d for f in (Add, Mul) for d in to_lean_facts(f)]
+    declarations += [d for f in (Add, Mul, And, Or, Not) for d in to_lean_facts(f)]
     names = [d.split("abbrev ", 1)[1].split()[0] for d in declarations]
     duplicates = sorted({n for n in names if names.count(n) > 1})
     if duplicates:

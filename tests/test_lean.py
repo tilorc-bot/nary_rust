@@ -58,9 +58,10 @@ def test_to_lean_rule():
         "abbrev mul_absorbing : Prop :=\n"
         "  ∀ (a : Nary.Number), a ≠ none → Nary.Mul [a, Nary.lit 0] = Nary.lit 0"
     )
-    assert to_lean_rule(by_name["exp_log"]) == (
-        "abbrev exp_log : Prop :=\n"
-        "  ∀ (a : Nary.Number), Nary.Holds (Nary.Ne a (Nary.lit 0)) → Nary.exp (Nary.log a) = a"
+    assert to_lean_rule(by_name["mul_inverse"]) == (
+        "abbrev mul_inverse : Prop :=\n"
+        "  ∀ (a : Nary.Number), Nary.Holds (Nary.Ne a (Nary.lit 0)) → a ≠ none → "
+        "Nary.Mul [a, Nary.Pow a (Nary.lit (-1))] = Nary.lit 1"
     )
     assert to_lean_rule(rule(f(x) * 0, 0, name="wrong")) == (
         "abbrev wrong : Prop :=\n  ∀ (x : Nary.Number) (f : Nary.NumberFunction), "
@@ -100,7 +101,7 @@ def test_names_that_are_quoted_or_refused():
         to_lean_rule(rule(x + 0, x, name="fun"))
 
 
-def test_facts_are_refused_for_a_function_that_does_not_take_a_list():
+def test_facts_are_refused_for_a_function_without_laws():
     for function in (nr.Pow, Integral):
         with pytest.raises(ValueError):
             to_lean_facts(function)
