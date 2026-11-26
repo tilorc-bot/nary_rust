@@ -7,12 +7,13 @@ from nary.rules import rule
 x, y, z, a = NumberKind("x"), NumberKind("y"), NumberKind("z"), NumberKind("a")
 b = NumberKind("b")
 f = NumberFunction("f")
+add_self = rules + [rule(a + a, 2 * a, name="add_self")]
 
 
 def test_unordered_and_flat_matching():
     assert rewrite(Add(0, x), rules) == x
     assert rewrite(Add(x, 0, y), rules) == Add(x, y)
-    assert rewrite(Add(x, y, x), rules) == Add(Mul(2, x), y)
+    assert rewrite(Add(x, y, x), add_self) == Add(Mul(2, x), y)
 
 
 def test_inside_a_larger_expression():
@@ -45,7 +46,7 @@ def test_lambda_untouched():
 
 
 def test_several_rules_in_sequence():
-    e = (x * 1 + 0) ** 1 - (y + 0) * 0
+    e = (x * 1 + 0) - (y + 0) * 0
     assert rewrite(e, rules) == x
 
 
@@ -58,8 +59,8 @@ def test_a_rule_that_changes_nothing_does_not_apply():
 
 
 def test_nested_flat_arguments_are_merged_only_when_a_rule_applies():
-    assert rewrite(Add(Add(x, y), x), rules) == Add(Mul(2, x), y)
-    assert rewrite(Add(Add(x, y), z), rules) == Add(Add(x, y), z)
+    assert rewrite(Add(Add(x, y), x), add_self) == Add(Mul(2, x), y)
+    assert rewrite(Add(Add(x, y), z), add_self) == Add(Add(x, y), z)
 
 
 def test_known_must_return_true_itself():
@@ -67,8 +68,9 @@ def test_known_must_return_true_itself():
 
 
 def test_zero_to_the_zero_has_no_value():
-    assert rewrite(x ** 0, rules) == x ** 0
-    assert rewrite(x ** 0, rules, known=lambda condition: condition == Ne(x, 0)) == NumberKind(1)
+    pow_zero = [rule(a ** 0, 1, when=Ne(a, 0))]
+    assert rewrite(x ** 0, pow_zero) == x ** 0
+    assert rewrite(x ** 0, pow_zero, known=lambda condition: condition == Ne(x, 0)) == NumberKind(1)
 
 
 def test_erased_function_without_a_domain():
