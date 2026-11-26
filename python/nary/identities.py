@@ -1,22 +1,14 @@
 """
-    >>> from nary import Add, Ne, NumberKind
-    >>> from nary.identities import Equal, identities, inverse
-    >>> from nary.rules import is_flat
-    >>> identities(Add)[:3], is_flat(Add)
-    ([associative, commutative, identity(0)], True)
-    >>> identities(Add)[3:]
-    [Equal(Add(a, a), Mul(2, a)), inverse(Mul(-1, a))]
+    >>> from nary import Add
+    >>> from nary.identities import identities, inverse
+    >>> identities(Add)[:3]
+    [associative, commutative, identity(0)]
     >>> inverse.statement
     Equal(f(a, i), e)
-    >>> x = NumberKind("x")
-    >>> Equal(x * 1, x).kind, Equal(x / x, 1, Ne(x, 0))
-    (BoolKind, Equal(Mul(x, Pow(x, -1)), 1, Ne(x, 0)))
 """
 
-from ._core import Expr, FunctionKind, declare_kind
-from .domains import declare_function
-from .kinds import BoolKind, NumberKind
-from .logic import true
+from ._core import FunctionKind, declare_kind
+from .kinds import NumberKind
 from .rules import flat, rule, unordered
 
 __all__ = [
@@ -25,34 +17,22 @@ __all__ = [
 ]
 
 
-_equal_functions = {}
-_names = {}
+class Equal:
+    """Both sides have no value, or the same value, where ``when`` holds:
 
-
-def Equal(lhs, rhs, when=None, name=None):
-    """Both sides have no value, or the same value, where ``when`` holds; unlike Eq it has a value:
-
-    >>> from nary import NumberKind, log
-    >>> from nary.domains import domain
+    >>> from nary import Ne, NumberKind
     >>> x = NumberKind("x")
-    >>> e = Equal(log(x), 1)
-    >>> e, domain(e.head)
-    (Equal(log(x), 1), true)
+    >>> Equal(x / x, 1, when=Ne(x, 0), name="div_self")
+    Equal(Mul(x, Pow(x, -1)), 1, when=Ne(x, 0), name='div_self')
     """
-    if not isinstance(rhs, Expr):
-        rhs = lhs.kind(rhs)
-    key = (lhs.kind, when is not None)
-    if key not in _equal_functions:
-        kinds = (lhs.kind, lhs.kind) + ((BoolKind,) if when is not None else ())
-        _equal_functions[key] = declare_function("Equal", *kinds, returns=BoolKind, domain=true)
-    e = _equal_functions[key](lhs, rhs, *(() if when is None else (when,)))
-    if name is not None and _names.setdefault(e, name) != name:
-        raise ValueError(f"{e!r} is already named {_names[e]!r}")
-    return e
 
+    def __init__(self, lhs, rhs, when=None, name=None):
+        self.lhs, self.rhs, self.when, self.name = lhs, rhs, when, name
 
-def _is_equal(item):
-    return isinstance(item, Expr) and item.head in _equal_functions.values()
+    def __repr__(self):
+        extra = "" if self.when is None else f", when={self.when!r}"
+        extra += "" if self.name is None else f", name={self.name!r}"
+        return f"Equal({self.lhs!r}, {self.rhs!r}{extra})"
 
 
 class Law:
@@ -105,15 +85,15 @@ def declare_identities(F, items):
     x = NumberKind("a")
     rules, facts = [], []
     for item in items:
-        if not (isinstance(item, Law) or _is_equal(item)):
+        if not isinstance(item, (Law, Equal)):
             raise TypeError(f"{item!r} cannot be listed")
         if isinstance(item, Law) and item.params and item.name is None:
             name = f"{F.name.lower()}_{item.title}"
             item = Law(item.title, item.statement, item.params, item.args, item.when, name)
-        if _is_equal(item):
-            if item not in _names:
-                raise ValueError(f"{item!r} in the block of {F!r} needs a name=")
-            rules.append(rule(*item.args, name=_names[item]))
+        if isinstance(item, Equal) and item.name is None:
+            raise ValueError(f"{item!r} in the block of {F!r} needs a name=")
+        if isinstance(item, Equal):
+            rules.append(rule(item.lhs, item.rhs, when=item.when, name=item.name))
         elif item.title == "associative":
             facts.append(flat)
         elif item.title == "commutative":
