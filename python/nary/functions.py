@@ -18,16 +18,18 @@ The arguments of a lambda are its variables and then its body.
     ((x,), Mul(x, x), True)
 """
 
-from ._core import Expr, FunctionKind, Symbol
+from __future__ import annotations
+
+from ._core import Expr, FunctionKind, Kind, Symbol
 from .domains import declare_function
 from .logic import true
 
 __all__ = ["Lambda", "is_lambda"]
 
-_lambda_functions = {}
+_lambda_functions: dict[tuple[Kind, ...], Expr] = {}
 
 
-def _lambda_function(variable_kinds, body_kind):
+def _lambda_function(variable_kinds: tuple[Kind, ...], body_kind: Kind) -> Expr:
     key = (*variable_kinds, body_kind)
     if key not in _lambda_functions:
         _lambda_functions[key] = declare_function(
@@ -40,7 +42,7 @@ def _lambda_function(variable_kinds, body_kind):
     return _lambda_functions[key]
 
 
-def Lambda(variables, body):
+def Lambda(variables: Expr | tuple[Expr, ...], body: Expr) -> Expr:
     if not isinstance(variables, tuple):
         variables = (variables,)
     if not variables:
@@ -64,7 +66,7 @@ def Lambda(variables, body):
     return _lambda_function(variable_kinds, body.kind)(*variables, body)
 
 
-def is_lambda(e):
+def is_lambda(e: object) -> bool:
     if not isinstance(e, Expr) or e.is_atom:
         return False
     return _lambda_functions.get(e.head.kind.inputs) is e.head

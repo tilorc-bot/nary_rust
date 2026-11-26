@@ -8,7 +8,9 @@
     (x, y, 1)
 """
 
-from ._core import set_operator
+from __future__ import annotations
+
+from ._core import Expr, set_operator
 from .domains import declare_function
 from .kinds import Many, NumberKind
 from .logic import Or, true
@@ -29,15 +31,15 @@ Pow = declare_function(
 NegativeOne = NumberKind(-1)
 
 
-def _subtract(a, b):
+def _subtract(a: Expr, b: object) -> Expr:
     return Add(a, Mul(NegativeOne, b))
 
 
-def _divide(a, b):
+def _divide(a: Expr, b: object) -> Expr:
     return Mul(a, Pow(b, NegativeOne))
 
 
-def _negate(a):
+def _negate(a: Expr) -> Expr:
     return Mul(NegativeOne, a)
 
 
