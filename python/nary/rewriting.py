@@ -304,6 +304,8 @@ def _match(pattern, e, bindings):
     elif e.head is not None and rational(e) is None:
         for with_head in _match(pattern.head, e.head, bindings):
             yield from _match_args(pattern, e.args, with_head)
+    elif pattern == e:
+        yield bindings
 
 
 def _unit(head):

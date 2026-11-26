@@ -111,6 +111,10 @@ def test_a_numeric_condition_is_decided():
     assert rewrite(Pow(2, -1) * 0, rules) == NumberKind(0)
 
 
+def test_a_rational_matches_a_pattern_equal_to_it():
+    assert rewrite(Pow(x, Pow(2, -1)) + Pow(2, -1), [rule(Pow(b, Pow(2, -1)), log(b))]) == log(x) + Pow(2, -1)
+
+
 def test_the_next_way_of_matching_is_tried():
     assert rewrite(Mul(log(x), 0, 0), rules) == Mul(log(x), 0)
 
