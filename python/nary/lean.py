@@ -43,6 +43,14 @@ to_lean_rule writes the claim of a rule as a Lean proposition.
     abbrev div_self : Prop :=
       ∀ (a : Nary.Number), Nary.Holds (Nary.Ne a (Nary.lit 0)) → a ≠ none → Nary.Mul [a, Nary.Pow a (Nary.lit (-1))] = Nary.lit 1
 
+A run variable is a list joined to the other arguments.
+
+    >>> from nary import Many, sin
+    >>> rest = Many(NumberKind)("rest")
+    >>> print(to_lean_rule(rule(Add(a, rest) * 0, 0, name="mul_zero")))
+    abbrev mul_zero : Prop :=
+      ∀ (a : Nary.Number) (rest : List Nary.Number), a ≠ none → (∀ x ∈ rest, x ≠ none) → Nary.Mul [Nary.Add ([a] ++ rest), Nary.lit 0] = Nary.lit 0
+
 to_lean_facts writes the facts recorded for a function.
 
     >>> for statement in to_lean_facts(Add):
@@ -101,6 +109,8 @@ _RULE_VARIABLE_TYPES = {
     NumberKind: "Nary.Number",
     BoolKind: "Nary.Boolean",
     NumberFunction: "Nary.NumberFunction",
+    Many(NumberKind): "List Nary.Number",
+    Many(BoolKind): "List Nary.Boolean",
 }
 
 _IDENTIFIER = _re.compile(r"[A-Za-z_][A-Za-z0-9_']*\Z")
@@ -191,6 +201,10 @@ def _is_declared_function(e):
     return e.is_constant and e.kind.inputs is not None
 
 
+def _is_run(e):
+    return e.is_symbol and getattr(e.kind, "family", None) is Many
+
+
 class _Printer:
     def __init__(self, rule=False):
         self.rule = rule
@@ -207,11 +221,11 @@ class _Printer:
                         f"{variable.kind!r}; Lean would read it as the variable"
                     )
                 return _identifier(e.name)
-        if e.kind not in _VARIABLE_TYPES:
+        if e.kind not in (_RULE_VARIABLE_TYPES if self.rule else _VARIABLE_TYPES):
             raise ValueError(
                 f"the symbol {e.name} of kind {e.kind!r} has no Lean definition: "
-                f"only symbols of NumberKind, BoolKind and {NumberFunction!r} "
-                f"are printed"
+                f"only symbols of NumberKind, BoolKind and {NumberFunction!r}, "
+                f"and run variables in a rule, are printed"
             )
         known = self.free.setdefault(e.name, e)
         if known.kind is not e.kind:
@@ -225,12 +239,31 @@ class _Printer:
         text, atomic = self.print(e)
         return text if atomic else f"({text})"
 
+    def list(self, args):
+        segments = []
+        for a in args:
+            if _is_run(a):
+                segments.append(self.symbol(a))
+            elif segments and isinstance(segments[-1], list):
+                segments[-1].append(self.print(a)[0])
+            else:
+                segments.append([self.print(a)[0]])
+        texts = [s if isinstance(s, str) else f"[{', '.join(s)}]" for s in segments]
+        if len(texts) < 2:
+            return texts[0] if texts else "[]"
+        return f"({' ++ '.join(texts)})"
+
     def print(self, e):
         if not isinstance(e, Expr):
             raise TypeError(f"to_lean expects an expression, got {e!r}")
 
         if e.is_symbol:
             name = self.symbol(e)
+            if _is_run(e):
+                raise ValueError(
+                    f"the run variable {e.name} can only be printed among the "
+                    f"arguments of a function that takes a list"
+                )
             if e.kind is NumberFunction or self.rule:
                 return name, True
             return f"some {name}", False
@@ -279,8 +312,7 @@ class _Printer:
             fixed = len(inputs) - run
             parts = [name] + [self.argument(a) for a in e.args[:fixed]]
             if run:
-                rest = ", ".join(self.print(a)[0] for a in e.args[fixed:])
-                parts.append(f"[{rest}]")
+                parts.append(self.list(e.args[fixed:]))
             if len(parts) == 1:
                 return name, True
             return " ".join(parts), False
@@ -331,7 +363,9 @@ def to_lean_rule(r):
     pattern, replacement = printer.print(r.pattern)[0], printer.print(r.replacement)[0]
     hypotheses = [f"Nary.Holds {printer.argument(r.condition)}"] if r.condition is not None else []
     for v in r.erased:
-        if v.kind is not NumberFunction:
+        if _is_run(v):
+            hypotheses.append(f"(∀ x ∈ {_identifier(v.name)}, x ≠ none)")
+        elif v.kind is not NumberFunction:
             hypotheses.append(f"{_identifier(v.name)} ≠ none")
     binders = []
     for kind, lean_type in _RULE_VARIABLE_TYPES.items():

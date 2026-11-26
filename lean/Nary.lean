@@ -2,4 +2,10 @@ import Nary.Number
 import Nary.Logic
 import Nary.Calculus
 import Nary.Facts
+import Nary.Literals
 import Nary.ArithmeticRules
+import Nary.ArithmeticRules.Statements
+import Nary.ElementaryRules.Statements
+import Nary.LogicRules.Statements
+import Nary.Normal.Statements
+import Nary.Normal

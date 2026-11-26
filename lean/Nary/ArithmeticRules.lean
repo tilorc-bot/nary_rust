@@ -93,19 +93,4 @@ theorem mul_flat : Statement.mul_flat := by
   simp only [Mul, List.mapM_append, List.mapM_cons]
   cases xs.mapM id <;> cases ys.mapM id <;> cases zs.mapM id <;> simp
 
-theorem proved : Proved where
-  add_identity := add_identity
-  mul_identity := mul_identity
-  mul_absorbing := mul_absorbing
-  add_self := add_self
-  add_inverse := add_inverse
-  mul_inverse := mul_inverse
-  pow_one := pow_one
-  pow_zero := pow_zero
-  exp_log := exp_log
-  add_unordered := add_unordered
-  add_flat := add_flat
-  mul_unordered := mul_unordered
-  mul_flat := mul_flat
-
 end Nary.ArithmeticRules
