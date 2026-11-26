@@ -20,6 +20,7 @@ SOURCES = {
     "Trigsimp": ("nary.strategies", "trigsimp", ()),
     "Together": ("nary.strategies", "together", ()),
     "Powsimp": ("nary.strategies", "powsimp", ()),
+    "Autosimp": ("nary.autosimp", "RULES", ()),
 }
 
 HEADER = """\
@@ -31,7 +32,8 @@ import Nary.Logic
 
 def render_one(name, module, attribute, functions):
     rules = getattr(import_module(module), attribute)
-    declarations = [to_lean_rule(r) for r in rules]
+    rules = [r for group in rules.values() for r in group] if isinstance(rules, dict) else rules
+    declarations = list(dict.fromkeys(to_lean_rule(r) for r in rules))
     declarations += [d for f in functions for d in to_lean_facts(f)]
     names = [d.split("abbrev ", 1)[1].split()[0] for d in declarations]
     duplicates = sorted({n for n in names if names.count(n) > 1})

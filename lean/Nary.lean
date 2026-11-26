@@ -16,6 +16,7 @@ import Nary.ExpandTrig.Statements
 import Nary.Trigsimp.Statements
 import Nary.Together.Statements
 import Nary.Powsimp.Statements
+import Nary.Autosimp.Statements
 import Nary.Normal
 import Nary.LogicRules
 import Nary.ElementaryRules
