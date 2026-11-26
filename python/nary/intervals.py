@@ -10,8 +10,11 @@
 
 from functools import lru_cache
 
-from mpmath import floor as mpmath_floor
-from mpmath import iv
+try:
+    from mpmath import floor as mpmath_floor
+    from mpmath import iv
+except ImportError:
+    iv = None
 
 from .arithmetic import Add, Mul, Pow
 from .constants import E, I, pi
@@ -22,7 +25,7 @@ __all__ = ["enclosure", "nonzero", "real", "sign", "turns"]
 
 
 def _real(z):
-    return isinstance(z, iv.mpf)
+    return iv is not None and isinstance(z, iv.mpf)
 
 
 def _excludes_zero(z):
@@ -64,6 +67,8 @@ _CONSTANTS = {pi: lambda: iv.pi, E: lambda: iv.e, I: lambda: iv.mpc(0, 1)}
 
 
 def enclosure(e):
+    if iv is None:
+        return None
     precision, iv.dps = iv.dps, 30
     try:
         return _enclosure(e)

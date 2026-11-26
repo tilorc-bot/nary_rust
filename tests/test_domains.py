@@ -1,6 +1,9 @@
 import nary.domains
 import pytest
-from nary import BoolKind, Eq, Lambda, Ne, NumberKind, Pow, Symbol, declare_function, log, sin, tan
+from nary import (
+    Abs, BoolKind, Eq, Lambda, Ne, NumberKind, Pow, Symbol, arg, ceiling, conjugate, cosh,
+    declare_function, floor, im, log, sign, sin, sinh, tan, tanh,
+)
 from nary.calculus import Derivative, Integral
 from nary.domains import domain, domain_of
 from nary.logic import true
@@ -12,6 +15,10 @@ def test_declared_domains():
     assert domain(sin) == true
     assert repr(domain(log)) == "Ne(x, 0)"
     assert repr(domain(tan)) == "Ne(cos(x), 0)"
+    assert all(domain(f) == true for f in (sinh, cosh, im, Abs, conjugate, sign))
+    assert repr(domain(tanh)) == "Ne(cosh(x), 0)"
+    assert repr(domain(arg)) == "Ne(x, 0)"
+    assert repr(domain(floor)) == repr(domain(ceiling)) == "Eq(re(x), x)"
     assert repr(domain(nary.Lt)) == "And(Eq(re(lhs), lhs), Eq(re(rhs), rhs))"
     assert domain(Derivative) == true and domain(Lambda(x, x).head) == true
     assert domain(Integral) is None

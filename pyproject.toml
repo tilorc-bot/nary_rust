@@ -6,7 +6,14 @@ build-backend = "maturin"
 name = "nary_rust"
 version = "0.1.0"
 requires-python = ">=3.9"
-dependencies = ["mpmath>=1.3"]
+
+[project.optional-dependencies]
+intervals = ["mpmath>=1.3"]
+satsimp = [
+    "sympy==1.14.0",
+    "satassume @ git+https://github.com/tilorc-bot/satassume@9bafaa5b384b99a48cdaa51fe2e85aa12990e87f",
+    "satsimp @ git+https://github.com/tilorc-bot/satsimp@bd34c0a25506be91845ca7a85e8fa9b2e8466b32",
+]
 
 [tool.maturin]
 python-source = "python"

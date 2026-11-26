@@ -1,7 +1,11 @@
 from collections import Counter
 
-import nary as nr
 import pytest
+
+pytest.importorskip("sympy")
+pytest.importorskip("mpmath")
+
+import nary as nr
 from nary import E, Add, Eq, Ge, Gt, I, Le, Lt, Mul, Ne, Pow, cos, exp, log, pi, re, sin, tan
 from nary.autosimp import RULES, autosimp, node
 from nary.functions import is_lambda
