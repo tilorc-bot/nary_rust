@@ -1,11 +1,12 @@
 import doctest
 
+import pytest
+
 import nary.generic
-from nary import BoolKind, Eq, Equal, Lambda, NumberKind
+from nary import AnyEq, AnyNe, BoolKind, Eq, FunctionKind, Lambda, Ne, NumberKind
 from nary.domains import domain
 from nary.functions import is_lambda
 from nary.generic import Generic, kind_variable
-from nary.logic import Not, false
 from nary.logic import true
 
 x, y = NumberKind("x"), NumberKind("y")
@@ -19,8 +20,12 @@ def test_doctests():
 def test_a_generic_function_declares_each_filling_once():
     K = kind_variable("K")
     pair = Generic("Pair", K, K, returns=K, domain=true)
-    assert pair(x, x).head is pair(y, 1).head and len(pair.specific) == 1
+    assert pair(x, x).head is pair(y, 1).head is pair[NumberKind]
     assert pair(p, p).head in pair and Eq not in pair and len(pair.specific) == 2
+    with pytest.raises(TypeError, match="K is NumberKind and BoolKind"):
+        pair(x, p)
+    with pytest.raises(TypeError, match="do not give"):
+        pair(1, 1)
 
 
 def test_lambda_fills_in_its_kinds():
@@ -29,11 +34,9 @@ def test_lambda_fills_in_its_kinds():
     assert Lambda(p, Lambda(x, p)).kind.output.inputs == (NumberKind,)
 
 
-def test_equal_for_any_kind():
-    assert Equal(x, 0) == Equal(x, NumberKind(0)) and Equal(p, true).kind is BoolKind
-    assert Equal(x, y).head is Equal(y, x).head is not Equal(p, p).head
-    assert Equal(true, Not(false)).kind is BoolKind and Equal(x / x, 1).lhs == x / x
-    assert Equal(x, y) != Eq(x, y) and domain(Equal(p, p).head) == true
+def test_eq_and_ne_are_the_number_instances_of_any_kind_versions():
+    assert AnyEq(x, 0).head is Eq is AnyEq[NumberKind] and AnyNe(x, y).head is Ne
+    assert Eq.kind is FunctionKind((NumberKind, NumberKind), BoolKind) and Eq(x, y).lhs == x
+    assert domain(Eq) == true and AnyEq(p, true).kind is BoolKind
     f = Lambda(x, x)
-    assert Equal(f, f).head.kind.inputs == (f.kind, f.kind)
-
+    assert AnyEq(f, f).head.kind.inputs == (f.kind, f.kind) and AnyEq(f, f).head in AnyEq

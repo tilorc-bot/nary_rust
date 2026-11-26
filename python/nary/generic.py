@@ -45,12 +45,20 @@ def _match(parameter, kind, binding, name):
 
 def _fill(kind, binding):
     if kind in _variables:
-        if kind not in binding:
-            raise TypeError(f"the kind {kind!r} is not known from the arguments")
         return binding[kind]
     if kind.inputs is None:
         return kind
     return FunctionKind(tuple(_fill(k, binding) for k in kind.inputs), _fill(kind.output, binding))
+
+
+def _variables_in(kind, found):
+    if kind in _variables:
+        if kind not in found:
+            found.append(kind)
+    elif kind.inputs is not None:
+        for k in (*kind.inputs, kind.output):
+            _variables_in(k, found)
+    return found
 
 
 def _fill_parameter(parameter, binding):
@@ -62,24 +70,47 @@ def _fill_parameter(parameter, binding):
 
 
 class Generic:
+    """
+    >>> from nary import BoolKind, NumberKind
+    >>> from nary.logic import true
+    >>> K, L = kind_variable("K"), kind_variable("L")
+    >>> Pick = Generic("Pick", K, L, returns=K, domain=true)
+    >>> Pick.variables, Pick[NumberKind, BoolKind].kind
+    ([K, L], FunctionKind((NumberKind, BoolKind), NumberKind))
+    >>> Pick(NumberKind("x"), BoolKind("p")).head is Pick[NumberKind, BoolKind]
+    True
+    """
+
     def __init__(self, name, *parameters, returns, domain):
         self.name, self.parameters, self.returns, self.domain = name, parameters, returns, domain
+        self.variables = []
+        for kind in (*map(_kind_of, parameters), returns):
+            _variables_in(kind, self.variables)
         self.specific = {}
+
+    def __getitem__(self, kinds):
+        kinds = kinds if isinstance(kinds, tuple) else (kinds,)
+        if len(kinds) != len(self.variables):
+            raise TypeError(f"{self.name} has {len(self.variables)} kind variables, got {len(kinds)}")
+        if kinds not in self.specific:
+            binding = dict(zip(self.variables, kinds))
+            self.specific[kinds] = declare_function(
+                self.name,
+                *(_fill_parameter(p, binding) for p in self.parameters),
+                returns=_fill(self.returns, binding),
+                domain=self.domain,
+            )
+        return self.specific[kinds]
 
     def __call__(self, *args):
         binding = {}
         for parameter, arg in zip(self.parameters, args):
             if isinstance(arg, Expr):
                 _match(_kind_of(parameter), arg.kind, binding, self.name)
-        key = tuple(binding.items())
-        if key not in self.specific:
-            self.specific[key] = declare_function(
-                self.name,
-                *(_fill_parameter(p, binding) for p in self.parameters),
-                returns=_fill(self.returns, binding),
-                domain=self.domain,
-            )
-        return self.specific[key](*args)
+        unknown = [v for v in self.variables if v not in binding]
+        if unknown:
+            raise TypeError(f"{self.name}: the arguments do not give {unknown}")
+        return self[tuple(binding[v] for v in self.variables)](*args)
 
     def __contains__(self, function):
         return any(function is f for f in self.specific.values())

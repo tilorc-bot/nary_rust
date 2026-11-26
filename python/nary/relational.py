@@ -7,7 +7,7 @@ from .generic import Generic, kind_variable
 from .kinds import BoolKind, NumberKind
 from .logic import And, true
 
-__all__ = ["Eq", "Equal", "Ge", "Gt", "Le", "Lt", "Ne", "re"]
+__all__ = ["AnyEq", "AnyNe", "Eq", "Ge", "Gt", "Le", "Lt", "Ne", "re"]
 
 x = NumberKind("x")
 lhs, rhs = NumberKind("lhs"), NumberKind("rhs")
@@ -17,8 +17,10 @@ lhs, rhs = NumberKind("lhs"), NumberKind("rhs")
 re = declare_function("re", x, returns=NumberKind, domain=true)
 # == and != compare structure and return a Python bool, so Eq and Ne have no
 # operator.
-Eq = declare_function("Eq", lhs, rhs, returns=BoolKind, domain=true)
-Ne = declare_function("Ne", lhs, rhs, returns=BoolKind, domain=true)
+K = kind_variable("K")
+AnyEq = Generic("Eq", K("lhs"), K("rhs"), returns=BoolKind, domain=true)
+AnyNe = Generic("Ne", K("lhs"), K("rhs"), returns=BoolKind, domain=true)
+Eq, Ne = AnyEq[NumberKind], AnyNe[NumberKind]
 # A comparison has a value only when both sides are real, as in
 # lean/Nary/Logic.lean. Issue #2 proposes this; the owner has not confirmed it.
 both_real = And(Eq(re(lhs), lhs), Eq(re(rhs), rhs))
@@ -31,7 +33,3 @@ set_operator(NumberKind, "<", Lt)
 set_operator(NumberKind, ">", Gt)
 set_operator(NumberKind, "<=", Le)
 set_operator(NumberKind, ">=", Ge)
-
-
-K = kind_variable("K")
-Equal = Generic("Equal", K("lhs"), K("rhs"), returns=BoolKind, domain=true)
