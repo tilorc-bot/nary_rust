@@ -26,31 +26,18 @@ is substituted.
 """
 
 from ._core import Expr, FunctionKind, Symbol
-from .domains import declare_function
+from .domains import Family
 from .logic import true
 
 __all__ = ["Lambda", "is_lambda"]
 
-# The function named "Lambda" for each combination of kinds, declared the
-# first time it is needed. The key is the kinds of the variables followed by
-# the kind of the body, which is also the inputs of the function's kind.
-_lambda_functions = {}
+def _lambda_signature(*kinds):
+    *variable_kinds, body_kind = kinds
+    parameters = (*(Symbol(kind) for kind in variable_kinds), body_kind)
+    return parameters, FunctionKind(tuple(variable_kinds), body_kind), true
 
 
-def _lambda_function(variable_kinds, body_kind):
-    """The function named "Lambda" for these kinds, declared once."""
-    key = (*variable_kinds, body_kind)
-    if key not in _lambda_functions:
-        _lambda_functions[key] = declare_function(
-            "Lambda",
-            *(Symbol(kind) for kind in variable_kinds),
-            body_kind,
-            returns=FunctionKind(variable_kinds, body_kind),
-            # A lambda always means a function, though the function may
-            # have no value at some points.
-            domain=true,
-        )
-    return _lambda_functions[key]
+_lambda_functions = Family("Lambda", _lambda_signature)
 
 
 def Lambda(variables, body):
@@ -82,7 +69,7 @@ def Lambda(variables, body):
             names.add(variable.name)
 
     variable_kinds = tuple(variable.kind for variable in variables)
-    return _lambda_function(variable_kinds, body.kind)(*variables, body)
+    return _lambda_functions(*variable_kinds, body.kind)(*variables, body)
 
 
 def is_lambda(e):
@@ -90,4 +77,4 @@ def is_lambda(e):
     named "Lambda" declared here."""
     if not isinstance(e, Expr) or e.head is None:
         return False
-    return _lambda_functions.get(e.head.kind.inputs) is e.head
+    return e.head in _lambda_functions

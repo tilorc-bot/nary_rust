@@ -18,7 +18,7 @@
 6 python/nary/constants.py
 53 python/nary/domains.py
 2 python/nary/elementary.py
-26 python/nary/functions.py
+20 python/nary/functions.py
 8 python/nary/kinds.py
 134 python/nary/lean.py
 9 python/nary/logic.py
