@@ -19,10 +19,17 @@ The round trip may give a value where there was none, which strict refuses.
     (Add(Pow(tan(x), 2), Mul(-1, Pow(cos(x), -2))), -1)
     >>> sympy.refused[0]
     (Add(Pow(tan(x), 2), Mul(-1, 1), Mul(-1, Pow(tan(x), 2))), -1)
+
+The native canonical form, autosimp, takes the assumptions as known conditions.
+
+    >>> native = Simplifier(autosimp)
+    >>> native.trigsimp(nr.sin(x) ** 2 + nr.cos(x) ** 2), native.refine(x / x), native.refine(x / x, nr.Ne(x, 0))
+    (1, Pow(x, 0), 1)
 """
 
 from nary import Add, Mul
-from nary.logic import true
+from nary.autosimp import autosimp
+from nary.logic import And, true
 
 from .engine import Engine, identity_handler, rule_handler, size
 from .prove import prover
@@ -30,18 +37,26 @@ from .rows import refine_tables, trigsimp_tables
 from .substitute import substitution_handler
 from .translate import from_sympy, to_sympy
 
-__all__ = ["PROVIDERS", "Simplifier", "none", "sympy_round_trip"]
+__all__ = ["PROVIDERS", "Simplifier", "autosimp", "none", "sympy_round_trip"]
 
 
-def none(e):
+def none(e, known=()):
     return e
 
 
-def sympy_round_trip(e):
+def sympy_round_trip(e, known=()):
     return from_sympy(to_sympy(e))
 
 
-PROVIDERS = {"none": none, "sympy": sympy_round_trip}
+PROVIDERS = {"none": none, "sympy": sympy_round_trip, "native": autosimp}
+
+
+def _conjuncts(condition):
+    if condition == true:
+        return frozenset()
+    if condition.head == And:
+        return frozenset().union(*map(_conjuncts, condition.args))
+    return frozenset([condition])
 
 
 def _by_head(rows):
@@ -72,8 +87,11 @@ class Simplifier:
         self.canonical, self.strict, self.rows = canonical, strict, rows
         self.loops, self.refused, self.proved = [], [], []
 
-    def _run(self, handlers, e, known):
-        engine = Engine(handlers if self.rows else {}, known, self.canonical, self.strict)
+    def _run(self, handlers, e, known, conjuncts):
+        def canonical(e):
+            return self.canonical(e, conjuncts)
+
+        engine = Engine(handlers if self.rows else {}, known, canonical, self.strict)
         result = engine(e)
         self.loops += engine.loops
         self.refused += engine.refused
@@ -85,7 +103,7 @@ class Simplifier:
                    for rows in parts]
             for head, parts in refine_tables().rows.items()
         }
-        return self._run(handlers, e, prover(assumptions, self.proved))
+        return self._run(handlers, e, prover(assumptions, self.proved), _conjuncts(assumptions))
 
     def trigsimp(self, e, assumptions=true):
         tables = trigsimp_tables().rows
@@ -96,7 +114,11 @@ class Simplifier:
         def measure(e):
             return _count(e, heads), size(e)
 
-        known = prover(assumptions, self.proved)
+        known, conjuncts = prover(assumptions, self.proved), _conjuncts(assumptions)
+
+        def run(handlers, e):
+            return self._run(handlers, e, known, conjuncts)
+
         conditional = _by_head(tables["conditional"])
         normalize = {**_by_head(tables["normalize"]), **conditional}
         pythagorean = substitution_handler(tables["pythagorean"], measure, heads)
@@ -105,10 +127,10 @@ class Simplifier:
                     Mul: [_smallest(tables["quotients"], measure), substitute]}
         best, best_m = e, measure(e)
         while True:
-            normal = self._run(normalize, best, known)
-            out = min(self._run(simplify, normal, known),
-                      self._run(simplify, self._run({Add: [pythagorean], Mul: [pythagorean]},
-                                                    normal, known), known), key=measure)
+            normal = run(normalize, best)
+            out = min(run(simplify, normal),
+                      run(simplify, run({Add: [pythagorean], Mul: [pythagorean]}, normal)),
+                      key=measure)
             if not measure(out) < best_m:
                 return best
             best, best_m = out, measure(out)

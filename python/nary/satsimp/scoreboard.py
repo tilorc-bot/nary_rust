@@ -25,8 +25,8 @@ from .translate import Untranslatable, from_sympy, lacking, to_sympy
 
 __all__ = ["normal", "plain", "score_catalogue", "score_tests"]
 
-SETTINGS = [(name, strict, True) for name in PROVIDERS for strict in (True, False)] + [
-    ("sympy", True, False), ("sympy", False, False)]
+SETTINGS = [(name, strict, rows) for rows in (True, False) for name in PROVIDERS
+            if rows or name != "none" for strict in (True, False)]
 
 
 def normal(e):
