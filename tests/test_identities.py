@@ -16,6 +16,7 @@ def test_the_rules_are_those_listed_before_the_blocks():
         rule(a * 1, a, name="mul_identity"),
         rule(a * 0, 0, name="mul_absorbing"),
         rule(a + a, 2 * a, name="add_self"),
+        rule(a * a, a ** 2, name="mul_repeats"),
         rule(a - a, 0, name="add_inverse"),
         rule(a / a, 1, when=Ne(a, 0), name="mul_inverse"),
         rule(a ** 1, a, name="pow_one"),

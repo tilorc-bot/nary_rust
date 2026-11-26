@@ -100,7 +100,7 @@ def test_names_that_are_quoted_or_refused():
         to_lean_rule(rule(x + 0, x, name="fun"))
 
 
-def test_facts_are_refused_for_a_function_that_does_not_take_a_list():
+def test_facts_are_refused_for_a_function_without_laws():
     for function in (nr.Pow, Integral):
         with pytest.raises(ValueError):
             to_lean_facts(function)

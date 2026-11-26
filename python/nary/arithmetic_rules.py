@@ -17,18 +17,18 @@ The rule a * 0 -> 0 erases a.
 from .arithmetic import Add, Mul, Pow
 from .elementary import exp, log
 from ._identities import (
-    Equal, absorbing, associative, commutative, declare_identities, identity, inverse,
+    Equal, absorbing, associative, commutative, declare_identities, identity, inverse, repeats,
 )
 from .kinds import NumberKind
 from .relational import Ne
 
-a = NumberKind("a")
+a, n = NumberKind("a"), NumberKind("n")
 
 add = declare_identities(Add, [
     associative,
     commutative,
     identity(0),
-    Equal(a + a, 2 * a, name="add_self"),
+    repeats(Mul(n, a), n, name="add_self"),
     inverse(Mul(-1, a)),
 ])
 mul = declare_identities(Mul, [
@@ -36,6 +36,7 @@ mul = declare_identities(Mul, [
     commutative,
     identity(1),
     absorbing(0),
+    repeats(Pow(a, n), n),
     inverse(Pow(a, -1), when=Ne(a, 0)),
 ])
 power = declare_identities(Pow, [

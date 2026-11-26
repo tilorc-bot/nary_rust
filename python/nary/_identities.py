@@ -12,8 +12,8 @@ from .kinds import Many, NumberKind
 from .rules import flat, rule, unordered
 
 __all__ = [
-    "Equal", "absorbing", "associative", "commutative", "declare_identities",
-    "identities", "identity", "inverse",
+    "Equal", "absorbing", "associative", "commutative", "declare_identities", "heads",
+    "idempotent", "identities", "identity", "inverse", "involution", "repeats",
 ]
 
 
@@ -41,14 +41,14 @@ class Law:
     (identity(0), Equal(f(s, e, t), f(s, t)))
     """
 
-    def __init__(self, title, statement, params=(), args=None, when=None, name=None):
+    def __init__(self, title, statement, params=(), args=None, when=None, name=None, of=None):
         self.title, self.statement, self.params = title, statement, params
-        self.args, self.when, self.name = args, when, name
+        self.args, self.when, self.name, self.of = args, when, name, of or self
 
     def __call__(self, *args, when=None, name=None):
         if self.args is not None or len(args) != len(self.params):
             raise TypeError(f"{self.title} takes {len(self.params)} parameters")
-        return Law(self.title, self.statement, self.params, args, when, name)
+        return Law(self.title, self.statement, self.params, args, when, name, self)
 
     def __repr__(self):
         if not self.params:
@@ -58,13 +58,18 @@ class Law:
 
 PatternKind = declare_kind("PatternKind")
 f = FunctionKind((Many(PatternKind),), PatternKind)("f")
-a, b, e, i, z, s, t, u = (PatternKind(name) for name in "abeizstu")
+g, plus = (FunctionKind((PatternKind, PatternKind), PatternKind)(name) for name in ("g", "plus"))
+h = FunctionKind((PatternKind,), PatternKind)("h")
+a, b, e, i, m, n, z, s, t, u = (PatternKind(name) for name in "abeimnzstu")
 
 associative = Law("associative", Equal(f(s, f(t), u), f(s, t, u)))
 commutative = Law("commutative", Equal(f(s, a, t, b, u), f(s, b, t, a, u)))
 identity = Law("identity", Equal(f(s, e, t), f(s, t)), (e,))
 absorbing = Law("absorbing", Equal(f(s, z, t), z), (z,))
 inverse = Law("inverse", Equal(f(a, i), e), (i,))
+idempotent = Law("idempotent", Equal(f(s, a, t, a, u), f(s, a, t, u)))
+involution = Law("involution", Equal(h(h(a)), a))
+repeats = Law("repeats", Equal(f(g(a, m), g(a, n)), g(a, plus(m, n))), (g(a, n), n))
 
 _blocks = {}
 
@@ -82,14 +87,14 @@ def declare_identities(F, items):
         raise ValueError(f"the identities of {F!r} are already declared")
     laws = [item for item in items if isinstance(item, Law)]
     units = [law.args[0] for law in laws if law.title == "identity"]
-    x = NumberKind("a")
+    x = F.kind.output("a")
     rules, facts = [], []
     for item in items:
         if not isinstance(item, (Law, Equal)):
             raise TypeError(f"{item!r} cannot be listed")
-        if isinstance(item, Law) and item.params and item.name is None:
+        if isinstance(item, Law) and item.name is None:
             name = f"{F.name.lower()}_{item.title}"
-            item = Law(item.title, item.statement, item.params, item.args, item.when, name)
+            item = Law(item.title, item.statement, item.params, item.args, item.when, name, item.of)
         if isinstance(item, Equal) and item.name is None:
             raise ValueError(f"{item!r} in the block of {F!r} needs a name=")
         if isinstance(item, Equal):
@@ -106,6 +111,14 @@ def declare_identities(F, items):
             if not units:
                 raise ValueError(f"inverse needs an identity in the block of {F!r}")
             rules.append(rule(F(x, item.args[0]), units[0], when=item.when, name=item.name))
+        elif item.title == "idempotent":
+            rules.append(rule(F(x, x), x, when=item.when, name=item.name))
+        elif item.title == "involution":
+            rules.append(rule(F(F(x)), x, when=item.when, name=item.name))
+        elif item.title == "repeats":
+            form, count = item.args
+            twice = form.head(*(count.kind(2) if arg == count else x for arg in form.args))
+            rules.append(rule(F(x, x), twice, when=item.when, name=item.name))
     names = [r.name for r in rules]
     if len(set(names)) < len(names):
         raise ValueError(f"two rules in the block of {F!r} have the same name")
@@ -117,3 +130,7 @@ def declare_identities(F, items):
 
 def identities(F):
     return list(_blocks.get(F, []))
+
+
+def heads():
+    return list(_blocks)
