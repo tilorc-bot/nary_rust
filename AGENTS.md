@@ -4,7 +4,10 @@ Write no prose. Show what the code does with an example that a test runs.
 
 ## Docstrings
 
-Only doctests. One line of text above a group of examples is allowed.
+Doctests. One line of text above a group of examples is allowed.
+
+Where the name and the parameters do not say what a function does, the
+first line may be one simple sentence that does.
 
 Good:
 
@@ -13,6 +16,14 @@ def domain_of(e):
     """
     >>> domain_of(log(y + 1))
     Ne(Add(y, 1), 0)
+    """
+
+
+def _has_a_value(e, known):
+    """Whether e is known to have a value, given the conditions that known says hold.
+
+    >>> _has_a_value(log(x), lambda condition: condition == Ne(x, 0))
+    True
     """
 ```
 

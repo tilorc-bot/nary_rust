@@ -17,8 +17,10 @@ def docstring_prose(doc):
     0
     >>> docstring_prose("First line.\\nSecond line.\\n\\n    >>> 1 + 1\\n    2\\n")
     2
-    >>> docstring_prose("No example.")
-    1
+    >>> docstring_prose("One sentence and no example.")
+    0
+    >>> docstring_prose("First line.\\nSecond line.")
+    2
     >>> docstring_prose("    >>> 1 + 1\\n    2\\n\\nAfter the last example.")
     1
     """
@@ -28,7 +30,7 @@ def docstring_prose(doc):
         if isinstance(piece, doctest.Example):
             continue
         lines = sum(1 for line in piece.splitlines() if line.strip())
-        caption = lines == 1 and i + 1 < len(pieces)
+        caption = lines == 1 and (i == 0 or i + 1 < len(pieces))
         if not caption:
             count += lines
     return count
@@ -38,8 +40,8 @@ def python_prose(source):
     """
     >>> python_prose("x = 1  # why\\n# why\\nfrom m import *  # noqa: F403\\n")
     2
-    >>> python_prose('def f():\\n    "What f does."\\n')
-    1
+    >>> python_prose('def f():\\n    "What f does,\\\\nat length."\\n')
+    2
     """
     count = 0
     for token in tokenize.generate_tokens(io.StringIO(source).readline):
