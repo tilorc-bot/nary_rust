@@ -598,7 +598,10 @@ fn apply<'py>(head: &Bound<'py, Expr>, args: &Bound<'py, PyTuple>) -> PyResult<B
             _ => sig.inputs[position],
         };
         match arg.cast_exact::<Expr>() {
-            Ok(expr_arg) if same_kind(expr_arg.get().kind, expected) => {
+            Ok(expr_arg)
+                if same_kind(expr_arg.get().kind, expected)
+                    || (position >= fixed && same_kind(expr_arg.get().kind, sig.inputs[fixed])) =>
+            {
                 if let Some(converted) = converted.as_mut() {
                     converted.push(arg.to_owned());
                 }
