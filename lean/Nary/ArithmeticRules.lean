@@ -8,13 +8,13 @@ private theorem holds_ne_zero {a : Number} (h : Holds (Ne a (lit 0))) :
   | none => simp [Ne, Holds] at h
   | some z => exact ⟨z, rfl, by simpa [Ne, Holds, lit] using h⟩
 
-theorem add_zero : Statement.add_zero := by
+theorem add_identity : Statement.add_identity := by
   intro a; cases a <;> simp [Add, lit]
 
-theorem mul_one : Statement.mul_one := by
+theorem mul_identity : Statement.mul_identity := by
   intro a; cases a <;> simp [Mul, lit]
 
-theorem mul_zero : Statement.mul_zero := by
+theorem mul_absorbing : Statement.mul_absorbing := by
   intro a h
   obtain ⟨z, rfl⟩ := Option.ne_none_iff_exists'.mp h
   simp [Mul, lit]
@@ -25,12 +25,12 @@ example : Mul [log (lit 0), lit 0] ≠ lit 0 := by
 theorem add_self : Statement.add_self := by
   intro a; cases a <;> simp [Add, Mul, lit, two_mul]
 
-theorem sub_self : Statement.sub_self := by
+theorem add_inverse : Statement.add_inverse := by
   intro a h
   obtain ⟨z, rfl⟩ := Option.ne_none_iff_exists'.mp h
   simp [Add, Mul, lit]
 
-theorem div_self : Statement.div_self := by
+theorem mul_inverse : Statement.mul_inverse := by
   intro a h _
   obtain ⟨z, rfl, hz⟩ := holds_ne_zero h
   have : z * Complex.exp (-Complex.log z) = 1 := by
@@ -94,12 +94,12 @@ theorem mul_flat : Statement.mul_flat := by
   cases xs.mapM id <;> cases ys.mapM id <;> cases zs.mapM id <;> simp
 
 theorem proved : Proved where
-  add_zero := add_zero
-  mul_one := mul_one
-  mul_zero := mul_zero
+  add_identity := add_identity
+  mul_identity := mul_identity
+  mul_absorbing := mul_absorbing
   add_self := add_self
-  sub_self := sub_self
-  div_self := div_self
+  add_inverse := add_inverse
+  mul_inverse := mul_inverse
   pow_one := pow_one
   pow_zero := pow_zero
   exp_log := exp_log

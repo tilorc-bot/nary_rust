@@ -51,11 +51,11 @@ def test_refused():
 
 def test_to_lean_rule():
     by_name = {r.name: r for r in rules}
-    assert to_lean_rule(by_name["add_zero"]) == (
-        "abbrev add_zero : Prop :=\n  ∀ (a : Nary.Number), Nary.Add [a, Nary.lit 0] = a"
+    assert to_lean_rule(by_name["add_identity"]) == (
+        "abbrev add_identity : Prop :=\n  ∀ (a : Nary.Number), Nary.Add [a, Nary.lit 0] = a"
     )
-    assert to_lean_rule(by_name["mul_zero"]) == (
-        "abbrev mul_zero : Prop :=\n"
+    assert to_lean_rule(by_name["mul_absorbing"]) == (
+        "abbrev mul_absorbing : Prop :=\n"
         "  ∀ (a : Nary.Number), a ≠ none → Nary.Mul [a, Nary.lit 0] = Nary.lit 0"
     )
     assert to_lean_rule(by_name["exp_log"]) == (

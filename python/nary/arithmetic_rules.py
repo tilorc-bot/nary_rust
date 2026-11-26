@@ -10,31 +10,40 @@ The rule a * 0 -> 0 erases a.
 
     >>> a = NumberKind("a")
     >>> [(r, r.erased) for r in rules if r.pattern == a * 0]
-    [(Rule(Mul(a, 0), 0, name='mul_zero'), (a,))]
+    [(Rule(Mul(a, 0), 0, name='mul_absorbing'), (a,))]
 
 """
 
-from .arithmetic import Add, Mul
+from .arithmetic import Add, Mul, Pow
 from .elementary import exp, log
+from ._identities import (
+    Equal, absorbing, associative, commutative, declare_identities, identity, inverse,
+)
 from .kinds import NumberKind
 from .relational import Ne
-from .rules import flat, rule, unordered
 
 a = NumberKind("a")
 
-unordered(Add)
-flat(Add)
-unordered(Mul)
-flat(Mul)
+add = declare_identities(Add, [
+    associative,
+    commutative,
+    identity(0),
+    Equal(a + a, 2 * a, name="add_self"),
+    inverse(Mul(-1, a)),
+])
+mul = declare_identities(Mul, [
+    associative,
+    commutative,
+    identity(1),
+    absorbing(0),
+    inverse(Pow(a, -1), when=Ne(a, 0)),
+])
+power = declare_identities(Pow, [
+    Equal(a ** 1, a, name="pow_one"),
+    Equal(a ** 0, 1, when=Ne(a, 0), name="pow_zero"),
+])
+exponential = declare_identities(exp, [
+    Equal(exp(log(a)), a, when=Ne(a, 0), name="exp_log"),
+])
 
-rules = [
-    rule(a + 0, a, name="add_zero"),
-    rule(a * 1, a, name="mul_one"),
-    rule(a * 0, 0, name="mul_zero"),
-    rule(a + a, 2 * a, name="add_self"),
-    rule(a - a, 0, name="sub_self"),
-    rule(a / a, 1, when=Ne(a, 0), name="div_self"),
-    rule(a ** 1, a, name="pow_one"),
-    rule(a ** 0, 1, when=Ne(a, 0), name="pow_zero"),
-    rule(exp(log(a)), a, when=Ne(a, 0), name="exp_log"),
-]
+rules = add + mul + power + exponential

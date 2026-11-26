@@ -4,22 +4,22 @@ import Nary.Logic
 
 namespace Nary.ArithmeticRules.Statement
 
-abbrev add_zero : Prop :=
+abbrev add_identity : Prop :=
   ∀ (a : Nary.Number), Nary.Add [a, Nary.lit 0] = a
-
-abbrev mul_one : Prop :=
-  ∀ (a : Nary.Number), Nary.Mul [a, Nary.lit 1] = a
-
-abbrev mul_zero : Prop :=
-  ∀ (a : Nary.Number), a ≠ none → Nary.Mul [a, Nary.lit 0] = Nary.lit 0
 
 abbrev add_self : Prop :=
   ∀ (a : Nary.Number), Nary.Add [a, a] = Nary.Mul [Nary.lit 2, a]
 
-abbrev sub_self : Prop :=
+abbrev add_inverse : Prop :=
   ∀ (a : Nary.Number), a ≠ none → Nary.Add [a, Nary.Mul [Nary.lit (-1), a]] = Nary.lit 0
 
-abbrev div_self : Prop :=
+abbrev mul_identity : Prop :=
+  ∀ (a : Nary.Number), Nary.Mul [a, Nary.lit 1] = a
+
+abbrev mul_absorbing : Prop :=
+  ∀ (a : Nary.Number), a ≠ none → Nary.Mul [a, Nary.lit 0] = Nary.lit 0
+
+abbrev mul_inverse : Prop :=
   ∀ (a : Nary.Number), Nary.Holds (Nary.Ne a (Nary.lit 0)) → a ≠ none → Nary.Mul [a, Nary.Pow a (Nary.lit (-1))] = Nary.lit 1
 
 abbrev pow_one : Prop :=
@@ -48,12 +48,12 @@ end Nary.ArithmeticRules.Statement
 namespace Nary.ArithmeticRules
 
 structure Proved : Prop where
-  add_zero : Statement.add_zero
-  mul_one : Statement.mul_one
-  mul_zero : Statement.mul_zero
+  add_identity : Statement.add_identity
   add_self : Statement.add_self
-  sub_self : Statement.sub_self
-  div_self : Statement.div_self
+  add_inverse : Statement.add_inverse
+  mul_identity : Statement.mul_identity
+  mul_absorbing : Statement.mul_absorbing
+  mul_inverse : Statement.mul_inverse
   pow_one : Statement.pow_one
   pow_zero : Statement.pow_zero
   exp_log : Statement.exp_log
