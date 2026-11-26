@@ -20,7 +20,7 @@ from fractions import Fraction
 from functools import lru_cache
 from math import gcd, prod
 
-from . import arithmetic_rules
+from . import arithmetic_rules, intervals
 from ._core import Expr
 from .arithmetic import Add, Mul, Pow
 from .constants import E, I, pi
@@ -461,6 +461,8 @@ def _pow(args, known):
         return node(Pow, [base.args[0], node(Mul, [base.args[1], x], known)], known)
     if base.head == exp and (n is not None or real(base.args[0], known)):
         return node(exp, [node(Mul, [x, base.args[0]], known)], known)
+    if base.head in (Pow, exp) and (value := _branch(*_base_exp(base), x, known)) is not None:
+        return value
     if base.head == Mul and n:
         return node(Mul, [node(Pow, [f, x], known) for f in base.args], known)
     if base.head == Mul and rational(x) is not None and _coeff(base)[1] == I:
@@ -550,6 +552,41 @@ def _nested(inner, y, x, known):
     if integer(x) is None and not (rational(y) is not None and abs(rational(y)) < 1):
         return False
     return nonzero(inner, known) or _nonnegative(y, known) or _nonnegative(x, known)
+
+
+def _turns(b, y, known):
+    r = rational(y)
+    if r is not None and negative(b, known):
+        return int((HALF_FRACTION - r / 2) // 1)
+    return intervals.turns(Mul(y, log(b)))
+
+
+def _branch(b, y, x, known):
+    """
+    >>> node(Pow, [exp(5 * I), HALF])
+    Mul(-1, exp(Mul(5, Pow(2, -1), I)))
+    >>> node(Pow, [Pow(1 - Pow(2, HALF), -1), HALF])
+    Mul(I, Pow(Add(-1, Pow(2, Pow(2, -1))), Mul(-1, Pow(2, -1))))
+    """
+    r, s = rational(y), rational(x)
+    half = s is not None and s.denominator == 2
+    if not nonzero(b, known) or r == 0:
+        return None
+    if r == -1 and half and negative(b, known):
+        rest = node(Pow, [_negative(b, known), _negative(x, known)], known)
+        return node(Mul, [node(Pow, [MINUS_ONE, x], known), rest], known)
+    if r is not None and r % 2 == 0 and negative(b, known):
+        return node(Pow, [node(Pow, [_negative(b, known), y], known), x], known)
+    if r is not None and abs(r) < 2 and _nonnegative(node(re, [b], known), known):
+        k = 0
+    elif real(y, known) and not half:
+        return None
+    else:
+        k = _turns(b, y, known)
+    if k is None or (k and not half):
+        return None
+    power = node(Pow, [b, node(Mul, [y, x], known)], known)
+    return node(Mul, [MINUS_ONE, power], known) if k and k * s.numerator % 2 else power
 
 
 def _split_power(base, x, known):
