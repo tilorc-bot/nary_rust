@@ -49,14 +49,14 @@ negation = declare_identities(Not, [
     Equal(Not(Not(p)), p, name="not_not"),
     Equal(Not(true), false, name="not_true"),
     Equal(Not(false), true, name="not_false"),
-    Equal(Not(And(p, ps)), Or(Not(p), Not(And(ps))), name="not_and"),
-    Equal(Not(Or(p, ps)), And(Not(p), Not(Or(ps))), name="not_or"),
     Equal(Not(Eq(a, b)), Ne(a, b), name="not_eq"),
     Equal(Not(Ne(a, b)), Eq(a, b), name="not_ne"),
     Equal(Not(Lt(a, b)), Ge(a, b), name="not_lt"),
     Equal(Not(Le(a, b)), Gt(a, b), name="not_le"),
     Equal(Not(Gt(a, b)), Le(a, b), name="not_gt"),
     Equal(Not(Ge(a, b)), Lt(a, b), name="not_ge"),
+    Equal(Not(And(p, ps)), Or(Not(p), Not(And(ps))), name="not_and"),
+    Equal(Not(Or(p, ps)), And(Not(p), Not(Or(ps))), name="not_or"),
 ])
 equality = declare_identities(Eq, [Equal(Eq(a, a), true, name="eq_self")])
 inequality = declare_identities(Ne, [Equal(Ne(a, a), false, name="ne_self")])

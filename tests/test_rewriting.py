@@ -1,5 +1,6 @@
+import nary.logic_rules  # noqa: F401
 from nary import Add, Eq, Gt, Lambda, Many, Mul, Ne, NumberKind, Pow, cos, exp, log, pi, re, sin, tan
-from nary.logic import And, Or, false, true
+from nary.logic import And, BoolKind, Not, Or, false, true
 from nary.arithmetic_rules import rules
 from nary.domains import declare_function
 from nary.calculus import Integral, NumberFunction
@@ -98,9 +99,9 @@ def test_known_is_asked_about_the_variable_of_a_lambda():
 
 
 def test_a_nested_pattern_is_not_flattened():
-    assert rewrite(Add(Add(x, y), x), [rule(a + b + a, a)]) == Add(Add(x, y), x)
+    assert rewrite(Add(Add(x, y), z), [rule(a + b + a, a)]) == Add(Add(x, y), z)
     cancel = rule(a * b / b, a, when=Ne(b, 0))
-    assert rewrite(x * y / y, [cancel], known=lambda condition: True) == x * y / y
+    assert rewrite(x * y / y, [cancel], known=lambda condition: True) == Mul(x, 1)
 
 
 def test_a_condition_is_not_evaluated():
@@ -128,8 +129,8 @@ def test_the_result_of_a_partial_match_is_flattened():
 def test_a_run_variable_takes_the_arguments_that_are_left():
     period = rule(sin(Add(a, Mul(2, pi), rest)), sin(Add(a, rest)))
     assert rewrite(sin(Add(x, y, 2 * pi)), [period]) == sin(Add(x, y))
-    assert rewrite(sin(Add(x, 2 * pi)), [period]) == sin(Add(x))
-    assert rewrite(cos(sin(Add(2 * pi, x))), [period]) == cos(sin(Add(x)))
+    assert rewrite(sin(Add(x, 2 * pi)), [period]) == sin(x)
+    assert rewrite(cos(sin(Add(2 * pi, x))), [period]) == cos(sin(x))
 
 
 def test_a_run_variable_in_an_ordered_argument_list():
@@ -181,3 +182,23 @@ def test_beta():
     assert beta(Lambda(y, sin(y) + y)(x)) == sin(x) + x
     inner = Lambda(y, Lambda(x, x + y))(x)
     assert beta(inner) == inner
+
+
+def test_a_flat_pattern_matches_through_the_identity():
+    half_turn = rule(sin(Mul(b, pi, rest)), cos(Mul(b, rest)))
+    assert rewrite(sin(pi), [half_turn]) == cos(1)
+    shift = rule(sin(Add(a, Mul(2, pi), rest)), sin(Add(a, rest)))
+    assert rewrite(sin(Mul(2, pi)), [shift]) == sin(0)
+    assert rewrite(sin(x), [rule(sin(Add(a, b, z)), cos(a))]) == cos(x)
+
+
+def test_a_replacement_is_flattened():
+    assert rewrite(sin(x), [rule(sin(a), Add(a, Add(a, Add(a, 1))))]) == Add(x, x, x, 1)
+    p, q, r = BoolKind("p"), BoolKind("q"), BoolKind("r")
+    assert rewrite(Not(And(p, q, r)), nary.logic_rules.rules) == Or(Not(p), Not(q), Not(r))
+
+
+def test_a_cycle_stops():
+    flip = rule(sin(a), sin(Mul(-1, a)))
+    unflip = rule(sin(Mul(-1, a)), sin(a))
+    assert rewrite(sin(x), [unflip, flip]) in (sin(x), sin(Mul(-1, x)))

@@ -8,6 +8,7 @@ from nary.normal import normal
 from nary.relational import Eq, Ge, Gt, Lt, Ne
 from nary.rewriting import rewrite
 from nary.rules import Rule
+from nary.simplify import simplify
 
 LISTS = [arithmetic_rules.rules, elementary_rules.rules, logic_rules.rules]
 RULES = [r for rules in LISTS for r in rules]
@@ -121,3 +122,24 @@ def test_logic_rewrites(e, expected):
 def test_reflexive_order_needs_a_real_argument():
     assert rewrite(Lt(x, x), logic_rules.rules) == Lt(x, x)
     assert rewrite(Lt(x, x), logic_rules.rules, known=facts(Eq(re(x), x))) == false
+
+
+@pytest.mark.parametrize("e, expected", [
+    (sin(pi), 0),
+    (cos(pi), -1),
+    (sin(pi / 2), 1),
+    (cos(pi / 2), 0),
+    (sin(7 * pi / 6), -Pow(2, -1)),
+    (cos(4 * pi / 3), -Pow(2, -1)),
+    (sin(x + 2 * pi), sin(x)),
+    (sin(x + pi), -sin(x)),
+    (cos(x + pi / 2), -sin(x)),
+    (sin(x - pi / 3), -cos(x + pi / 6)),
+    (tan(x + pi), tan(x)),
+    (exp(I * pi), -1),
+    (exp(2 * I * pi), 1),
+    (exp(I * pi / 2), I),
+    (exp(7 * I * pi / 3), exp(I * pi / 3)),
+])
+def test_values_and_shifts_through_simplify(e, expected):
+    assert simplify(e) == simplify(NumberKind(expected) if isinstance(expected, int) else expected)

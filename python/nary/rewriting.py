@@ -53,6 +53,7 @@ from .functions import is_lambda
 from .kinds import NumberKind
 from .logic import And, Or, true
 from .relational import Eq, Ge, Gt, Le, Lt, Ne, re
+from ._identities import Law, identities
 from .rules import is_flat, is_run, is_unordered
 
 __all__ = ["beta", "has_a_value", "holds", "implications", "rewrite"]
@@ -132,6 +133,7 @@ class _Rewriting:
 
     def rewrite(self, e):
         if e not in self.done:
+            self.done[e] = e
             self.done[e] = self._rewrite(e)
         return self.done[e]
 
@@ -141,7 +143,7 @@ class _Rewriting:
         head = self.rewrite(e.head)
         args = tuple(map(self.rewrite, e.args))
         if head != e.head or args != e.args:
-            e = head(*args)
+            e = _flatten(head(*args))
         if self.normal is not None:
             result = self.normal(e, self.ask)
             if result != e:
@@ -175,12 +177,13 @@ def _apply(rule, e, known):
 def _flatten(e):
     if not (_is_declared(e.head) and is_flat(e.head)):
         return e
-    if not any(arg.head == e.head for arg in e.args):
-        return e
     args = []
     for arg in e.args:
         args.extend(arg.args if arg.head == e.head else (arg,))
-    return e.head(*args)
+    unit = _unit(e.head)
+    if unit is not None and len(args) < 2:
+        return args[0] if args else unit
+    return e.head(*args) if len(args) != len(e.args) or args != list(e.args) else e
 
 
 def _is_declared(head):
@@ -189,13 +192,11 @@ def _is_declared(head):
 
 def _match_top(pattern, e):
     head = pattern.head
-    if any(map(is_run, pattern.args)) or not (
-        _is_declared(head) and is_unordered(head) and is_flat(head)
+    if any(map(is_run, pattern.args)) or e.head != head or len(e.args) < len(pattern.args) or not (
+        is_unordered(head) and is_flat(head)
     ):
         for bindings in _match(pattern, e, {}):
             yield bindings, None
-        return
-    if e.head != head:
         return
     for bindings, used in _match_unordered(pattern.args, e.args, {}, ()):
         if len(used) == len(e.args):
@@ -215,14 +216,28 @@ def _match(pattern, e, bindings):
     elif pattern.head is None:
         if pattern == e:
             yield bindings
+    elif e.head != pattern.head and _unit(pattern.head) is not None:
+        yield from _match_args(pattern, (e,), bindings)
     elif e.head is not None:
         for with_head in _match(pattern.head, e.head, bindings):
             yield from _match_args(pattern, e.args, with_head)
 
 
+def _unit(head):
+    if not (_is_declared(head) and is_flat(head)):
+        return None
+    units = [law.args[0] for law in identities(head) if isinstance(law, Law) and law.title == "identity"]
+    if not units:
+        return None
+    return units[0] if isinstance(units[0], Expr) else head.kind.output(units[0])
+
+
 def _match_args(pattern, args, bindings):
     runs = [p for p in pattern.args if is_run(p)]
     fixed = [p for p in pattern.args if not is_run(p)]
+    unit = _unit(pattern.head)
+    if unit is not None and len(args) < len(fixed):
+        args = args + (unit,) * (len(fixed) - len(args))
     if _is_declared(pattern.head) and is_unordered(pattern.head):
         for new, used in _match_unordered(fixed, args, bindings, ()):
             yield from _bind_run(runs, tuple(a for i, a in enumerate(args) if i not in used), new)
@@ -267,4 +282,4 @@ def _substitute(e, bindings):
     args = []
     for arg in e.args:
         args.extend(bindings.get(arg, (arg,)) if is_run(arg) else (_substitute(arg, bindings),))
-    return _substitute(e.head, bindings)(*args)
+    return _flatten(_substitute(e.head, bindings)(*args))
