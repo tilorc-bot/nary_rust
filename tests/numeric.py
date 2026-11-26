@@ -23,12 +23,17 @@ def _strict(f):
     return apply
 
 
+def _on_cut(z):
+    z = mpmath.mpc(z)
+    return mpmath.mpc(z.real, 0) if z.real < 0 and abs(z.imag) < ZERO else z
+
+
 def _pow(b, e):
     if _is_zero(b):
         return mpmath.mpc(0) if e.real > ZERO else None
     if e.imag == 0 and e.real == int(e.real):
         return b ** int(e.real)
-    return mpmath.exp(e * mpmath.log(b))
+    return mpmath.exp(e * mpmath.log(_on_cut(b)))
 
 
 def _real(z):
@@ -64,7 +69,7 @@ FUNCTIONS = {
     cos: _strict(mpmath.cos),
     tan: _strict(lambda z: None if _is_zero(mpmath.cos(z)) else mpmath.tan(z)),
     exp: _strict(mpmath.exp),
-    log: _strict(lambda z: None if _is_zero(z) else mpmath.log(z)),
+    log: _strict(lambda z: None if _is_zero(z) else mpmath.log(_on_cut(z))),
     re: _strict(lambda z: mpmath.mpc(mpmath.mpc(z).real)),
     nr.Eq: _strict(lambda a, b: _is_zero(a - b)),
     nr.Ne: _strict(lambda a, b: not _is_zero(a - b)),
