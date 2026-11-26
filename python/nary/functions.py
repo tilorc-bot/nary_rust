@@ -65,6 +65,6 @@ def Lambda(variables, body):
 
 
 def is_lambda(e):
-    if not isinstance(e, Expr) or e.head is None:
+    if not isinstance(e, Expr) or e.is_atom:
         return False
     return _lambda_functions.get(e.head.kind.inputs) is e.head

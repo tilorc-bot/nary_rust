@@ -801,6 +801,11 @@ impl Expr {
     }
 
     #[getter]
+    fn is_atom(&self) -> bool {
+        !matches!(self.form, Form::Apply { .. })
+    }
+
+    #[getter]
     fn value(&self, py: Python<'_>) -> Option<Py<PyAny>> {
         match &self.form {
             Form::Literal { value } => Some(value.clone_ref(py)),
