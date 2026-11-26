@@ -1,10 +1,18 @@
-"""Conditions are proved by satassume, after translating them to Q facts.
+"""Conditions are proved from the assumptions by decide: nary's properties and autosimp, given the conjuncts as known.
 
     >>> import nary as nr
     >>> x = nr.NumberKind("x")
-    >>> known = prover(nr.Gt(x, 1))
+    >>> known = prover(nr.Gt(x, 0))
     >>> known(nr.Ne(x, 0)), known(nr.Lt(x, 0)), known(nr.Eq(nr.re(x), x))
     (True, False, True)
+
+A known value is substituted, and an implication is proved by assuming its antecedent.
+
+    >>> prover(nr.Eq(x, 0))(nr.Eq(nr.I * nr.pi * x, 0))
+    True
+    >>> c = nr.Ne(nr.cos(x), 0)
+    >>> known(implies(c, nr.Ne(nr.cos(x) * x, 0))), known(implies(c, nr.Ne(nr.cos(x) * (x - 1), 0)))
+    (True, False)
 
 definedness is where an expression has a value: the domains of its parts.
 
@@ -14,15 +22,16 @@ definedness is where an expression has a value: the domains of its parts.
     true
 """
 
-import sympy
-from satassume.sympy_api import ask
+from functools import cache
 
+from nary.autosimp import autosimp
+from nary import Eq
 from nary.domains import domain_of
 from nary.logic import And, Not, Or, true
+from nary.properties import holds
+from nary.rewriting import _substitute
 
-from .translate import Untranslatable, to_sympy
-
-__all__ = ["definedness", "implies", "prover"]
+__all__ = ["conjuncts", "decide", "definedness", "implies", "prover"]
 
 
 def _parts(e):
@@ -51,30 +60,41 @@ def implies(a, b):
     return b if a == true else Or(Not(a), b)
 
 
-def prover(assumptions=true, log=None):
-    facts = to_sympy(assumptions)
-    answers = {}
+def conjuncts(condition):
+    if condition == true:
+        return frozenset()
+    if condition.head == And:
+        return frozenset().union(*map(conjuncts, condition.args))
+    return frozenset([condition])
 
-    def known(condition):
+
+@cache
+def _simplified(known):
+    return conjuncts(autosimp(And(*known))) if known else known
+
+
+def decide(condition, known):
+    known = _simplified(known)
+    condition = _substitute(condition, {c.args[0]: c.args[1] for c in known if c.head == Eq and c.args[0].is_symbol})
+    if holds(condition, known) or autosimp(condition, known) == true:
+        return True
+    if condition.head == Or and any(c.head == Not for c in condition.args):
+        assumed = known.union(*(conjuncts(autosimp(c.args[0], known)) for c in condition.args if c.head == Not))
+        rest = [c for c in condition.args if c.head != Not]
+        return bool(rest) and decide(Or(*rest) if len(rest) > 1 else rest[0], assumed)
+    return False
+
+
+def prover(assumptions=true, log=None, decide=decide):
+    known, answers = conjuncts(assumptions), {}
+
+    def proved(condition):
         if condition == true:
             return True
         if condition not in answers:
-            answers[condition] = _proved(condition, facts)
+            answers[condition] = decide(condition, known)
             if answers[condition] and log is not None:
                 log.append(condition)
         return answers[condition]
 
-    return known
-
-
-def _proved(condition, facts):
-    try:
-        question = to_sympy(condition)
-    except Untranslatable:
-        return False
-    if question in (sympy.true, sympy.false):
-        return question is sympy.true
-    try:
-        return ask(question, facts) is True
-    except (ValueError, TypeError):
-        return False
+    return proved

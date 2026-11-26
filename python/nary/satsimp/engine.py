@@ -35,7 +35,6 @@ from nary.functions import is_lambda
 from nary.rewriting import _flatten, _has_a_value, _match_top, _substitute
 
 from .prove import definedness, implies
-from .translate import Untranslatable
 
 __all__ = ["Engine", "identity_handler", "rule_handler", "size"]
 
@@ -100,10 +99,7 @@ class Engine:
         return None
 
     def normal(self, e):
-        try:
-            new = self.canonical(e)
-        except Untranslatable:
-            return e
+        new = self.canonical(e)
         if new == e or not self.strict or self.defined_where(e, new):
             return new
         self.refused.append((e, new))

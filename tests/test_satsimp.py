@@ -6,7 +6,7 @@ import pytest
 for name in ("sympy", "satassume", "satsimp"):
     pytest.importorskip(name)
 
-MODULES = ["translate", "prove", "rows", "engine", "substitute", "methods", "record", "scoreboard"]
+MODULES = ["translate", "via_sympy", "generate", "record", "scoreboard"]
 
 
 @pytest.mark.parametrize("name", MODULES)
@@ -17,13 +17,20 @@ def test_docstring_examples(name):
     assert result.attempted > 0
 
 
+def test_committed_tables_are_generated():
+    from pathlib import Path
+
+    from nary.satsimp import generate
+
+    assert generate.source() == (Path(generate.__file__).parent / "tables.py").read_text()
+
 
 def test_trig_measure_is_satsimps_without_abs():
     import sympy
     from satsimp.methods.trigsimp.wiring import measure
 
     import nary as nr
-    from nary.satsimp.methods import trig_measure
+    from nary.satsimp.measure import trig_measure
     from nary.satsimp.translate import from_sympy
 
     x, y = sympy.symbols("x y")

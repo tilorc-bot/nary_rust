@@ -4,7 +4,7 @@
     >>> from nary.satsimp.engine import Engine, size
     >>> from nary.satsimp.prove import prover
     >>> from nary.satsimp.rows import trigsimp_tables
-    >>> rows = trigsimp_tables().rows["substitutions"]
+    >>> rows = trigsimp_tables()["substitutions"]
     >>> measure = lambda e, signless=False: (size(e),)
     >>> handler = substitution_handler(rows, measure, (nr.sin, nr.cos, nr.tan))
     >>> x, y = nr.NumberKind("x"), nr.NumberKind("y")
@@ -16,8 +16,8 @@ Like terms are not collected, so a sum needs a canonical form to get smaller.
     >>> e = nr.sin(x) ** 2 + nr.cos(x) ** 2
     >>> handler(e, Engine({}, prover())) is None
     True
-    >>> from nary.satsimp.methods import sympy_round_trip
-    >>> handler(e, Engine({}, prover(), sympy_round_trip))
+    >>> from nary.autosimp import autosimp
+    >>> handler(e, Engine({}, prover(), autosimp))
     1
 
 Under strict, a candidate may not have a value where the expression has none.

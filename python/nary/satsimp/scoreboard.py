@@ -19,14 +19,25 @@ import nary as nr
 from nary.logic import And, true
 from nary.rules import is_flat, is_unordered
 
-from .methods import PROVIDERS, Simplifier
+from nary.autosimp import autosimp
+
+from .methods import Simplifier, none
+from .prove import decide
 from .record import load
-from .translate import Untranslatable, from_sympy, lacking, to_sympy
+from .translate import from_sympy, lacking, to_sympy
+from .via_sympy import ask, round_trip
 
 __all__ = ["normal", "plain", "score_catalogue", "score_tests"]
 
-SETTINGS = [(name, strict, rows) for rows in (True, False) for name in PROVIDERS
-            if rows or name != "none" for strict in (True, False)]
+PROVIDERS = {"none": none, "sympy": round_trip, "native": autosimp}
+DECIDE = {"native": decide, "satassume": ask}
+SETTINGS = [(name, how, strict, rows) for rows in (True, False) for name in PROVIDERS if rows or name != "none"
+            for how in DECIDE for strict in (True, False)]
+
+
+def _simplifiers():
+    return {(name, how, strict, rows): Simplifier(PROVIDERS[name], strict, rows, DECIDE[how])
+            for name, how, strict, rows in SETTINGS}
 
 
 def normal(e):
@@ -76,7 +87,7 @@ def score_tests(cases):
             outside[frozenset(missing)] += 1
         else:
             inside.append((method, *map(from_sympy, (expr, assumptions, result)), result))
-    simplifiers = {setting: Simplifier(PROVIDERS[setting[0]], *setting[1:]) for setting in SETTINGS}
+    simplifiers = _simplifiers()
     scores = {setting: Counter() for setting in SETTINGS}
     for method, expr, assumptions, expected, result in inside:
         rewritten = normal(expected) != normal(expr)
@@ -102,7 +113,7 @@ def _nary(text, symbols):
 
 
 def score_catalogue(entries):
-    simplifiers = {setting: Simplifier(PROVIDERS[setting[0]], *setting[1:]) for setting in SETTINGS}
+    simplifiers = _simplifiers()
     scores = {setting: Counter() for setting in SETTINGS}
     reached = {setting: [] for setting in SETTINGS}
     outside = []
@@ -115,10 +126,7 @@ def score_catalogue(entries):
             continue
         assumptions = And(*conditions) if conditions else true
         for setting, simplifier in simplifiers.items():
-            try:
-                got = _run(simplifier, "both", e, assumptions)
-            except Untranslatable:
-                got = e
+            got = _run(simplifier, "both", e, assumptions)
             if normal(got) == normal(expected):
                 reached[setting].append(entry["name"])
             scores[setting]["entries"] += 1
@@ -127,8 +135,8 @@ def score_catalogue(entries):
 
 
 def _name(setting):
-    provider, strict, rows = setting
-    return f"{provider}{'' if rows else ' alone'} {'strict' if strict else 'loose'}"
+    provider, how, strict, rows = setting
+    return f"{provider}{'' if rows else ' alone'} {'strict' if strict else 'loose'}, decide {how}"
 
 
 def main(argv):

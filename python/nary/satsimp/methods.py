@@ -1,64 +1,44 @@
 """refine and trigsimp on nary expressions, with satsimp's rows.
 
     >>> import nary as nr
-    >>> from nary.logic import true
     >>> x = nr.NumberKind("x")
-    >>> plain, sympy = Simplifier(none), Simplifier(sympy_round_trip)
+    >>> plain, native = Simplifier(none), Simplifier()
     >>> e = nr.sin(x) ** 2 + nr.cos(x) ** 2
-    >>> plain.trigsimp(e), sympy.trigsimp(e)
+    >>> plain.trigsimp(e), native.trigsimp(e)
     (Add(Pow(sin(x), 2), Pow(cos(x), 2)), 1)
     >>> plain.trigsimp(nr.sin(x) / nr.cos(x))
     tan(x)
     >>> plain.refine(nr.E ** x), plain.refine(nr.Pow(nr.Pow(x, 2), 3), nr.Gt(x, 0))
     (exp(x), Pow(x, Mul(3, 2)))
 
-The round trip may give a value where there was none, which strict refuses.
+The canonical form, autosimp by default, takes the assumptions as known conditions.
 
-    >>> e = nr.tan(x) ** 2 - nr.cos(x) ** -2
-    >>> sympy.trigsimp(e), Simplifier(sympy_round_trip, strict=False).trigsimp(e)
-    (Add(Pow(tan(x), 2), Mul(-1, Pow(cos(x), -2))), -1)
-    >>> sympy.refused[0]
-    (Add(Pow(tan(x), 2), Mul(-1, 1), Mul(-1, Pow(tan(x), 2))), -1)
+    >>> native.refine(x / x), native.refine(x / x, nr.Ne(x, 0))
+    (Pow(x, 0), 1)
 
-The native canonical form, autosimp, takes the assumptions as known conditions.
+A step that gives a value where there was none is refused, unless strict is False.
 
-    >>> native = Simplifier(autosimp)
-    >>> native.trigsimp(nr.sin(x) ** 2 + nr.cos(x) ** 2), native.refine(x / x), native.refine(x / x, nr.Ne(x, 0))
-    (1, Pow(x, 0), 1)
+    >>> e = nr.cos(x) * nr.tan(x) ** 2 / nr.sin(x)
+    >>> native.trigsimp(e) == e, Simplifier(strict=False).trigsimp(e)
+    (True, tan(x))
 """
-
-import sympy
 
 from nary import Add, Mul
 from nary.autosimp import autosimp
-from nary.logic import And, true
+from nary.logic import true
 
 from .engine import Engine, identity_handler, rule_handler
-from .prove import prover
+from .measure import count_heads, trig_measure
+from .prove import conjuncts, decide, prover
 from .rows import refine_tables, trigsimp_tables
 from .substitute import substitution_handler
-from .translate import from_sympy, to_sympy
+from .tables import TRIG_HEADS
 
-__all__ = ["PROVIDERS", "Simplifier", "autosimp", "none", "sympy_round_trip", "trig_measure"]
+__all__ = ["Simplifier", "none"]
 
 
 def none(e, known=()):
     return e
-
-
-def sympy_round_trip(e, known=()):
-    return from_sympy(to_sympy(e))
-
-
-PROVIDERS = {"none": none, "sympy": sympy_round_trip, "native": autosimp}
-
-
-def _conjuncts(condition):
-    if condition == true:
-        return frozenset()
-    if condition.head == And:
-        return frozenset().union(*map(_conjuncts, condition.args))
-    return frozenset([condition])
 
 
 def _by_head(rows):
@@ -66,23 +46,6 @@ def _by_head(rows):
     for row in rows:
         tables.setdefault(row.rule.pattern.head, []).append(row)
     return {head: [rule_handler(rs)] for head, rs in tables.items()}
-
-
-def _count(e, heads):
-    if e.head is None:
-        return 0
-    return (e.head in heads) + sum(_count(arg, heads) for arg in e.args)
-
-
-def trig_measure(heads):
-    def measure(e, signless=False):
-        with sympy.evaluate(False):
-            s = to_sympy(e)
-        if signless and s.could_extract_minus_sign():
-            s = -s
-        return _count(e, heads), sympy.count_ops(s), sum(1 for _ in sympy.preorder_traversal(s))
-
-    return measure
 
 
 def _smallest(rows, measure):
@@ -96,13 +59,13 @@ def _smallest(rows, measure):
 
 
 class Simplifier:
-    def __init__(self, canonical=none, strict=True, rows=True):
-        self.canonical, self.strict, self.rows = canonical, strict, rows
+    def __init__(self, canonical=autosimp, strict=True, rows=True, decide=decide):
+        self.canonical, self.strict, self.rows, self.decide = canonical, strict, rows, decide
         self.loops, self.refused, self.proved = [], [], []
 
-    def _run(self, handlers, e, known, conjuncts):
+    def _run(self, handlers, e, known, given):
         def canonical(e):
-            return self.canonical(e, conjuncts)
+            return self.canonical(e, given)
 
         engine = Engine(handlers if self.rows else {}, known, canonical, self.strict)
         result = engine(e)
@@ -114,21 +77,23 @@ class Simplifier:
         handlers = {
             head: [(rule_handler if rows[0].kind == "rule" else identity_handler)(rows)
                    for rows in parts]
-            for head, parts in refine_tables().rows.items()
+            for head, parts in refine_tables().items()
         }
-        return self._run(handlers, e, prover(assumptions, self.proved), _conjuncts(assumptions))
+        return self._run(handlers, e, self._prover(assumptions), conjuncts(assumptions))
+
+    def _prover(self, assumptions):
+        return prover(assumptions, self.proved, self.decide)
 
     def trigsimp(self, e, assumptions=true):
-        tables = trigsimp_tables().rows
-        heads = tables["heads"]
-        if not _count(e, heads):
+        tables, heads = trigsimp_tables(), TRIG_HEADS
+        if not count_heads(e, heads):
             return e
 
         measure = trig_measure(heads)
-        known, conjuncts = prover(assumptions, self.proved), _conjuncts(assumptions)
+        known, given = self._prover(assumptions), conjuncts(assumptions)
 
         def run(handlers, e):
-            return self._run(handlers, e, known, conjuncts)
+            return self._run(handlers, e, known, given)
 
         conditional = _by_head(tables["conditional"])
         normalize = {**_by_head(tables["normalize"]), **conditional}
