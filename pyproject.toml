@@ -10,3 +10,10 @@ requires-python = ">=3.9"
 [tool.maturin]
 python-source = "python"
 module-name = "nary._core"
+
+[project.optional-dependencies]
+satsimp = [
+    "sympy==1.14.0",
+    "satassume @ git+https://github.com/tilorc-bot/satassume@9bafaa5b384b99a48cdaa51fe2e85aa12990e87f",
+    "satsimp @ git+https://github.com/tilorc-bot/satsimp@bd34c0a25506be91845ca7a85e8fa9b2e8466b32",
+]
