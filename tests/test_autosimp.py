@@ -86,7 +86,7 @@ FROM_SYMPY_TESTS = [
         (Pow(Pow(a, 3), Mul(2, Pow(5, -1))), [Gt(a, 0)]),
         (Pow(Pow(a, 2), b), [Gt(a, 0), Eq(re(b), b)]),
         Mul(-1, Mul(-1, Pow(Add(Pow(5, Pow(2, -1)), Mul(-1, 1)), Pow(2, -1)))), Pow(123, 789),
-        Pow(1, I), Pow(-2, -5),
+        Pow(1, I), Pow(-2, -5), Pow(0, Mul(2, x)), Pow(0, Mul(Mul(2, x), y)),
         Pow(Mul(Mul(-1, Pow(3, Pow(2, -1))), Add(1, Mul(2, I))), Pow(2, -1)),
         (Pow(Pow(p, 2), Pow(3, -1)), [Gt(p, 0)]), Pow(Add(3, Mul(4, I)), Pow(2, -1)),
         Pow(Add(3, Mul(-1, Mul(4, I))), Pow(2, -1)), Pow(Add(-3, Mul(-1, Mul(4, I))), Pow(2, -1)),
@@ -107,7 +107,7 @@ FROM_SYMPY_TESTS = [
         Pow(Pow(I, Pow(2, -1)), Mul(9, Pow(2, -1))),
     ]),
     ("test_power", "same once assumed", [
-        Mul(1, Pow(Pow(x, y), -1)), Pow(0, Mul(2, x)), Pow(0, Mul(Mul(2, x), y)),
+        Mul(1, Pow(Pow(x, y), -1)),
     ]),
     ("test_power", "different", [
         Pow(Pow(Add(1, I), Mul(Mul(12, I), Mul(pi, Pow(log(Pow(2, Pow(2, -1))), -1)))), Pow(3, -1)),

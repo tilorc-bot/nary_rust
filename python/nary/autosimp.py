@@ -436,6 +436,8 @@ def _pow(args, known):
         value = _gaussian_power(*_gaussian(base), rational(x), known)
         if value is not None:
             return value
+    if base == ZERO and _coeff(x)[0] > 0 and _coeff(x)[0] != 1:
+        return node(Pow, [ZERO, _coeff(x)[1]], known)
     return Pow(base, x)
 
 
