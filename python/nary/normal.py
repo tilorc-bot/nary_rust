@@ -19,6 +19,8 @@ Comparisons and real parts of numbers are evaluated.
     (false, Lt(I, 2), Pow(2, -1))
 """
 
+from math import prod
+
 from .arithmetic import Add, Mul, Pow
 from .constants import E, I, pi
 from .elementary import exp
@@ -284,7 +286,7 @@ def _pow(base, exponent, known):
 
 def _split_positive(factors, known):
     numbers = [f for f in factors if value(f) is not None]
-    c = value(_mul(numbers)) if numbers else Number(1)
+    c = prod((value(f) for f in numbers), start=Number(1))
     rest = [f for f in factors if value(f) is None]
     args = rest if c == 1 else [to_expr(c), *rest]
     positive = [f for f in args if _sign(f, known) == 1]

@@ -13,7 +13,7 @@
     Pow(cos(x), -2)
 """
 
-from .arithmetic import Add, Mul
+from .arithmetic import Add, Mul, Pow
 from .elementary import cos, exp, log, sin, tan
 from .kinds import Many, NumberKind
 from .logic import And
@@ -39,7 +39,14 @@ log_rules = [
     rule(log(a**b), b * log(a),
          when=And(Eq(re(b), b), Gt(b, -1), Le(b, 1)), name="expand_log_root"),
 ]
-expand = [
+expand_power_exp = [
+    rule(Pow(a, Add(b, c, cs)), a**b * Pow(a, Add(c, cs)), when=Ne(a, 0), name="expand_power_exp"),
+]
+expand_power_base = [
+    rule(Pow(Mul(a, b, cs), c), a**c * Pow(Mul(b, cs), c), when=Gt(a, 0),
+         name="expand_power_base_positive"),
+]
+expand = expand_power_exp + expand_power_base + [
     rule(a * Add(b, c, cs), a * b + a * Add(c, cs), name="expand_distribute"),
     rule(Add(a, b, cs) ** n, a * Add(a, b, cs) ** (n - 1) + Add(b, cs) * Add(a, b, cs) ** (n - 1),
          when=And(n_is_an_integer, Gt(n, 1)), name="expand_power_of_sum"),
@@ -95,7 +102,8 @@ powsimp = [
 STRATEGIES = {
     "expand": expand, "expand_log": expand_log, "logcombine": logcombine,
     "expand_trig": expand_trig, "trigsimp": trigsimp, "together": together, "powsimp": powsimp,
-    "simplify_logic": simplify_logic, "to_nnf": to_nnf,
+    "simplify_logic": simplify_logic, "to_nnf": to_nnf, "simplify": powsimp + simplify_logic,
+    "expand_power_exp": expand_power_exp, "expand_power_base": expand_power_base,
 }
 
 

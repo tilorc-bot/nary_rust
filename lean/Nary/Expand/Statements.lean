@@ -4,6 +4,12 @@ import Nary.Logic
 
 namespace Nary.Expand.Statement
 
+abbrev expand_power_exp : Prop :=
+  ∀ (a b c : Nary.Number) (cs : List Nary.Number), Nary.Holds (Nary.Ne a (Nary.lit 0)) → Nary.Pow a (Nary.Add ([b, c] ++ cs)) = Nary.Mul [Nary.Pow a b, Nary.Pow a (Nary.Add ([c] ++ cs))]
+
+abbrev expand_power_base_positive : Prop :=
+  ∀ (a b c : Nary.Number) (cs : List Nary.Number), Nary.Holds (Nary.Gt a (Nary.lit 0)) → Nary.Pow (Nary.Mul ([a, b] ++ cs)) c = Nary.Mul [Nary.Pow a c, Nary.Pow (Nary.Mul ([b] ++ cs)) c]
+
 abbrev expand_distribute : Prop :=
   ∀ (a b c : Nary.Number) (cs : List Nary.Number), Nary.Mul [a, Nary.Add ([b, c] ++ cs)] = Nary.Add [Nary.Mul [a, b], Nary.Mul [a, Nary.Add ([c] ++ cs)]]
 

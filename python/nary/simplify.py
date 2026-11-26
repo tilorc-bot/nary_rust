@@ -29,9 +29,8 @@ rules = arithmetic_rules.rules + elementary_rules.rules + logic_rules.rules
 
 
 def simplify(e, known=None):
-    if known is not None and not callable(known):
-        known = frozenset(known).__contains__
-    return rewrite(e, rules, known, _normal)
+    from .strategies import apply
+    return apply("simplify", e, known)
 
 
 def _normal(e, known):
