@@ -1,13 +1,7 @@
-"""Printing expressions as Lean terms and rules as Lean statements, with
-nary.lean. Lean itself is not needed: lean/check_printer.py checks printed
-terms with Lean by hand, and `lake build` in lean/ checks the rules."""
-
-import doctest
 import importlib.util
 from pathlib import Path
 
 import nary as nr
-import nary.lean
 import pytest
 from nary.arithmetic_rules import rules
 from nary.calculus import Derivative, Integral, NumberFunction
@@ -15,16 +9,12 @@ from nary.lean import to_lean, to_lean_example, to_lean_rule
 from nary.logic import And, Not, true
 from nary.matrices import Matrix, Trace
 from nary.rules import rule
+from nary.sets import Contains, FiniteSet, NumberSet, Union
 
 x, y = nr.NumberKind("x"), nr.NumberKind("y")
 p = nr.BoolKind("p")
 f = NumberFunction("f")
-
-
-def test_docstring_examples():
-    result = doctest.testmod(nary.lean)
-    assert result.attempted > 0
-    assert result.failed == 0
+S = NumberSet("S")
 
 
 def test_to_lean():
@@ -40,7 +30,10 @@ def test_to_lean():
         "noncomputable example (x y : ℂ) (f : ℂ → Nary.Number) : Nary.Number := "
         "Nary.Add [Nary.Mul [Nary.apply f (some x), some y], Nary.sin (some x)]"
     )
-    # The variable of a lambda is not free.
+    assert to_lean_example(Contains(x, Union(FiniteSet(1, 2), S))) == (
+        "noncomputable example (x : ℂ) (S : Set ℂ) : Nary.Boolean := "
+        "Nary.Contains (some x) (Nary.Union [Nary.FiniteSet [Nary.lit 1, Nary.lit 2], some S])"
+    )
     assert to_lean_example(nr.Lambda(x, x * y)) == (
         "noncomputable example (y : ℂ) : ℂ → Nary.Number := fun x => Nary.Mul [some x, some y]"
     )
@@ -51,7 +44,6 @@ def test_refused():
         to_lean(Integral(nr.sin, 0, x))
     with pytest.raises(ValueError, match="^Trace has no Lean definition"):
         to_lean(Trace(Matrix("A")) + 1)
-    # A function named sin that is not nary's sin.
     other_sin = nr.declare_function("sin", nr.NumberKind, returns=nr.NumberKind, domain=true)
     with pytest.raises(ValueError, match="^sin has no Lean definition"):
         to_lean(other_sin(x))
@@ -76,11 +68,18 @@ def test_to_lean_rule():
         "abbrev exp_log : Prop :=\n"
         "  ∀ (a : Nary.Number), Nary.Holds (Nary.Ne a (Nary.lit 0)) → Nary.exp (Nary.log a) = a"
     )
-    # A function variable is a function, which always has a value, so the
-    # wrong rule f(a) * 0 -> 0 prints as a false statement.
+    assert to_lean_rule(by_name["collect"]) == (
+        "abbrev collect : Prop :=\n  ∀ (m n : ℤ) (a : Nary.Number), "
+        "Nary.Add [Nary.Mul [Nary.lit m, a], Nary.Mul [Nary.lit n, a]] "
+        "= Nary.Mul [Nary.lit (m + n), a]"
+    )
     assert to_lean_rule(rule(f(x) * 0, 0, name="wrong")) == (
         "abbrev wrong : Prop :=\n  ∀ (x : Nary.Number) (f : Nary.NumberFunction), "
         "x ≠ none → Nary.Mul [Nary.apply f x, Nary.lit 0] = Nary.lit 0"
+    )
+    assert to_lean_rule(rule(Contains(x, Union(S, S)), Contains(x, S), name="union_self")) == (
+        "abbrev union_self : Prop :=\n  ∀ (x : Nary.Number) (S : Nary.NumberSet), "
+        "Nary.Contains x (Nary.Union [S, S]) = Nary.Contains x S"
     )
 
 

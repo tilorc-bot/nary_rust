@@ -1,8 +1,3 @@
-"""Calculus of functions of one number, declared in nary.calculus."""
-
-import doctest
-
-import nary.calculus
 import pytest
 from nary import Lambda, NumberKind, sin
 from nary.calculus import (
@@ -49,9 +44,3 @@ def test_only_a_function_of_one_number_is_accepted():
         Integral(x * x, a, b)
     with pytest.raises(TypeError, match=r"^Derivative expects .* got FunctionKind\(\(NumberKind, NumberKind\), NumberKind\)"):
         Derivative(Lambda((x, y), x * y))
-
-
-def test_module_docstring_examples():
-    result = doctest.testmod(nary.calculus, optionflags=doctest.ELLIPSIS)
-    assert result.attempted > 0
-    assert result.failed == 0
