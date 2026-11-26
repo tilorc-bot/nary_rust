@@ -74,7 +74,7 @@ def declare_function(name, *parameters, returns, domain):
 
 def _subexpressions(e):
     yield e
-    if e.head is not None:
+    if not e.is_atom:
         yield from _subexpressions(e.head)
         for arg in e.args:
             yield from _subexpressions(arg)
@@ -103,6 +103,6 @@ def domain_of(e):
 def _replace(e, replacements):
     if e.is_symbol:
         return replacements.get(e, e)
-    if e.head is None:
+    if e.is_atom:
         return e
     return _replace(e.head, replacements)(*(_replace(arg, replacements) for arg in e.args))
