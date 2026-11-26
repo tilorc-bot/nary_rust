@@ -38,11 +38,11 @@ def pows(e):
 
 def test_value_of_literal_arithmetic():
     assert value(Add(1, Mul(2, I), Pow(I, 2))) == Number(0, 2)
-    assert value(Pow(Add(1, I), -2)) == Number(0, F(-1, 2))
+    assert value(Pow(Mul(2, I), -2)) == F(-1, 4) and value(Mul(2, Add(1, I))) == Number(2, 2)
     assert value(Pow(I, 7)) == Number(0, -1) and value(Pow(I, -1)) == Number(0, -1)
     assert value(Mul()) == 1 and value(Add()) == 0
     assert value(Pow(Mul(2, Pow(3, -1)), -3)) == F(27, 8)
-    for e in (Pow(0, -1), Pow(0, 0), Pow(2, Pow(2, -1)), Add(x, 1), Pow(Add(1, Mul(-1, 1)), -1)):
+    for e in (Pow(Add(1, I), -1), Mul(Add(1, I), Add(1, I)), Mul(I, Add(1, I)), Pow(0, -1), Pow(0, 0), Pow(2, Pow(2, -1)), Add(x, 1), Pow(Add(1, Mul(-1, 1)), -1)):
         assert value(e) is None
 
 
@@ -89,7 +89,12 @@ def test_to_expr_shapes_and_round_trip():
     (Number(-3, -4), F(1, 2), Add(1, Mul(-2, I))),
     (Number(0, 2), F(1, 2), Add(1, I)),
     (Number(0, 1), 5, I),
-    (Number(1, 1), -2, Mul(-1, Pow(2, -1), I)),
+    (Number(1, 1), 1, Add(1, I)),
+    (Number(1, 1), 0, NumberKind(1)),
+    (Number(0, 2), F(3, 2), Pow(Add(1, I), 3)),
+    (Number(0, F(-9, 2)), F(3, 2), Mul(27, Pow(8, -1), Pow(Add(1, Mul(-1, I)), 3))),
+    (Number(3, 4), F(-1, 2), Add(Mul(2, Pow(5, -1)), Mul(-1, Pow(5, -1), I))),
+    (Number(3, 4), F(3, 2), Add(2, Mul(11, I))),
     (0, F(1, 2), NumberKind(0)),
     (65537**2 * 4, F(1, 2), NumberKind(131074)),
     (65537**3 * 3, F(1, 3), Mul(65537, Pow(3, Pow(3, -1)))),
@@ -99,7 +104,8 @@ def test_power_examples(b, e, expected):
 
 
 @pytest.mark.parametrize("b, e", [(5, F(1, 2)), (12, F(1, 3)), (-2, F(1, 3)), (-1, F(1, 3)), (0, -1),
-                                  (0, 0), (0, F(-1, 2)), (Number(1, 1), F(1, 2)), (2, Number(0, 1))])
+                                  (0, 0), (0, F(-1, 2)), (Number(1, 1), F(1, 2)), (2, Number(0, 1)),
+                                  (Number(1, 1), -2), (Number(2, 1), 3)])
 def test_power_leaves_these_alone(b, e):
     assert power(_number(b), _number(e)) is None
 

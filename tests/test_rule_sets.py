@@ -13,7 +13,7 @@ from nary.simplify import simplify
 LISTS = [arithmetic_rules.rules, elementary_rules.rules, logic_rules.rules]
 RULES = [r for rules in LISTS for r in rules]
 
-x, y = NumberKind("x"), NumberKind("y")
+x, y, z = NumberKind("x"), NumberKind("y"), NumberKind("z")
 p, q = BoolKind("p"), BoolKind("q")
 
 
@@ -143,3 +143,12 @@ def test_reflexive_order_needs_a_real_argument():
 ])
 def test_values_and_shifts_through_simplify(e, expected):
     assert simplify(e) == simplify(NumberKind(expected) if isinstance(expected, int) else expected)
+
+
+def test_complex_powers_and_logarithms_through_simplify():
+    assert simplify(I ** I) == simplify(exp(-pi / 2))
+    assert simplify(Pow(5, 6 + 7 * I)) == simplify(exp((6 + 7 * I) * log(NumberKind(5))))
+    assert simplify(log(NumberKind(-2))) == simplify(log(NumberKind(2)) + I * pi)
+    assert simplify(log(-x), [Gt(x, 0)]) == simplify(log(x) + I * pi)
+    assert simplify((x * y) ** z, [Gt(x, 0)]) == simplify(x ** z * y ** z)
+    assert simplify(x ** z, [Gt(x, 0)]) == x ** z

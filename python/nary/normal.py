@@ -55,6 +55,7 @@ laws = [
          name="pow_pow_positive_integer"),
     rule((x**a) ** n, x ** (a * n), when=And(n_is_an_integer, Ne(x, 0)),
          name="pow_pow_integer"),
+    rule(exp(a) ** n, exp(n * a), when=n_is_an_integer, name="exp_pow_integer"),
     rule((c * x) ** a, c**a * x**a, when=Gt(c, 0), name="pow_positive_factor"),
 ]
 
@@ -106,7 +107,7 @@ def _collect(head, args, known):
     number, groups = Number(0 if adding else 1), {}
     args = _flatten(head, args)
     for arg in args if adding else _flatten(head, _combine_radicals(args, known)):
-        v = value(arg)
+        v = _coefficient(head, arg)
         if v is not None:
             number = number + v if adding else number * v
         else:
@@ -118,7 +119,7 @@ def _collect(head, args, known):
             joined.append(_join(head, key, coefficient, known))
     radicals = [e for e in map(_radical_exponent, joined) if e is not None]
     if len(set(radicals)) < len(radicals) or any(
-            value(j) is not None or j.head == head for j in joined):
+            _coefficient(head, j) is not None or j.head == head for j in joined):
         return _collect(head, [to_expr(number), *joined], known)
     joined.sort(key=order_key)
     if not adding:
@@ -133,6 +134,11 @@ def _collect(head, args, known):
     if not result:
         return NumberKind(identity)
     return result[0] if len(result) == 1 else head(*result)
+
+
+def _coefficient(head, e):
+    v = value(e)
+    return None if head == Mul and v is not None and v.is_sum else v
 
 
 def _flatten(head, args):
@@ -236,6 +242,8 @@ def _pow(base, exponent, known):
         return base
     if vx == 0:
         return NumberKind(1) if holds(Ne(base, 0), known) else Pow(base, exponent)
+    if vx.is_integer and base.head == exp:
+        return exp(_collect(Mul, [exponent, base.args[0]], known))
     if vx.is_integer and base.head == Mul:
         return _collect(Mul, [_pow(f, exponent, known) for f in base.args], known)
     if vx.is_integer and base.head == Pow and (vx.re > 0 or _nonzero(base.args[0], known)):

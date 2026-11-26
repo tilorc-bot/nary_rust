@@ -22,7 +22,7 @@ from ._identities import (
 )
 from .kinds import Many, NumberKind
 from .logic import And
-from .relational import Eq, Gt, Le, Ne, re
+from .relational import Eq, Gt, Le, Lt, Ne, re
 
 a, b, c = NumberKind("a"), NumberKind("b"), NumberKind("c")
 rest, cs = Many(NumberKind)("rest"), Many(NumberKind)("cs")
@@ -49,10 +49,12 @@ power = declare_identities(Pow, [
     Equal(0 ** a, 0, when=Gt(re(a), 0), name="zero_pow"),
     Equal(E ** a, exp(a), name="pow_e"),
     Equal((a ** b) ** c, a ** (b * c), when=And(Gt(a, 0), Eq(re(b), b)), name="pow_pow"),
+    Equal(a ** b, exp(b * log(a)), when=And(Ne(a, 0), Ne(re(b), b)), name="pow_complex"),
+    Equal(Mul(a, rest) ** b, a ** b * Mul(rest) ** b, when=Gt(a, 0), name="pow_positive_factor"),
 ])
 exponential = declare_identities(exp, [
     Equal(exp(log(a)), a, when=Ne(a, 0), name="exp_log"),
-    Equal(exp(Mul(log(a), cs)), a ** k, when=Ne(a, 0), name="exp_log_power"),
+    Equal(exp(Mul(log(a), cs)), a ** k, when=And(Ne(a, 0), Eq(re(k), k)), name="exp_log_power"),
     Equal(exp(0), 1, name="exp_zero"),
     Equal(exp(1), E, name="exp_one"),
     Equal(exp(a) * exp(b), exp(a + b), name="exp_product"),
@@ -69,6 +71,9 @@ logarithm = declare_identities(log, [
     Equal(log(1), 0, name="log_one"),
     Equal(log(E), 1, name="log_e"),
     Equal(log(exp(a)), a, when=Eq(re(a), a), name="log_exp"),
+    Equal(log(a), log(-a) + I * pi, when=Lt(a, 0), name="log_negative"),
+    Equal(log(-a), log(a) + I * pi, when=Gt(a, 0), name="log_negative_product"),
+    Equal(log(I), Mul(half, I, pi), name="log_i"),
     Equal(log(a ** b), b * log(a), when=And(Gt(a, 0), Eq(re(b), b)), name="log_pow"),
 ])
 

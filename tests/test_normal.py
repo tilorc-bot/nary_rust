@@ -1,6 +1,6 @@
 import pytest
 
-from nary import Add, Eq, Ge, I, Le, Lt, Mul, Ne, NumberKind, Pow, log, re, sin
+from nary import Add, Eq, Ge, I, Le, Lt, Mul, Ne, NumberKind, Pow, exp, log, re, sin
 from nary.logic import false, true
 from nary.normal import laws, normal
 
@@ -74,6 +74,9 @@ CASES = [
     (Pow(0, 2 * x), Pow(0, x)),
     (Pow(0, x / 2) * Pow(0, x), Pow(0, x)),
     (Pow(0, -x), Pow(0, Mul(-1, x))),
+    (exp(x) ** 2, exp(Mul(2, x))),
+    (exp(x + 1) ** -1, exp(Add(-1, Mul(-1, x)))),
+    (exp(x) ** half, Pow(exp(x), half)),
 ]
 
 

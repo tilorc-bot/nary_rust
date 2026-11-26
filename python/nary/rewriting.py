@@ -20,7 +20,7 @@ It does not apply when the erased part may have no value.
 
 A condition holds when known returns True for it.
 
-    >>> rewrite(x / x, rules), rewrite(x / x, rules, known=lambda c: True)
+    >>> rewrite(x / x, rules), rewrite(x / x, rules, known=lambda c: c == Ne(x, 0))
     (Mul(x, Pow(x, -1)), 1)
 
 A run variable matches the arguments that are left, at any depth.

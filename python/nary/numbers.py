@@ -14,7 +14,7 @@
 
 from dataclasses import dataclass
 from fractions import Fraction
-from math import gcd, isqrt, prod
+from math import gcd, isqrt, lcm, prod
 
 from .arithmetic import Add, Mul, Pow
 from .constants import I
@@ -80,6 +80,10 @@ class Number:
         return result
 
     @property
+    def is_sum(self):
+        return self.re != 0 and self.im != 0
+
+    @property
     def is_integer(self):
         return self.im == 0 and self.re.denominator == 1
 
@@ -106,9 +110,12 @@ def value(e):
     if e.head == Add:
         return sum(vs, Number(0))
     if e.head == Mul:
+        sums = [v for v in vs if v.is_sum]
+        if sums and sum(v.im != 0 for v in vs) > 1:
+            return None
         return prod(vs, start=Number(1))
     b, x = vs
-    if not x.is_integer or (b == 0 and x.re <= 0):
+    if not x.is_integer or (b == 0 and x.re <= 0) or (b.is_sum and x not in (0, 1)):
         return None
     return b ** int(x.re)
 
@@ -226,13 +233,16 @@ def power(b, x):
     if b == 0:
         return NumberKind(0) if x.re > 0 else None
     if x.is_integer:
-        return to_expr(b ** int(x.re))
+        return None if b.is_sum and x not in (0, 1) else to_expr(b ** int(x.re))
     if x.im != 0:
         return None
     y = x.re
     if b.im != 0:
         root = _gaussian_sqrt(b) if y.denominator == 2 else None
-        return None if root is None else to_expr(root ** y.numerator)
+        if root is None or b.is_sum or y.numerator == 1:
+            return root and to_expr(root ** y.numerator)
+        g = Fraction(gcd(root.re.numerator, root.im.numerator), lcm(root.re.denominator, root.im.denominator))
+        return _product(Number(g) ** y.numerator, [Pow(to_expr(root * Number(1 / g)), y.numerator)])
     c, radicals = _positive_power(abs(b.re), y)
     coefficient, factors = Number(c), [_radical(base, e) for base, e in radicals]
     if b.re < 0:
