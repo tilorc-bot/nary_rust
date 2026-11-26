@@ -115,7 +115,7 @@ def value(e):
             return None
         return prod(vs, start=Number(1))
     b, x = vs
-    if not x.is_integer or (b == 0 and x.re <= 0) or (b.is_sum and x not in (0, 1)):
+    if not x.is_integer or (b == 0 and x.re <= 0) or (b.is_sum and x not in (-1, 0, 1)):
         return None
     return b ** int(x.re)
 
@@ -233,13 +233,13 @@ def power(b, x):
     if b == 0:
         return NumberKind(0) if x.re > 0 else None
     if x.is_integer:
-        return None if b.is_sum and x not in (0, 1) else to_expr(b ** int(x.re))
+        return None if b.is_sum and x not in (-1, 0, 1) else to_expr(b ** int(x.re))
     if x.im != 0:
         return None
     y = x.re
     if b.im != 0:
         root = _gaussian_sqrt(b) if y.denominator == 2 else None
-        if root is None or b.is_sum or y.numerator == 1:
+        if root is None or b.is_sum or abs(y.numerator) == 1:
             return root and to_expr(root ** y.numerator)
         g = Fraction(gcd(root.re.numerator, root.im.numerator), lcm(root.re.denominator, root.im.denominator))
         return _product(Number(g) ** y.numerator, [Pow(to_expr(root * Number(1 / g)), y.numerator)])

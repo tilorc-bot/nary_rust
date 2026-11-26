@@ -42,7 +42,7 @@ def test_value_of_literal_arithmetic():
     assert value(Pow(I, 7)) == Number(0, -1) and value(Pow(I, -1)) == Number(0, -1)
     assert value(Mul()) == 1 and value(Add()) == 0
     assert value(Pow(Mul(2, Pow(3, -1)), -3)) == F(27, 8)
-    for e in (Pow(Add(1, I), -1), Mul(Add(1, I), Add(1, I)), Mul(I, Add(1, I)), Pow(0, -1), Pow(0, 0), Pow(2, Pow(2, -1)), Add(x, 1), Pow(Add(1, Mul(-1, 1)), -1)):
+    for e in (Pow(Add(1, I), -2), Mul(Add(1, I), Add(1, I)), Mul(I, Add(1, I)), Pow(0, -1), Pow(0, 0), Pow(2, Pow(2, -1)), Add(x, 1), Pow(Add(1, Mul(-1, 1)), -1)):
         assert value(e) is None
 
 
