@@ -23,7 +23,7 @@ from nary.rewriting import implications
 from nary.rules import rule
 from nary.simplify import simplify
 from nary.strategies import apply
-from test_soundness import check
+from test_soundness import check, needs_mpmath
 
 x, y = NumberKind("x"), NumberKind("y")
 p, q = BoolKind("p"), BoolKind("q")
@@ -38,7 +38,7 @@ CASES = [
     (Not(Lt(x, y)), [], Ge(x, y)),
     (And(p, Not(p)), [], false),
     (Or(p, And(p, q)), [], p),
-    (Ge(log(8), pi + 9), [], false),
+    pytest.param(Ge(log(8), pi + 9), [], false, marks=needs_mpmath),
     (Lt(Pow(27, -1), tan(2 * pi * third)), [], false),
     (Eq(NumberKind(2), 3), [], false),
     (Ne(E, I), [], true),

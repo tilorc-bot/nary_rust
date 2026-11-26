@@ -11,6 +11,12 @@
     (Mul(2, cos(x), sin(x)), sin(Mul(2, x)))
     >>> apply("trigsimp", tan(x) ** 2 + 1)
     Pow(cos(x), -2)
+
+trigsimp and refine are the satsimp port's procedures, which take the facts as assumptions.
+
+    >>> from nary import Abs, Lt, Ne
+    >>> apply("refine", Abs(x), [Lt(x, 0)]), apply("trigsimp", cos(x) * tan(x), [Ne(cos(x), 0)])
+    (Mul(-1, x), sin(x))
 """
 
 from .arithmetic import Add, Mul, Pow
@@ -18,14 +24,16 @@ from .constants import I, pi
 from .elementary import cos, exp, log, sin, tan
 from .elementary_rules import log_power, pythagorean
 from .kinds import Many, NumberKind
-from .logic import And
+from .logic import And, true
 from .logic_rules import simplify_logic, to_nnf
 from .relational import Eq, Gt, Le, Lt, Ne, re
 from .rules import rule
 from .rewriting import rewrite
+from .satsimp.methods import Simplifier
+from .satsimp.prove import decide
 from .simplify import _normal, rules
 
-__all__ = ["STRATEGIES", "apply"]
+__all__ = ["PROCEDURES", "STRATEGIES", "apply"]
 
 a, b, c, d, n = (NumberKind(s) for s in "abcdn")
 cs, ds = Many(NumberKind)("cs"), Many(NumberKind)("ds")
@@ -107,11 +115,15 @@ STRATEGIES = {
     "simplify_logic": simplify_logic, "to_nnf": to_nnf, "simplify": powsimp + simplify_logic + pythagorean + log_power,
     "expand_power_exp": expand_power_exp, "expand_power_base": expand_power_base,
 }
+PROCEDURES = {"trigsimp": Simplifier.trigsimp, "refine": Simplifier.refine}
 
 
 def apply(name, e, known=None):
     facts = frozenset() if known is None or callable(known) else frozenset(known)
     if known is not None and not callable(known):
         known = facts.__contains__
+    if name in PROCEDURES:
+        port = Simplifier() if known is None else Simplifier(decide=lambda c, given: known(c) or decide(c, given))
+        return PROCEDURES[name](port, e, And(*sorted(facts, key=repr)) if facts else true)
     return rewrite(e, rules + STRATEGIES[name], known, lambda e, ask: _normal(e, ask, facts))
 

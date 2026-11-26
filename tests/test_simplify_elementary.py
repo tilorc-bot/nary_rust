@@ -1,6 +1,7 @@
 import pytest
 from nary import Gt, I, Lt, Mul, NumberKind, Pow, cos, exp, pi, re, sin, tan
 from nary.simplify import simplify
+from test_soundness import needs_mpmath
 
 x, y = NumberKind("x"), NumberKind("y")
 half = Pow(2, -1)
@@ -23,10 +24,10 @@ def test_unchanged(e, known):
 @pytest.mark.parametrize("e, expected", [
     (sin(-3 * x), -sin(3 * x)),
     (cos(-x * half), cos(x * half)),
-    (sin(5 - y), -sin(y - 5)),
+    pytest.param(sin(5 - y), -sin(y - 5), marks=needs_mpmath),
     (cos(-x - 2), cos(x + 2)),
-    (tan(half - y), -tan(y - half)),
-    (cos(pi / 6 - y), sin(y + pi / 3)),
+    pytest.param(tan(half - y), -tan(y - half), marks=needs_mpmath),
+    pytest.param(cos(pi / 6 - y), sin(y + pi / 3), marks=needs_mpmath),
     (cos(x + 5 * pi / 4), -cos(x + pi / 4)),
     (sin(Mul(5, pi, Pow(7, -1))), sin(Mul(2, pi, Pow(7, -1)))),
     (cos(Mul(9, pi, Pow(7, -1))), -cos(Mul(2, pi, Pow(7, -1)))),

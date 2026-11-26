@@ -2,6 +2,7 @@ import cmath
 import itertools
 import math
 import random
+from importlib.util import find_spec
 
 import pytest
 from nary import (
@@ -14,6 +15,7 @@ from nary.kinds import Many
 from nary.logic import And, Not, Or, false, true
 from nary.simplify import simplify
 
+needs_mpmath = pytest.mark.skipif(find_spec("mpmath") is None, reason="mpmath")
 CIRCLE = [cmath.exp(2j * math.pi * k / 32) for k in range(32)]
 
 

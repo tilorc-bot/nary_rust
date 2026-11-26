@@ -1,3 +1,4 @@
+import pytest
 import nary.logic_rules  # noqa: F401
 from nary import Add, Eq, Gt, Lambda, Many, Mul, Ne, NumberKind, Pow, cos, exp, log, pi, re, sin, tan
 from nary.logic import And, BoolKind, Not, Or, false, true
@@ -105,6 +106,7 @@ def test_a_nested_pattern_is_not_flattened():
 
 
 def test_a_numeric_condition_is_decided():
+    pytest.importorskip("mpmath")
     assert rewrite(log(x) * 0, rules) == log(x) * 0
     assert rewrite(Pow(2, -1) * 0, rules) == NumberKind(0)
 

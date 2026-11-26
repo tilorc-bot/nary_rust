@@ -2,7 +2,7 @@ import pytest
 from test_soundness import Undecided, check, evaluate, points, same
 
 from nary import Gt, Lt, Mul, NumberKind, Pow, cos, exp, log, sin, tan
-from nary.strategies import STRATEGIES, apply
+from nary.strategies import PROCEDURES, STRATEGIES, apply
 
 x, y, z = NumberKind("x"), NumberKind("y"), NumberKind("z")
 RULES = list({r.name: r for rules in STRATEGIES.values() for r in rules}.values())
@@ -24,7 +24,7 @@ def test_rule_is_sound(r):
     assert held > 0
 
 
-@pytest.mark.parametrize("name", STRATEGIES)
+@pytest.mark.parametrize("name", {**STRATEGIES, **PROCEDURES})
 @pytest.mark.parametrize("known", [None, KNOWN], ids=["free", "positive"])
 def test_strategy_terminates_and_is_sound(name, known):
     for e in INPUTS:
