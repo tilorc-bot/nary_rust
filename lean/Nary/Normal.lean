@@ -1,3 +1,4 @@
+import Nary.Literals
 import Nary.Normal.Statements
 
 namespace Nary.Normal
@@ -58,5 +59,102 @@ theorem pow_zero : Statement.pow_zero := by
   | some z =>
     have hz : z ≠ 0 := by simpa [Ne, Holds, lit] using h
     simp [Pow, withDomain₂, powDomain, powTotal, lit, hz]
+
+theorem exp_pow_integer : Statement.exp_pow_integer := by
+  intro a n h
+  obtain ⟨k, rfl⟩ := Literals.integer_of_holds h
+  cases a with
+  | none => simp [exp, Pow, withDomain₂, Mul]
+  | some w =>
+    rw [exp, Option.map_some, Literals.pow_integer _ _ (Or.inl (Complex.exp_ne_zero w))]
+    simp [exp, Mul, lit, Complex.exp_int_mul]
+
+theorem mul_pow_integer : Statement.mul_pow_integer := by
+  intro x y n h
+  obtain ⟨k, rfl⟩ := Literals.integer_of_holds h
+  cases x with
+  | none => simp [Pow, withDomain₂, Mul]
+  | some u =>
+  cases y with
+  | none => simp [Pow, withDomain₂, Mul]
+  | some v =>
+  by_cases hk : 0 < k
+  · simp only [Mul, List.mapM_cons, List.mapM_nil]
+    simp [Literals.pow_integer _ _ (Or.inr hk), mul_zpow]
+  · by_cases hu : u = 0
+    · subst hu; simp [Mul, Literals.pow_zero_nonpositive k (not_lt.mp hk)]
+    by_cases hv : v = 0
+    · subst hv; simp [Mul, Literals.pow_zero_nonpositive k (not_lt.mp hk)]
+    simp [Mul, Literals.pow_integer _ _ (Or.inl hu), Literals.pow_integer _ _ (Or.inl hv),
+      Literals.pow_integer _ _ (Or.inl (mul_ne_zero hu hv)), mul_zpow]
+
+theorem pow_pow_integer : Statement.pow_pow_integer := by
+  intro x a n h
+  simp only [holds_and, List.mem_cons, List.not_mem_nil, forall_eq_or_imp] at h
+  obtain ⟨hn, hx, -⟩ := h
+  obtain ⟨k, rfl⟩ := Literals.integer_of_holds hn
+  cases x with
+  | none => simp [Ne, Holds] at hx
+  | some z =>
+  have hz : z ≠ 0 := by simpa [Ne, Holds, lit] using hx
+  cases a with
+  | none => simp [Pow, withDomain₂, Mul]
+  | some w =>
+  have hp : Pow (some z) (some w) = some (Complex.exp (w * Complex.log z)) := by
+    simp [Pow, withDomain₂, powDomain, powTotal, hz]
+  rw [hp, Literals.pow_integer _ _ (Or.inl (Complex.exp_ne_zero _))]
+  simp [Pow, withDomain₂, powDomain, powTotal, hz, Mul, lit, ← Complex.exp_int_mul]
+  ring_nf
+
+theorem pow_pow_positive_integer : Statement.pow_pow_positive_integer := by
+  intro x a n h
+  simp only [holds_and, List.mem_cons, List.not_mem_nil, forall_eq_or_imp] at h
+  obtain ⟨hn, hpos, -⟩ := h
+  obtain ⟨k, rfl⟩ := Literals.integer_of_holds hn
+  have hk : 0 < k := by simpa [Gt, Lt, lit, Holds] using hpos
+  cases a with
+  | none => simp [Pow, withDomain₂, Mul]
+  | some w =>
+  cases x with
+  | none => simp [Pow, withDomain₂]
+  | some z =>
+  by_cases hz : z = 0
+  · subst hz
+    by_cases hw : 0 < w.re
+    · have hp : Pow (some 0) (some w) = some 0 := by simp [Pow, withDomain₂, powDomain, powTotal, hw]
+      rw [hp, Literals.pow_integer _ _ (Or.inr hk)]
+      simp [Pow, withDomain₂, powDomain, powTotal, Mul, lit, hw, hk, zero_zpow k hk.ne']
+    · have hp : Pow (some 0) (some w) = none := by simp [Pow, withDomain₂, powDomain, hw]
+      rw [hp]
+      have : ¬ 0 < w.re * k := fun h => hw (pos_of_mul_pos_left h (by exact_mod_cast hk.le))
+      simp [Pow, withDomain₂, powDomain, Mul, lit, this]
+  · have hp : Pow (some z) (some w) = some (Complex.exp (w * Complex.log z)) := by
+      simp [Pow, withDomain₂, powDomain, powTotal, hz]
+    rw [hp, Literals.pow_integer _ _ (Or.inl (Complex.exp_ne_zero _))]
+    simp [Pow, withDomain₂, powDomain, powTotal, hz, Mul, lit, ← Complex.exp_int_mul]
+    ring_nf
+
+theorem split_exponent : Statement.split_exponent := by
+  intro b n x h
+  cases b with
+  | none => simp [Ne, Holds] at h
+  | some z =>
+    have hz : z ≠ 0 := by simpa [Ne, Holds, lit] using h
+    cases n <;> cases x <;>
+      simp [Pow, Mul, Add, withDomain₂, powDomain, powTotal, hz, add_mul, Complex.exp_add]
+
+theorem zero_base : Statement.zero_base := by
+  intro c x h _
+  cases c with
+  | none => simp [Gt, Lt, Holds] at h
+  | some u =>
+    have hu : u.im = 0 ∧ 0 < u.re := by
+      by_cases hi : u.im = 0
+      · exact ⟨hi, by simpa [Gt, Lt, lit, Holds, hi] using h⟩
+      · simp [Gt, Lt, lit, Holds, hi] at h
+    cases x with
+    | none => simp [Pow, withDomain₂, Mul]
+    | some w =>
+      simp [Pow, withDomain₂, powDomain, powTotal, Mul, lit, hu.1, mul_pos_iff_of_pos_left hu.2]
 
 end Nary.Normal

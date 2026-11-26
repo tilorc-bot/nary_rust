@@ -9,3 +9,5 @@ import Nary.ElementaryRules.Statements
 import Nary.LogicRules.Statements
 import Nary.Normal.Statements
 import Nary.Normal
+import Nary.LogicRules
+import Nary.ElementaryRules

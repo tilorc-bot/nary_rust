@@ -52,6 +52,9 @@ abbrev pow_pow_positive_integer : Prop :=
 abbrev pow_pow_integer : Prop :=
   ∀ (x a n : Nary.Number), Nary.Holds (Nary.And [Nary.Eq (Nary.exp (Nary.Mul [Nary.Mul [Nary.Mul [Nary.lit 2, Nary.pi], Nary.I], n])) (Nary.lit 1), Nary.Ne x (Nary.lit 0)]) → Nary.Pow (Nary.Pow x a) n = Nary.Pow x (Nary.Mul [a, n])
 
+abbrev exp_pow_integer : Prop :=
+  ∀ (a n : Nary.Number), Nary.Holds (Nary.Eq (Nary.exp (Nary.Mul [Nary.Mul [Nary.Mul [Nary.lit 2, Nary.pi], Nary.I], n])) (Nary.lit 1)) → Nary.Pow (Nary.exp a) n = Nary.exp (Nary.Mul [n, a])
+
 abbrev pow_positive_factor : Prop :=
   ∀ (c x a : Nary.Number), Nary.Holds (Nary.Gt c (Nary.lit 0)) → Nary.Pow (Nary.Mul [c, x]) a = Nary.Mul [Nary.Pow c a, Nary.Pow x a]
 

@@ -1,3 +1,4 @@
+import Nary.Literals
 import Nary.ArithmeticRules.Statements
 
 namespace Nary.ArithmeticRules
@@ -92,5 +93,93 @@ theorem mul_flat : Statement.mul_flat := by
   intro xs ys zs
   simp only [Mul, List.mapM_append, List.mapM_cons]
   cases xs.mapM id <;> cases ys.mapM id <;> cases zs.mapM id <;> simp
+
+private theorem log_exp_real {w : ℂ} (h : w.im = 0) : Complex.log (Complex.exp w) = w :=
+  Complex.log_exp (by rw [h]; linarith [Real.pi_pos]) (by rw [h]; exact Real.pi_pos.le)
+
+theorem one_pow : Statement.one_pow := by
+  intro a h
+  obtain ⟨w, rfl⟩ := Option.ne_none_iff_exists'.mp h
+  simp [Pow, withDomain₂, powDomain, powTotal, lit]
+
+theorem zero_pow : Statement.zero_pow := by
+  intro a h _
+  cases a with
+  | none => simp [Gt, Lt, re, Holds] at h
+  | some w =>
+    have hw : 0 < w.re := by simpa [Gt, Lt, re, lit, Holds] using h
+    simp [Pow, withDomain₂, powDomain, powTotal, lit, hw]
+
+theorem pow_e : Statement.pow_e := by
+  intro a
+  cases a <;> simp [Pow, withDomain₂, powDomain, powTotal, E, exp, Complex.exp_ne_zero,
+    log_exp_real (show (1 : ℂ).im = 0 by simp)]
+
+theorem exp_zero : Statement.exp_zero := by simp [Statement.exp_zero, exp, lit]
+
+theorem exp_one : Statement.exp_one := by simp [Statement.exp_one, exp, lit, E]
+
+theorem exp_product : Statement.exp_product := by
+  intro a b; cases a <;> cases b <;> simp [exp, Mul, Add, Complex.exp_add]
+
+theorem log_one : Statement.log_one := by
+  simp [Statement.log_one, log, withDomain, logDomain, lit]
+
+theorem log_e : Statement.log_e := by
+  simp [Statement.log_e, log, withDomain, logDomain, lit, E, Complex.exp_ne_zero,
+    log_exp_real (show (1 : ℂ).im = 0 by simp)]
+
+theorem log_exp : Statement.log_exp := by
+  intro a h
+  cases a with
+  | none => simp [Eq, re, Holds] at h
+  | some w =>
+    have hw : w.im = 0 := by
+      have : (w.re : ℂ) = w := by simpa [Eq, re, Holds] using h
+      rw [← this]; simp
+    simp [log, exp, withDomain, logDomain, Complex.exp_ne_zero, log_exp_real hw]
+
+theorem exp_i_pi : Statement.exp_i_pi := by
+  intro rest
+  cases h : rest.mapM id <;>
+    simp [exp, Add, Mul, I, pi, List.mapM_cons, h, Complex.exp_add, mul_comm Complex.I,
+      Complex.exp_pi_mul_I, lit]
+
+theorem pow_complex : Statement.pow_complex := by
+  intro a b h
+  simp only [holds_and, List.mem_cons, List.not_mem_nil, forall_eq_or_imp] at h
+  obtain ⟨ha, -, -⟩ := h
+  cases a with
+  | none => simp [Ne, Holds] at ha
+  | some z =>
+  have hz : z ≠ 0 := by simpa [Ne, Holds, lit] using ha
+  cases b <;> simp [Pow, withDomain₂, powDomain, powTotal, hz, exp, log, withDomain, logDomain, Mul]
+
+theorem exp_half_i_pi : Statement.exp_half_i_pi := by
+  intro rest
+  have : Pow (lit 2) (lit (-1)) = some 2⁻¹ := by
+    rw [lit, Literals.pow_integer _ _ (Or.inl (by norm_num))]; simp
+  rw [this]
+  have e : Complex.exp (2⁻¹ * (Complex.I * Real.pi)) = Complex.I := by
+    rw [show 2⁻¹ * (Complex.I * Real.pi) = Real.pi / 2 * Complex.I by ring, Complex.exp_pi_div_two_mul_I]
+  cases h : rest.mapM id <;> simp [exp, Add, Mul, I, pi, List.mapM_cons, h, Complex.exp_add, e]
+
+theorem exp_minus_half_i_pi : Statement.exp_minus_half_i_pi := by
+  intro rest
+  have : Pow (lit 2) (lit (-1)) = some 2⁻¹ := by
+    rw [lit, Literals.pow_integer _ _ (Or.inl (by norm_num))]; simp
+  rw [this]
+  have e : Complex.exp (-(2⁻¹ * (Complex.I * Real.pi))) = -Complex.I := by
+    rw [show -(2⁻¹ * (Complex.I * Real.pi)) = -(Real.pi / 2 * Complex.I) by ring, Complex.exp_neg,
+      Complex.exp_pi_div_two_mul_I, Complex.inv_I]
+  cases h : rest.mapM id <;> simp [exp, Add, Mul, I, pi, lit, List.mapM_cons, h, Complex.exp_add, e]
+
+theorem log_i : Statement.log_i := by
+  simp only [Statement.log_i]
+  have : Pow (lit 2) (lit (-1)) = some 2⁻¹ := by
+    rw [lit, Literals.pow_integer _ _ (Or.inl (by norm_num))]; simp
+  rw [this]
+  simp [log, withDomain, logDomain, I, Mul, pi, Complex.log_I]
+  ring
 
 end Nary.ArithmeticRules

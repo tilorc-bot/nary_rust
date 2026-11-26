@@ -14,7 +14,7 @@ theorem and_idempotent : Statement.and_idempotent := by
   intro a; rcases a with _ | q <;> simp only [And] <;> boolean
 
 theorem and_empty : Statement.and_empty := by
-  simp only [And, true]; boolean
+  simp only [Statement.and_empty, And, Nary.true]; boolean
 
 theorem and_single : Statement.and_single := by
   intro a; rcases a with _ | q <;> simp only [And] <;> boolean
@@ -32,7 +32,7 @@ theorem or_idempotent : Statement.or_idempotent := by
   intro a; rcases a with _ | q <;> simp only [Or] <;> boolean
 
 theorem or_empty : Statement.or_empty := by
-  simp only [Or, false]; boolean
+  simp only [Statement.or_empty, Or, Nary.false]; boolean
 
 theorem or_single : Statement.or_single := by
   intro a; rcases a with _ | q <;> simp only [Or] <;> boolean
@@ -43,9 +43,11 @@ theorem or_excluded_middle : Statement.or_excluded_middle := by
 theorem not_not : Statement.not_not := by
   intro a; cases a <;> simp [Not]
 
-theorem not_true : Statement.not_true := by simp [Not, true, false]
+theorem not_true : Statement.not_true := by
+  simp [Statement.not_true, Not, Nary.true, Nary.false]
 
-theorem not_false : Statement.not_false := by simp [Not, true, false]
+theorem not_false : Statement.not_false := by
+  simp [Statement.not_false, Not, Nary.true, Nary.false]
 
 theorem not_eq : Statement.not_eq := by
   intro a b; cases a <;> cases b <;> simp [Not, Eq, Ne]
@@ -54,16 +56,20 @@ theorem not_ne : Statement.not_ne := by
   intro a b; cases a <;> cases b <;> simp [Not, Eq, Ne]
 
 theorem not_lt : Statement.not_lt := by
-  intro a b; cases a <;> cases b <;> simp [Not, Lt, Le, Ge] <;> split_ifs <;> simp_all [and_comm]
+  intro a b; cases a <;> cases b <;> simp [Not, Lt, Le, Ge]
+  split_ifs <;> simp_all [and_comm]
 
 theorem not_le : Statement.not_le := by
-  intro a b; cases a <;> cases b <;> simp [Not, Lt, Le, Gt] <;> split_ifs <;> simp_all [and_comm]
+  intro a b; cases a <;> cases b <;> simp [Not, Lt, Le, Gt]
+  split_ifs <;> simp_all [and_comm]
 
 theorem not_gt : Statement.not_gt := by
-  intro a b; cases a <;> cases b <;> simp [Not, Lt, Le, Gt] <;> split_ifs <;> simp_all [and_comm]
+  intro a b; cases a <;> cases b <;> simp [Not, Lt, Le, Gt]
+  split_ifs <;> simp_all [and_comm]
 
 theorem not_ge : Statement.not_ge := by
-  intro a b; cases a <;> cases b <;> simp [Not, Lt, Le, Ge] <;> split_ifs <;> simp_all [and_comm]
+  intro a b; cases a <;> cases b <;> simp [Not, Lt, Le, Ge]
+  split_ifs <;> simp_all [and_comm]
 
 theorem eq_self : Statement.eq_self := by
   intro a h; obtain ⟨z, rfl⟩ := Option.ne_none_iff_exists'.mp h; simp [Eq, true]
@@ -92,21 +98,33 @@ theorem ge_self : Statement.ge_self := by
   simp [Ge, Le, true, real_of_holds h]
 
 theorem and_unordered : Statement.and_unordered := by
-  intro xs ys h; simp only [And, h.mem_iff]
+  intro xs ys h
+  have e : ∀ a, a ∈ xs ↔ a ∈ ys := fun _ => h.mem_iff
+  unfold And; split_ifs <;> simp_all
 
 theorem or_unordered : Statement.or_unordered := by
-  intro xs ys h; simp only [Or, h.mem_iff]
-
-theorem and_absorption : Statement.and_absorption := by
-  intro p ps h; rcases p with _ | q <;> simp only [And, Or, List.cons_append, List.nil_append] <;> boolean
-
-theorem or_absorption : Statement.or_absorption := by
-  intro p ps h; rcases p with _ | q <;> simp only [And, Or, List.cons_append, List.nil_append] <;> boolean
+  intro xs ys h
+  have e : ∀ a, a ∈ xs ↔ a ∈ ys := fun _ => h.mem_iff
+  unfold Or; split_ifs <;> simp_all
 
 theorem not_and : Statement.not_and := by
-  intro p ps; rcases p with _ | q <;> simp only [And, Or, Not, Option.map, List.cons_append, List.nil_append] <;> boolean
+  intro p ps
+  by_cases hA : ∃ q, some q ∈ ps ∧ ¬q <;> by_cases hN : none ∈ ps <;>
+    rcases p with _ | q <;> (try by_cases hq : q) <;> simp [And, Or, Not, -eq_iff_iff, *]
 
 theorem not_or : Statement.not_or := by
-  intro p ps; rcases p with _ | q <;> simp only [And, Or, Not, Option.map, List.cons_append, List.nil_append] <;> boolean
+  intro p ps
+  by_cases hA : ∃ q, some q ∈ ps ∧ q <;> by_cases hN : none ∈ ps <;>
+    rcases p with _ | q <;> (try by_cases hq : q) <;> simp [And, Or, Not, -eq_iff_iff, *]
+
+theorem and_absorption : Statement.and_absorption := by
+  intro p ps h
+  by_cases hA : ∃ q, some q ∈ ps ∧ q <;>
+    rcases p with _ | q <;> (try by_cases hq : q) <;> simp [And, Or, -eq_iff_iff, *]
+
+theorem or_absorption : Statement.or_absorption := by
+  intro p ps h
+  by_cases hA : ∃ q, some q ∈ ps ∧ ¬q <;>
+    rcases p with _ | q <;> (try by_cases hq : q) <;> simp [And, Or, -eq_iff_iff, *]
 
 end Nary.LogicRules

@@ -55,12 +55,6 @@ abbrev not_true : Prop :=
 abbrev not_false : Prop :=
   Nary.Not Nary.false = Nary.true
 
-abbrev not_and : Prop :=
-  ∀ (p : Nary.Boolean) (ps : List Nary.Boolean), Nary.Not (Nary.And ([p] ++ ps)) = Nary.Or [Nary.Not p, Nary.Not (Nary.And ps)]
-
-abbrev not_or : Prop :=
-  ∀ (p : Nary.Boolean) (ps : List Nary.Boolean), Nary.Not (Nary.Or ([p] ++ ps)) = Nary.And [Nary.Not p, Nary.Not (Nary.Or ps)]
-
 abbrev not_eq : Prop :=
   ∀ (a b : Nary.Number), Nary.Not (Nary.Eq a b) = Nary.Ne a b
 
@@ -78,6 +72,12 @@ abbrev not_gt : Prop :=
 
 abbrev not_ge : Prop :=
   ∀ (a b : Nary.Number), Nary.Not (Nary.Ge a b) = Nary.Lt a b
+
+abbrev not_and : Prop :=
+  ∀ (p : Nary.Boolean) (ps : List Nary.Boolean), Nary.Not (Nary.And ([p] ++ ps)) = Nary.Or [Nary.Not p, Nary.Not (Nary.And ps)]
+
+abbrev not_or : Prop :=
+  ∀ (p : Nary.Boolean) (ps : List Nary.Boolean), Nary.Not (Nary.Or ([p] ++ ps)) = Nary.And [Nary.Not p, Nary.Not (Nary.Or ps)]
 
 abbrev eq_self : Prop :=
   ∀ (a : Nary.Number), a ≠ none → Nary.Eq a a = Nary.true

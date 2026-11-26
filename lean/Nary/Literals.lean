@@ -41,4 +41,23 @@ theorem lt_not_real (z w : ℂ) (h : z.im ≠ 0 ∨ w.im ≠ 0) : Lt (some z) (s
 theorem le_not_real (z w : ℂ) (h : z.im ≠ 0 ∨ w.im ≠ 0) : Le (some z) (some w) = none := by
   simp [Le]; tauto
 
+theorem pow_zero_nonpositive (k : ℤ) (h : k ≤ 0) : Pow (some 0) (lit k) = none := by
+  simp [Pow, withDomain₂, powDomain, lit]; exact_mod_cast h
+
+theorem integer_of_holds {n : Number}
+    (h : Holds (Eq (exp (Mul [Mul [Mul [lit 2, pi], I], n])) (lit 1))) : ∃ k : ℤ, n = lit k := by
+  cases n with
+  | none => simp [Eq, exp, Mul, Holds] at h
+  | some w =>
+    have h1 : Complex.exp (2 * Real.pi * Complex.I * w) = 1 := by
+      simpa [Eq, exp, Mul, Holds, lit, pi, I] using h
+    obtain ⟨k, hk⟩ := Complex.exp_eq_one_iff.mp h1
+    refine ⟨k, ?_⟩
+    have hne : (2 * Real.pi * Complex.I : ℂ) ≠ 0 := by
+      simp [Real.pi_ne_zero, Complex.I_ne_zero]
+    have : w = k := by
+      apply mul_left_cancel₀ hne
+      rw [hk]; ring
+    simp [lit, this]
+
 end Nary.Literals
