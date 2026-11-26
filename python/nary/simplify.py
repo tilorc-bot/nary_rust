@@ -20,8 +20,11 @@ Known facts are given as a list of conditions or as a function.
 """
 
 from . import arithmetic_rules, elementary_rules, logic_rules
+from .calculus import Derivative
+from .differentiation import derivative
+from .functions import Lambda
 from .normal import normal
-from .rewriting import beta, rewrite
+from .rewriting import beta, holds, rewrite
 
 __all__ = ["rules", "simplify"]
 
@@ -35,4 +38,21 @@ def simplify(e, known=None):
 
 def _normal(e, known):
     reduced = beta(e)
+    if reduced == e and e.head is not None and e.head.head == Derivative:
+        reduced = _differentiate(e, known)
     return reduced if reduced != e else normal(e, known)
+
+
+def _differentiate(e, known):
+    found = derivative(e.head.args[0])
+    if found is None:
+        return e
+    f, conditions = found
+    point = dict(zip(f.args[:-1], e.args))
+    if not all(holds(_at(c, point), known) for c in conditions):
+        return e
+    return beta(f(*e.args))
+
+
+def _at(c, point):
+    return beta(Lambda(*point, c)(*point.values()))
