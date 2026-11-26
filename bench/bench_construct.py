@@ -1,26 +1,9 @@
-"""Time building, comparing and hashing expressions.
-
-    python bench/bench_construct.py                # a table, ns per operation
-    python bench/bench_construct.py --json         # {"label": [ns, ...], ...}
-    python bench/bench_construct.py --only "x + y" # one operation
-
-The package ``nary`` has to be installed or on PYTHONPATH. ``--module`` names
-another module with the same names, so that one copy of this script can time
-several versions; ``bench/compare.py`` does that.
-
-Each statement is timed with ``timeit``. The number of loops is chosen so
-that one repeat takes about ``--target`` seconds, and the result is the time
-of one loop in each of ``--repeats`` repeats.
-"""
-
 import argparse
 import importlib
 import json
 import sys
 import timeit
 
-# The statements, each with the number of operations in it. A time is
-# reported for one operation.
 STATEMENTS = [
     ("Add(x, y, z)", "Add(x, y, z)", 1),
     ("x + y", "x + y", 1),
@@ -47,7 +30,6 @@ def namespace(nr):
     return {
         "Add": nr.Add, "Eq": nr.Eq, "sin": nr.sin, "NumberKind": nr.NumberKind,
         "x": x, "y": y, "z": z,
-        # Two equal trees that share no node, so == walks all of both.
         "a": deep(), "b": deep(),
         "thousand": range(1000),
     }
@@ -62,14 +44,14 @@ def measure(nr, repeats, target, only=None):
         timer = timeit.Timer(statement, globals=dict(names))
         loops, seconds = timer.autorange()
         loops = max(1, round(loops * target / seconds))
-        timer.timeit(loops)  # warm up
+        timer.timeit(loops)
         times = timer.repeat(repeats, loops)
         results[label] = [t / loops / operations * 1e9 for t in times]
     return results
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser = argparse.ArgumentParser(description="Time building, comparing and hashing expressions.")
     parser.add_argument("--module", default="nary")
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--target", type=float, default=0.1, help="seconds per repeat")

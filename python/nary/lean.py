@@ -1,15 +1,4 @@
-"""Printing an expression as a Lean term, and a rule as a Lean statement.
-
-``lean/`` is a Lean 4 project that says what each declared function means
-(see ``lean/README.md``). ``to_lean(e)`` writes the expression ``e`` as the
-Lean term built from those definitions, and ``to_lean_example(e)`` writes a
-whole line that Lean can check on its own: an ``example`` with the free
-symbols of ``e`` as variables, the type of the result, and the term. The
-line starts with ``noncomputable``, because the definitions in ``lean/``
-are noncomputable (they use Mathlib's complex functions and classical
-logic) and Lean would otherwise try to compile the example.
-``to_lean_rule(r)`` and ``to_lean_facts(f)`` write what a rule or a fact
-claims, as a Lean statement to be proved (see "Rules and facts" below).
+"""to_lean writes an expression as a Lean term.
 
     >>> from nary import Lambda, NumberKind, sin
     >>> from nary.calculus import Derivative, Integral, NumberFunction
@@ -19,66 +8,33 @@ claims, as a Lean statement to be proved (see "Rules and facts" below).
     'Nary.Add [some x, Nary.Mul [Nary.lit (-1), some y]]'
     >>> to_lean(x ** 2)
     'Nary.Pow (some x) (Nary.lit 2)'
+
+A declared function used as a value becomes a fun.
+
     >>> to_lean(Derivative(sin)(x))
     'Nary.apply (Nary.Derivative (fun z => Nary.sin (some z))) (some x)'
+
+A call of a lambda or of a function symbol uses Nary.apply.
+
     >>> to_lean(Lambda(x, sin(x))(y))
     'Nary.apply (fun x => Nary.sin (some x)) (some y)'
     >>> f = NumberFunction("f")
     >>> to_lean(f(x) < y)
     'Nary.Lt (Nary.apply f (some x)) (some y)'
+
+to_lean_example writes a line that Lean can check on its own.
+
     >>> print(to_lean_example(x - y))
     noncomputable example (x y : ℂ) : Nary.Number := Nary.Add [some x, Nary.Mul [Nary.lit (-1), some y]]
+
+A function with no Lean definition is refused.
+
     >>> to_lean(Integral(sin, 0, x))
     Traceback (most recent call last):
         ...
     ValueError: Integral has no Lean definition: it is not in nary.lean.LEAN_NAMES
 
-How each part is printed:
-
-- A symbol of ``NumberKind`` named ``x`` is a Lean variable ``x : ℂ`` and
-  prints as ``some x``; a ``BoolKind`` symbol ``p`` is ``p : Prop`` and
-  prints as ``some p``; a symbol ``f`` of ``FunctionKind((NumberKind,),
-  NumberKind)`` is ``f : ℂ → Nary.Number`` and prints as ``f``.
-- An integer literal prints as ``Nary.lit 3`` or ``Nary.lit (-1)``.
-- The declared functions and constants print with their full Lean names,
-  ``Nary.Add``, ``Nary.I``, ``Nary.true``, because several of them (``Eq``,
-  ``And``, ``Not``, ``Pow``, ``true``, ...) are also names in Lean itself.
-  Which declaration is which Lean definition is the table ``LEAN_NAMES``
-  below, keyed by the declared object, not by its name.
-- A function declared with ``rest=`` takes its arguments as a Lean list,
-  ``Nary.Add [a, b]``; any other takes them one after the other.
-- ``Lambda(x, body)``, with one ``NumberKind`` variable and a
-  ``NumberKind`` body, prints as ``fun x => body``.
-- A call whose head is not a declared function (a lambda, a function
-  symbol, ``Derivative(f)``) prints with ``Nary.apply``.
-- A declared function of one number used as a value, such as ``sin`` in
-  ``Derivative(sin)``, prints as ``fun z => Nary.sin (some z)``.
-
-A symbol name that is not a plain ASCII Lean identifier, or that is a Lean
-keyword (any word that Lean reads as a keyword once Mathlib is imported),
-is written between ``«`` and ``»``: ``NumberKind("fun")`` prints as
-``some «fun»`` and ``NumberKind("θ")`` as ``some «θ»``.
-
-Refused, with a ``ValueError`` that names the part with no Lean
-definition: ``Integral``, ``Sum``, ``Product``, ``Limit``,
-``Antiderivative``, everything in ``nary.matrices``, any other function or
-constant that ``LEAN_NAMES`` does not list, a declared function used as a
-value unless it is a function of one number, a lambda of more than one
-variable or of other kinds, symbols of any other kind, literals of any
-other kind, and symbol names that cannot be written in Lean: the empty
-name, a name containing ``»`` or a control character, and the names
-``some``, ``none`` and ``Nary``, which would hide the Lean names that the
-output uses. Also refused: two free symbols with the same name and different
-kinds, and a symbol inside a lambda whose variable has the same name and a
-different kind (Lean would read it as the variable).
-
-Rules and facts
----------------
-
-``to_lean_rule(r)`` writes the claim of the ``Rule`` ``r`` (see
-``nary.rules``) as a Lean declaration of a proposition named after the
-rule, and ``to_lean_facts(f)`` does the same for each fact recorded for the
-declared function ``f`` with ``unordered`` and ``flat``:
+to_lean_rule writes the claim of a rule as a Lean proposition.
 
     >>> from nary import Add, Ne
     >>> from nary.rules import rule
@@ -86,46 +42,15 @@ declared function ``f`` with ``unordered`` and ``flat``:
     >>> print(to_lean_rule(rule(a / a, 1, when=Ne(a, 0), name="div_self")))
     abbrev div_self : Prop :=
       ∀ (a : Nary.Number), Nary.Holds (Nary.Ne a (Nary.lit 0)) → a ≠ none → Nary.Mul [a, Nary.Pow a (Nary.lit (-1))] = Nary.lit 1
+
+to_lean_facts writes the facts recorded for a function.
+
     >>> for statement in to_lean_facts(Add):
     ...     print(statement)
     abbrev add_unordered : Prop :=
       Nary.Unordered Nary.Add
     abbrev add_flat : Prop :=
       Nary.Flat Nary.Add
-
-The claim of a rule reads: for all values of the variables, if the
-condition holds (``Nary.Holds``, which is false where the condition has no
-value) and every erased variable has a value (``a ≠ none``), then the
-pattern equals the replacement. On ``Nary.Number`` two meanings are equal
-exactly when both have no value or both have the same value, so this is
-the claim that ``nary.rules`` states. A rule with no condition has no
-``Nary.Holds`` hypothesis, and a rule that erases nothing no ``≠ none``
-hypothesis. ``Nary.Unordered`` and ``Nary.Flat`` are defined by hand in
-``lean/Nary/Facts.lean``.
-
-In a rule a symbol is a variable that may stand for an expression with no
-value, so it is printed differently from ``to_lean``: a ``NumberKind``
-variable ``a`` is ``a : Nary.Number`` and prints as ``a``, not ``some a``,
-and a ``BoolKind`` variable ``p`` is ``p : Nary.Boolean`` and prints as
-``p``. A variable ``f`` of ``FunctionKind((NumberKind,), NumberKind)`` is
-``f : Nary.NumberFunction`` and prints as ``f``, as in ``to_lean``. An
-erased function variable gets no ``≠ none`` hypothesis: an expression of a
-function kind always means a function, though the function may have no
-value at some points. So the wrong rule ``f(a) * 0 -> 0`` prints as a
-statement that is false (take ``f`` with no value anywhere), and has no
-proof. The variables are grouped by type in that order, each group in the
-order the variables first appear in the pattern.
-
-Refused, besides everything ``to_lean`` refuses: a rule with no name, or
-whose name is not a plain ASCII identifier or is a Lean keyword (the name
-is the name of a Lean declaration, so it is not written between ``«`` and
-``»``). ``to_lean_facts`` refuses a function that is not in ``LEAN_NAMES``,
-and one that does not take its arguments as a list (declared with
-``rest=`` and no other arguments): ``Nary.Unordered`` and ``Nary.Flat`` are
-defined only for a function on a list.
-
-The module is imported as ``nary.lean``; its names are not re-exported
-from ``nary``.
 """
 
 import re as _re
@@ -134,15 +59,11 @@ from . import arithmetic, calculus, constants, elementary, logic, relational
 from ._core import Expr
 from .calculus import NumberFunction
 from .functions import is_lambda
-from .kinds import BoolKind, NumberKind
+from .kinds import BoolKind, Many, NumberKind
 from .rules import Rule, is_flat, is_unordered
 
 __all__ = ["LEAN_NAMES", "to_lean", "to_lean_example", "to_lean_facts", "to_lean_rule"]
 
-# The Lean definition of each declared function and constant, keyed by the
-# declared object itself. A function is printed as its Lean definition only
-# if it is in this table; whether it takes a list comes from its declaration
-# (``rest=``), not from here.
 LEAN_NAMES = {
     arithmetic.Add: "Nary.Add",
     arithmetic.Mul: "Nary.Mul",
@@ -170,16 +91,12 @@ LEAN_NAMES = {
     calculus.Derivative: "Nary.Derivative",
 }
 
-# The Lean type of a variable of each kind of symbol, and of a result.
 _VARIABLE_TYPES = {NumberKind: "ℂ", BoolKind: "Prop", NumberFunction: "ℂ → Nary.Number"}
 _RESULT_TYPES = {
     NumberKind: "Nary.Number",
     BoolKind: "Nary.Boolean",
     NumberFunction: "ℂ → Nary.Number",
 }
-# The Lean type of a variable of a rule, which may stand for an expression
-# with no value. A function always has a value (a function, which may have
-# no value at some points), so only the first two can be erased.
 _RULE_VARIABLE_TYPES = {
     NumberKind: "Nary.Number",
     BoolKind: "Nary.Boolean",
@@ -244,15 +161,10 @@ _KEYWORDS = frozenset("""
     with_weak_namespace without_expected_type
 """.split())
 
-# Names that the printed term uses unqualified (``some``, and ``none`` in the
-# statement of a rule) or as the start of every full name (``Nary``). A
-# variable with one of these names would hide them, whether or not it is
-# written with « and ».
 _RESERVED = frozenset({"some", "none", "Nary"})
 
 
 def _identifier(name):
-    """``name`` written as a Lean identifier."""
     if not name:
         raise ValueError("a symbol with an empty name cannot be written in Lean")
     if name in _RESERVED:
@@ -281,18 +193,11 @@ def _is_declared_function(e):
 
 class _Printer:
     def __init__(self, rule=False):
-        # Whether symbols are the variables of a rule, which print as
-        # themselves (``a``), not as a value (``some a``).
         self.rule = rule
-        # The free symbols, by name, in the order they are first met.
         self.free = {}
-        # The variables of the lambdas around the current subexpression,
-        # innermost last.
         self.bound = []
 
     def symbol(self, e):
-        """Record the symbol ``e`` as bound or free and return its name in
-        Lean."""
         for variable in reversed(self.bound):
             if variable.name == e.name:
                 if variable.kind is not e.kind:
@@ -317,14 +222,10 @@ class _Printer:
         return _identifier(e.name)
 
     def argument(self, e):
-        """``e`` as an argument of a Lean application, in parentheses
-        unless it is a single name."""
         text, atomic = self.print(e)
         return text if atomic else f"({text})"
 
     def print(self, e):
-        """``e`` in Lean, and whether that is a single name (which then
-        needs no parentheses as an argument)."""
         if not isinstance(e, Expr):
             raise TypeError(f"to_lean expects an expression, got {e!r}")
 
@@ -346,7 +247,6 @@ class _Printer:
             name = LEAN_NAMES[e]
             if e.kind.inputs is None:
                 return name, True
-            # A declared function used as a value.
             if e.kind is not NumberFunction:
                 raise _no_definition(
                     e, f" as a value: only a declared function of kind "
@@ -369,15 +269,16 @@ class _Printer:
                 self.bound.pop()
             return text, False
 
-        # An application.
         head = e.head
         if _is_declared_function(head):
             if head not in LEAN_NAMES:
                 raise _not_in_table(head)
             name = LEAN_NAMES[head]
-            fixed = len(head.kind.inputs)
+            inputs = head.kind.inputs
+            run = bool(inputs) and inputs[-1].family is Many
+            fixed = len(inputs) - run
             parts = [name] + [self.argument(a) for a in e.args[:fixed]]
-            if head.kind.rest is not None:
+            if run:
                 rest = ", ".join(self.print(a)[0] for a in e.args[fixed:])
                 parts.append(f"[{rest}]")
             if len(parts) == 1:
@@ -393,21 +294,10 @@ class _Printer:
 
 
 def to_lean(e):
-    """The Lean term for the expression ``e``, as a string.
-
-    Raises ``ValueError`` if a part of ``e`` has no Lean definition.
-    """
     return _Printer().print(e)[0]
 
 
 def to_lean_example(e):
-    """A line that Lean can check on its own: ``noncomputable example``,
-    the free symbols of ``e`` as variables with their types, the type of
-    ``e`` and its term.
-
-    The variables are grouped by type (numbers, then propositions, then
-    functions), each group in the order the symbols first appear in ``e``.
-    """
     printer = _Printer()
     term = printer.print(e)[0]
     if e.kind not in _RESULT_TYPES:
@@ -417,8 +307,6 @@ def to_lean_example(e):
         names = [_identifier(s.name) for s in printer.free.values() if s.kind is kind]
         if names:
             binders.append(f"({' '.join(names)} : {lean_type})")
-    # The definitions in lean/ are noncomputable, and without the keyword
-    # Lean tries to compile the example and fails.
     return " ".join(
         ["noncomputable example", *binders, ":", _RESULT_TYPES[e.kind], ":=", term]
     )
@@ -436,14 +324,6 @@ def _declaration_name(name, what):
 
 
 def to_lean_rule(r):
-    """The statement of the rule ``r`` as a Lean declaration,
-    ``abbrev <name> : Prop := <claim>``, where the claim says: for all values
-    of the variables, wherever the condition holds and every erased variable
-    has a value, the pattern equals the replacement.
-
-    The rule must have a name that is a plain Lean identifier. Raises
-    ``ValueError`` if it has none or if a part of it has no Lean definition.
-    """
     if not isinstance(r, Rule):
         raise TypeError(f"to_lean_rule expects a Rule, got {r!r}")
     name = _declaration_name(r.name, f"the rule {r!r}")
@@ -465,17 +345,9 @@ def to_lean_rule(r):
 
 
 def to_lean_facts(f):
-    """The statements of the facts recorded for the declared function ``f``
-    with ``unordered`` and ``flat``, as Lean declarations such as
-    ``abbrev add_unordered : Prop := Nary.Unordered Nary.Add``.
-
-    ``Nary.Unordered`` and ``Nary.Flat`` are defined for a function on a
-    list, so ``f`` must take its arguments as a list (``rest=`` and no
-    other arguments). Raises ``ValueError`` otherwise.
-    """
     if not _is_declared_function(f) or f not in LEAN_NAMES:
         raise _not_in_table(f)
-    if f.kind.inputs or f.kind.rest is None:
+    if len(f.kind.inputs) != 1 or f.kind.inputs[0].family is not Many:
         raise ValueError(
             f"the facts about {f!r} cannot be stated in Lean: Nary.Unordered and "
             f"Nary.Flat are defined only for a function that takes a list"

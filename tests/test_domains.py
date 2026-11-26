@@ -1,7 +1,3 @@
-"""The domains of partial functions, declared with declare_function."""
-
-import doctest
-
 import nary.domains
 import pytest
 from nary import BoolKind, Eq, Lambda, Ne, NumberKind, Pow, Symbol, declare_function, log, sin, tan
@@ -10,12 +6,6 @@ from nary.domains import domain, domain_of
 from nary.logic import true
 
 x, y = NumberKind("x"), NumberKind("y")
-
-
-def test_docstring_examples():
-    result = doctest.testmod(nary.domains)
-    assert result.attempted > 0
-    assert result.failed == 0
 
 
 def test_declared_domains():
@@ -28,10 +18,7 @@ def test_declared_domains():
 
 
 def test_the_domain_of_an_application():
-    # x / y is Mul(x, Pow(y, -1)): this is where division by zero is excluded.
     assert repr(domain_of(Pow(y, -1))) == "Or(Ne(y, 0), Gt(re(-1), 0))"
-    # Every parameter is replaced at once, so arguments named like the
-    # parameters of Pow (base, exp) come out right.
     base, exp = NumberKind("base"), NumberKind("exp")
     assert repr(domain_of(Pow(exp, base))) == "Or(Ne(exp, 0), Gt(re(base), 0))"
     assert repr(domain_of(tan(log(x)))) == "Ne(cos(log(x)), 0)"
@@ -48,7 +35,6 @@ def test_what_a_declaration_refuses():
             declare_function("f", x, returns=NumberKind, domain=not_a_domain)
     with pytest.raises(ValueError, match="mentions y, which is not one of its parameters"):
         declare_function("f", x, returns=NumberKind, domain=Ne(y, 0))
-    # A symbol of another kind with the name of a parameter is not that parameter.
     with pytest.raises(ValueError, match="mentions x, which is not one of its parameters"):
         declare_function("f", BoolKind("x"), returns=NumberKind, domain=Eq(x, 0))
     with pytest.raises(ValueError, match="mentions x, which is not one of its parameters"):

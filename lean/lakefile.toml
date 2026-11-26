@@ -1,5 +1,3 @@
-# Lean definitions of what the functions declared in python/nary mean.
-# Keep the Mathlib version in step with lean-toolchain.
 name = "Nary"
 defaultTargets = ["Nary"]
 

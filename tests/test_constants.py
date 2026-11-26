@@ -1,5 +1,3 @@
-"""Constants: named leaves of any kind, declared with declare_constant."""
-
 import pytest
 from nary import BoolKind, Lambda, NumberKind, declare_constant, pi, sin
 from nary.logic import And, true

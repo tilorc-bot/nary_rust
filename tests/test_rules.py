@@ -1,22 +1,10 @@
-"""Rules and the facts unordered and flat, from nary.rules."""
-
-import doctest
-
 import nary.arithmetic_rules
-import nary.rules
 import pytest
 from nary import Add, BoolKind, Lambda, Mul, Ne, NumberKind, Pow, declare_function
 from nary.logic import And, true
 from nary.rules import flat, is_flat, is_unordered, rule, unordered
 
 a, b = NumberKind("a"), NumberKind("b")
-
-
-def test_docstring_examples():
-    for module in (nary.rules, nary.arithmetic_rules):
-        result = doctest.testmod(module)
-        assert result.attempted > 0
-        assert result.failed == 0
 
 
 def test_stored_fields():

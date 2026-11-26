@@ -1,5 +1,3 @@
-"""Kind families: kinds with other kinds as parameters, declared in Python."""
-
 import threading
 
 import nary as nr
@@ -10,10 +8,8 @@ from nary import (
 )
 from nary.logic import true
 
-# Families that nary does not have, declared here. Nothing in Rust knows
-# about them.
-TupleKind = declare_kind_family("TupleKind")              # one or more parameters
-MatrixKind = declare_kind_family("MatrixKind", params=1)  # exactly one parameter
+TupleKind = declare_kind_family("TupleKind")
+MatrixKind = declare_kind_family("MatrixKind", params=1)
 
 Pair = TupleKind(NumberKind, BoolKind)
 Piece = declare_function("Piece", NumberKind("expr"), BoolKind("condition"), returns=Pair, domain=true)
@@ -47,9 +43,9 @@ def test_the_same_parameters_give_the_same_kind():
 def test_different_parameters_give_different_kinds():
     kinds = [
         Pair,
-        TupleKind(BoolKind, NumberKind),           # another order
-        TupleKind(NumberKind),                     # fewer
-        TupleKind(NumberKind, BoolKind, BoolKind), # more
+        TupleKind(BoolKind, NumberKind),
+        TupleKind(NumberKind),
+        TupleKind(NumberKind, BoolKind, BoolKind),
         TupleKind(NumberKind, NumberKind),
         MatrixKind(NumberKind),
         MatrixKind(BoolKind),
@@ -58,7 +54,6 @@ def test_different_parameters_give_different_kinds():
 
 
 def test_different_families_give_different_kinds():
-    # Even with the same name and the same parameters.
     other = declare_kind_family("TupleKind")
     assert other is not TupleKind
     assert other(NumberKind, BoolKind) is not Pair
@@ -88,7 +83,6 @@ def test_a_kind_shows_its_family_and_parameters():
     assert Pair.params == (NumberKind, BoolKind)
     assert MatrixKind(BoolKind).family is MatrixKind
     assert MatrixKind(BoolKind).params == (BoolKind,)
-    # A kind declared with declare_kind(name) has neither.
     assert NumberKind.family is None
     assert NumberKind.params == ()
     assert declare_kind("Plain").family is None
@@ -109,28 +103,26 @@ def test_an_instantiated_kind_in_signatures():
     assert repr(p) == "Piece(x, Lt(x, y))"
     assert (p.expr, p.condition) == (x, x < y)
     Matrix = MatrixKind(NumberKind)
-    MatAdd = declare_function("MatAdd", rest=Matrix, returns=Matrix, domain=true)
+    MatAdd = declare_function("MatAdd", nr.Many(Matrix), returns=Matrix, domain=true)
     Trace = declare_function("Trace", Matrix, returns=NumberKind, domain=true)
     First = declare_function("First", Pair, returns=NumberKind, domain=true)
     A, B = Matrix("A"), Matrix("B")
     assert MatAdd(A, B).kind is Matrix
     assert Trace(MatAdd(A, B)).kind is NumberKind
     assert repr(First(p) + x) == "Add(First(Piece(x, Lt(x, y))), x)"
-    # A kind made again from the same parameters is accepted.
     assert MatrixKind(NumberKind)("C").kind is Matrix
     assert Trace(MatrixKind(NumberKind)("C")).kind is NumberKind
 
 
 def test_a_function_shows_what_was_declared():
     Matrix = MatrixKind(NumberKind)
-    MatAdd = declare_function("MatAdd", Matrix, rest=Matrix, returns=Matrix, domain=true)
+    MatAdd = declare_function("MatAdd", Matrix, nr.Many(Matrix), returns=Matrix, domain=true)
     assert MatAdd.name == "MatAdd"
-    assert len(MatAdd.kind.inputs) == 1 and MatAdd.kind.inputs[0] is Matrix
-    assert MatAdd.kind.rest is Matrix and MatAdd.kind.output is Matrix
+    assert MatAdd.kind.inputs == (Matrix, nr.Many(Matrix)) and MatAdd.kind.output is Matrix
     assert MatAdd.names == ()
-    assert Piece.kind.inputs == (NumberKind, BoolKind) and Piece.kind.rest is None
+    assert Piece.kind.inputs == (NumberKind, BoolKind)
     assert Piece.kind.output is Pair and Piece.names == ("expr", "condition")
-    assert nr.Add.kind.inputs == () and nr.Add.kind.rest is NumberKind
+    assert nr.Add.kind.inputs == (nr.Many(NumberKind),)
     with pytest.raises(AttributeError):
         Piece.names = ()
 
@@ -149,22 +141,19 @@ def test_an_instantiated_kind_is_checked():
 
 
 def test_the_result_kind_is_the_declared_one():
-    # Nothing is inferred from the arguments: a function declared to return
-    # TupleKind(NumberKind, BoolKind) returns that, whatever it is given.
-    Wrap = declare_function("Wrap", rest=MatrixKind(NumberKind), returns=Pair, domain=true)
+    Wrap = declare_function("Wrap", nr.Many(MatrixKind(NumberKind)), returns=Pair, domain=true)
     assert Wrap(MatrixKind(NumberKind)("A")).kind is Pair
 
 
 def test_an_instantiated_kind_has_its_own_operators():
     Matrix = MatrixKind(declare_kind("Scalar"))
-    MatMul = declare_function("MatMul", rest=Matrix, returns=Matrix, domain=true)
+    MatMul = declare_function("MatMul", nr.Many(Matrix), returns=Matrix, domain=true)
     set_operator(Matrix, "*", MatMul)
     A, B = Matrix("A"), MatrixKind(Matrix.params[0])("B")
     assert repr(A * B) == "MatMul(A, B)"
     assert (A * B).kind is Matrix
     with pytest.raises(ValueError, match=r"^the \* operator is already set for MatrixKind\(Scalar\)$"):
         set_operator(MatrixKind(Matrix.params[0]), "*", MatMul)
-    # Another instance of the family has no operators.
     with pytest.raises(TypeError, match="unsupported operand"):
         MatrixKind(BoolKind)("P") * MatrixKind(BoolKind)("Q")
     with pytest.raises(TypeError, match="unsupported operand"):

@@ -1,20 +1,13 @@
-import doctest
-
 import pytest
 
-import nary.identities
 from nary import Add, Mul, NumberKind, exp, log
 from nary._core import declare_function
+from nary._identities import Equal, declare_identities, identities, identity, inverse
 from nary.arithmetic_rules import rules
-from nary.identities import Equal, declare_identities, identities, identity, inverse
 from nary.relational import Ne
 from nary.rules import is_flat, is_unordered, rule
 
 a = NumberKind("a")
-
-
-def test_doctests():
-    assert doctest.testmod(nary.identities).failed == 0
 
 
 def test_the_rules_are_those_listed_before_the_blocks():

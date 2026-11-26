@@ -1,24 +1,7 @@
-/-
-Proofs of the rules and facts of `python/nary/arithmetic_rules.py`, written
-by hand.
-
-The statements are generated from Python into
-`Nary/ArithmeticRules/Statements.lean` as `Statement.add_identity` and so on.
-Each theorem here proves one of them under the same name, and `proved` at the
-end collects them all into the generated structure `Proved`. So `lake build`
-fails if a statement has no proof here, or if a proof no longer fits its
-statement after the rule changed in Python.
-
-Each theorem is `Nary.ArithmeticRules.pow_one` and so on, not `Nary.pow_one`,
-so that it cannot be confused with Mathlib's `pow_one`.
--/
 import Nary.ArithmeticRules.Statements
 
 namespace Nary.ArithmeticRules
 
-/-! ### The rules -/
-
-/-- The condition `Ne(a, 0)` holds exactly when `a` has a value that is not 0. -/
 private theorem holds_ne_zero {a : Number} (h : Holds (Ne a (lit 0))) :
     ∃ z, a = some z ∧ z ≠ 0 := by
   cases a with
@@ -36,8 +19,6 @@ theorem mul_absorbing : Statement.mul_absorbing := by
   obtain ⟨z, rfl⟩ := Option.ne_none_iff_exists'.mp h
   simp [Mul, lit]
 
-/-- Without the hypothesis `a ≠ none`, `a * 0 → 0` is wrong: at `a = log(0)`
-the left side has no value and the right side is 0. -/
 example : Mul [log (lit 0), lit 0] ≠ lit 0 := by
   simp [Mul, log, withDomain, logDomain, lit]
 
@@ -75,10 +56,6 @@ theorem exp_log : Statement.exp_log := by
   obtain ⟨z, rfl, hz⟩ := holds_ne_zero h
   simp [exp, log, withDomain, logDomain, hz, Complex.exp_log hz]
 
-/-! ### The facts about `Add` and `Mul` -/
-
-/-- The values of the arguments as a multiset (which forgets their order),
-or `none` if one argument has no value. -/
 private abbrev values (xs : List Number) : Option (Multiset ℂ) :=
   (xs.mapM id).map (fun l : List ℂ => (l : Multiset ℂ))
 
@@ -86,7 +63,6 @@ private theorem values_cons (x : Number) (l : List Number) :
     values (x :: l) = x.bind (fun a => (values l).map (Multiset.cons a)) := by
   cases x <;> cases h : l.mapM id <;> simp [values, List.mapM_cons, h]
 
-/-- Reordering the arguments does not change `values`. -/
 private theorem values_perm {xs ys : List Number} (h : xs.Perm ys) :
     values xs = values ys := by
   induction h with
@@ -117,9 +93,6 @@ theorem mul_flat : Statement.mul_flat := by
   simp only [Mul, List.mapM_append, List.mapM_cons]
   cases xs.mapM id <;> cases ys.mapM id <;> cases zs.mapM id <;> simp
 
-/-! ### All of them -/
-
-/-- Every generated statement is proved. -/
 theorem proved : Proved where
   add_identity := add_identity
   mul_identity := mul_identity

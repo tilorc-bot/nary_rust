@@ -1,6 +1,6 @@
 """
     >>> from nary import Add
-    >>> from nary.identities import identities, inverse
+    >>> from nary._identities import identities, inverse
     >>> identities(Add)[:3]
     [associative, commutative, identity(0)]
     >>> inverse.statement
@@ -8,7 +8,7 @@
 """
 
 from ._core import FunctionKind, declare_kind
-from .kinds import NumberKind
+from .kinds import Many, NumberKind
 from .rules import flat, rule, unordered
 
 __all__ = [
@@ -57,7 +57,7 @@ class Law:
 
 
 PatternKind = declare_kind("PatternKind")
-f = FunctionKind((), PatternKind, rest=PatternKind)("f")
+f = FunctionKind((Many(PatternKind),), PatternKind)("f")
 a, b, e, i, z, s, t, u = (PatternKind(name) for name in "abeizstu")
 
 associative = Law("associative", Equal(f(s, f(t), u), f(s, t, u)))
