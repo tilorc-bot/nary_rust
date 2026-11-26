@@ -15,10 +15,12 @@ from nary.lean import to_lean, to_lean_example, to_lean_rule
 from nary.logic import And, Not, true
 from nary.matrices import Matrix, Trace
 from nary.rules import rule
+from nary.sets import Contains, FiniteSet, NumberSet, Union
 
 x, y = nr.NumberKind("x"), nr.NumberKind("y")
 p = nr.BoolKind("p")
 f = NumberFunction("f")
+S = NumberSet("S")
 
 
 def test_docstring_examples():
@@ -39,6 +41,10 @@ def test_to_lean():
     assert to_lean_example(f(x) * y + nr.sin(x)) == (
         "noncomputable example (x y : ℂ) (f : ℂ → Nary.Number) : Nary.Number := "
         "Nary.Add [Nary.Mul [Nary.apply f (some x), some y], Nary.sin (some x)]"
+    )
+    assert to_lean_example(Contains(x, Union(FiniteSet(1, 2), S))) == (
+        "noncomputable example (x : ℂ) (S : Set ℂ) : Nary.Boolean := "
+        "Nary.Contains (some x) (Nary.Union [Nary.FiniteSet [Nary.lit 1, Nary.lit 2], some S])"
     )
     # The variable of a lambda is not free.
     assert to_lean_example(nr.Lambda(x, x * y)) == (
@@ -81,6 +87,10 @@ def test_to_lean_rule():
     assert to_lean_rule(rule(f(x) * 0, 0, name="wrong")) == (
         "abbrev wrong : Prop :=\n  ∀ (x : Nary.Number) (f : Nary.NumberFunction), "
         "x ≠ none → Nary.Mul [Nary.apply f x, Nary.lit 0] = Nary.lit 0"
+    )
+    assert to_lean_rule(rule(Contains(x, Union(S, S)), Contains(x, S), name="union_self")) == (
+        "abbrev union_self : Prop :=\n  ∀ (x : Nary.Number) (S : Nary.NumberSet), "
+        "Nary.Contains x (Nary.Union [S, S]) = Nary.Contains x S"
     )
 
 
