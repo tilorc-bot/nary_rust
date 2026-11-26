@@ -52,6 +52,7 @@ GATED = [
     (x ** 0, [Ne(x, 0)], Pow(x, 0)),
     (x ** 2 / x, [Ne(x, 0)], Mul(Pow(x, -1), Pow(x, 2))),
     (Pow(Pow(x, -1), -1), [Ne(x, 0)], Pow(Pow(x, -1), -1)),
+    (Pow(Pow(x, -1), -1) * x ** -1, [Ne(x, 0)], Pow(x, 0)),
     (Pow(x, y) * Pow(x, -y), [Ne(x, 0)], Mul(Pow(x, y), Pow(x, Mul(-1, y)))),
     (0 * log(x), [Ne(x, 0)], Mul(0, log(x))),
     (log(x) - log(x), [Ne(x, 0)], Mul(0, log(x))),
@@ -78,6 +79,18 @@ def test_gated_step_matches_sympy_when_assumed_and_waits_otherwise(e, known, wit
     assert agrees(e, known)
     assert not counterexamples(e, autosimp(e, known), known)
     assert autosimp(e) == without
+
+
+SIBLINGS = [
+    Add(Mul(0, cos(x) ** -2), cos(x) ** -4), Mul(cos(x) ** -4, Pow(cos(x) ** -1, -3)),
+    Add(tan(x), Mul(0, cos(x) ** -1)), Add(Mul(0, log(x)), x ** -1),
+]
+
+
+@pytest.mark.parametrize("e", SIBLINGS, ids=repr)
+def test_step_allowed_where_a_sibling_has_a_value(e):
+    s = autosimp(e)
+    assert agrees(e) and autosimp(s) == s and not counterexamples(e, s)
 
 
 FROM_SYMPY_TESTS = [

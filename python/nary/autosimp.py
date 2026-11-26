@@ -17,6 +17,7 @@ A step that is sound only under a condition waits for the condition.
 """
 
 from fractions import Fraction
+from functools import lru_cache
 from math import gcd, prod
 
 from . import arithmetic_rules
@@ -24,6 +25,7 @@ from ._core import Expr
 from .arithmetic import Add, Mul, Pow
 from .constants import E, I, pi
 from .elementary import cos, exp, log, sin, tan
+from .domains import domain_of
 from .functions import Lambda, is_lambda
 from .kinds import BoolKind, NumberKind
 from .logic import And, Not, Or, false, true
@@ -97,12 +99,39 @@ def node(head, args, known=frozenset()):
     >>> node(Mul, [x, Pow(x, 2)]), node(sin, [Mul(-1, x)])
     (Pow(x, 3), Mul(-1, sin(x)))
     """
+    if head in (Add, Mul):
+        args = _siblings(args, known)
     e = head(*args)
     for r in RULES.get(head, ()):
         bindings = _match(r.pattern, e, {})
         if bindings is not None and _allowed(r, bindings, known):
             return _build(r.replacement, bindings, known)
     return STEPS[head](list(e.args), known) if head in STEPS else e
+
+
+@lru_cache(maxsize=4096)
+def _defined(e, known):
+    if e.head in (None, And, Or) or is_lambda(e):
+        return frozenset()
+    found = frozenset().union(*(_defined(a, known) for a in e.args))
+    c = _simp(domain_of(e), known) if domain_of(e) not in (None, true) else true
+    return found | (frozenset(c.args) if c.head == And else frozenset({c}) - {true})
+
+
+def _siblings(args, known):
+    """
+    >>> from nary import NumberKind
+    >>> x = NumberKind("x")
+    >>> node(Add, [Mul(0, cos(x) ** -2), cos(x) ** -4]), node(Mul, [cos(x) ** -4, Pow(cos(x) ** -1, -3)])
+    (Pow(cos(x), -4), Pow(cos(x), -1))
+    """
+    args, defined = list(args), [_defined(a, known) for a in args]
+    for i, a in enumerate(args):
+        extra = frozenset().union(*defined[:i], *defined[i + 1:]) - known
+        if extra and a.head is not None and not is_lambda(a):
+            args[i] = node(a.head, list(a.args), known | extra)
+            defined[i] = _defined(args[i], known)
+    return args
 
 
 def _match(pattern, e, bindings):
