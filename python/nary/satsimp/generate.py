@@ -1,7 +1,7 @@
 """satsimp's tables translated to nary rules, written as tables.py by python -m nary.satsimp.generate.
 
     >>> rows, report = trigsimp_tables()
-    >>> rows["normalize"][2][0]
+    >>> rows["normalize"][-1][0]
     Row(Rule(tan(u), Mul(Pow(cos(u), -1), sin(u))), 'rule', strict=True)
     >>> report.translated, len(report.skipped)
     (47, 21)
@@ -20,6 +20,7 @@ needs orders what nary lacks by the rows each addition would translate.
 import json
 from collections import Counter
 from importlib.metadata import distribution
+from inspect import getclosurevars
 from pathlib import Path
 
 import sympy
@@ -39,15 +40,15 @@ class Report:
     def __init__(self):
         self.rows = {}
 
-    def add(self, row, kind, opaque=()):
+    def add(self, row, kind, opaque=(), measure=()):
         key = tuple(sympy.sympify(t) for t in row if t is not None)
         if key not in self.rows:
             try:
-                self.rows[key] = translate(row, kind, opaque)
+                self.rows[key] = translate(row, kind, opaque, measure)
             except Untranslatable as error:
                 self.rows[key] = error.reason
         found = self.rows[key]
-        return found._replace(kind=kind, opaque=opaque) if isinstance(found, Row) else None
+        return found._replace(kind=kind, opaque=opaque, measure=measure) if isinstance(found, Row) else None
 
     @property
     def translated(self):
@@ -72,11 +73,13 @@ class Report:
         return order
 
 
-def translate(row, kind="rule", opaque=()):
+def translate(row, kind="rule", opaque=(), measure=()):
     lhs, rhs, condition = (sympy.sympify(t) for t in row[:3])
     missing = set().union(*(lacking(t, wildcards=True) for t in (lhs, rhs, condition)))
     if len(row) > 3 and row[3] is not None:
         missing.add("row with unless")
+    if measure is None:
+        missing.add("identity measure")
     if missing:
         raise Untranslatable(frozenset(missing))
     lhs, rhs, condition = (from_sympy(t, wildcards=True) for t in (lhs, rhs, condition))
@@ -84,11 +87,28 @@ def translate(row, kind="rule", opaque=()):
         r = rule(lhs, rhs, when=None if condition == true else condition)
     except (TypeError, ValueError) as error:
         raise Untranslatable(frozenset({f"nary rule: {error}"})) from None
-    return Row(r, kind, strict(r), opaque)
+    return Row(r, kind, strict(r), opaque, measure)
 
 
 def _parts(parts):
     return parts if isinstance(parts, tuple) else (parts,)
+
+
+def _heads(classes):
+    return tuple(sorted(set(filter(None, map(head_of, classes))), key=repr))
+
+
+def _measure(part):
+    from satsimp.engine import hooks
+    from satsimp.engine.measure import count_measure, node_measure
+
+    if part.measure is None:
+        lhs = (sympy.sympify(row[0]) for row in part.rows)
+        return "default", _heads(t.func for t in lhs if not t.is_Atom), _heads([hooks.modulus])
+    kinds = {node_measure(()).__code__: "node", count_measure(()).__code__: "count"}
+    if getattr(part.measure, "__code__", None) not in kinds:
+        return None
+    return kinds[part.measure.__code__], _heads(getclosurevars(part.measure).nonlocals["heads"]), ()
 
 
 def refine_tables():
@@ -100,12 +120,12 @@ def refine_tables():
     for family in families():
         for key, parts in family_spec(family).handlers.items():
             for part in _parts(parts):
-                kind, opaque = ("identity", hooks.opaque if part.opaque is None else part.opaque) \
-                    if isinstance(part, Identities) else ("rule", ())
+                kind, opaque, measure = ("identity", hooks.opaque if part.opaque is None else part.opaque,
+                                         _measure(part)) if isinstance(part, Identities) else ("rule", (), ())
                 opaque = tuple(filter(None, map(head_of, opaque)))
-                rows = [r for r in (report.add(row, kind, opaque) for row in part.rows) if r]
+                rows = [r for r in (report.add(row, kind, opaque, measure) for row in part.rows) if r]
                 if rows and head_named(key) is not None:
-                    handlers.setdefault(head_named(key), []).append((kind, opaque, rows))
+                    handlers.setdefault(head_named(key), []).append((kind, opaque, measure, rows))
     return handlers, report
 
 
@@ -116,7 +136,7 @@ def trigsimp_tables():
     report = Report()
 
     def table(rows, kind):
-        return kind, (), [r for r in (report.add(row, kind) for row in rows) if r]
+        return kind, (), (), [r for r in (report.add(row, kind) for row in rows) if r]
 
     return {
         "normalize": table(normal.RULES, "rule"),
@@ -169,8 +189,9 @@ def _tuple(items):
     return f"({', '.join(map(repr, items))}{',' if len(items) == 1 else ''})"
 
 
-def _part(kind, opaque, rows, indent):
-    return [f'("{kind}", {_tuple(opaque)}, [',
+def _part(kind, opaque, measure, rows, indent):
+    measure = f'("{measure[0]}", {_tuple(measure[1])}, {_tuple(measure[2])})' if measure else "()"
+    return [f'("{kind}", {_tuple(opaque)}, {measure}, [',
             *(f"{indent}    ({r.rule.pattern!r}, {r.rule.replacement!r}, {r.rule.condition or true!r}),"
               for r in rows),
             f"{indent}]),"]
@@ -179,8 +200,9 @@ def _part(kind, opaque, rows, indent):
 def source():
     refine, trigsimp, heads = refine_tables()[0], trigsimp_tables()[0], trig_heads()
     found = {}
-    for kind, opaque, rows in [p for parts in refine.values() for p in parts] + list(trigsimp.values()):
-        for e in (*opaque, *(t for r in rows for t in (r.rule.pattern, r.rule.replacement, r.rule.condition or true))):
+    for kind, opaque, measure, rows in [p for parts in refine.values() for p in parts] + list(trigsimp.values()):
+        terms = (t for r in rows for t in (r.rule.pattern, r.rule.replacement, r.rule.condition or true))
+        for e in (*opaque, *(h for named in measure[1:] for h in named), *terms):
             _names(e, found)
     for e in (*refine, *heads):
         _names(e, found)

@@ -85,6 +85,7 @@ _PREDICATES = {
     Q.extended_nonnegative: lambda a: nr.Ge(a, 0),
     Q.extended_nonpositive: lambda a: nr.Le(a, 0),
     Q.finite: lambda a: logic.true,
+    Q.commutative: lambda a: logic.true,
     Q.complex: lambda a: logic.true,
     Q.eq: nr.Eq, Q.ne: nr.Ne, Q.lt: nr.Lt, Q.gt: nr.Gt, Q.le: nr.Le, Q.ge: nr.Ge,
 }

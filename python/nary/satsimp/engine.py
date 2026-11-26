@@ -34,6 +34,7 @@ from nary import arithmetic_rules  # noqa: F401
 from nary.functions import is_lambda
 from nary.rewriting import _flatten, _has_a_value, _match_top, _substitute
 
+from .measure import identity_measure
 from .prove import conjuncts, definedness, implies
 
 __all__ = ["Engine", "identity_handler", "rule_handler", "size"]
@@ -156,11 +157,14 @@ def _has(e, heads):
 
 def identity_handler(rows):
     busy = []
+    kind, heads, modulus = rows[0].measure
 
     def handler(e, engine):
         if busy:
             return None
         e = _flatten(e)
+        measure = identity_measure(kind, {*heads, e.head} if kind == "default" else heads, modulus, engine.known)
+        before = measure(e)
         for row in rows:
             new = engine.apply(row, e)
             if new is None:
@@ -170,7 +174,7 @@ def identity_handler(rows):
                 new = Engine(engine.handlers, engine.known, engine.canonical, engine.strict)(new)
             finally:
                 busy.pop()
-            if not _has(new, row.opaque) and size(new) < size(e):
+            if not _has(new, row.opaque) and measure(new) < before:
                 return new
         return None
 

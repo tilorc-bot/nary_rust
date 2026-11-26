@@ -10,6 +10,7 @@ b = NumberKind("b")
 d = NumberKind("d")
 e = NumberKind("e")
 f = NumberKind("f")
+g = NumberKind("g")
 p = NumberKind("p")
 r = NumberKind("r")
 t = NumberKind("t")
@@ -22,7 +23,7 @@ z = NumberKind("z")
 
 REFINE = {
     Abs: [
-        ("rule", (), [
+        ("rule", (), (), [
             (F(x), F(0), Eq(x, 0)),
             (Abs(a), a, Or(Ge(a, 0), Ge(a, 0))),
             (Abs(a), Mul(-1, a), Or(Le(a, 0), Le(a, 0))),
@@ -35,20 +36,21 @@ REFINE = {
             (conjugate(u), u, Or(Eq(re(u), u), Eq(re(u), u))),
             (conjugate(exp(z)), exp(conjugate(z)), true),
             (conjugate(Pow(b, e)), Pow(b, conjugate(e)), Gt(b, 0)),
+            (Mul(g, conjugate(g)), Pow(Abs(g), 2), true),
             (Mul(Pow(-1, a), Pow(-1, e)), Pow(-1, Add(a, e)), true),
         ]),
-        ("identity", (floor, im, arg), [
+        ("identity", (floor, im, arg), ("node", (Abs, re), ()), [
             (Abs(exp(z)), exp(re(z)), true),
             (Abs(Pow(b, e)), exp(re(Mul(e, log(b)))), Or(Gt(e, 0), Not(Eq(b, 0)))),
             (Abs(Mul(r, y)), Mul(Abs(r), Abs(y)), true),
             (Abs(Mul(r, y)), Mul(Abs(r), Abs(y)), true),
         ]),
-        ("identity", (sign,), [
+        ("identity", (sign,), ("default", (Abs,), (Abs,)), [
             (Abs(f), Mul(f, Pow(sign(f), -1)), And(true, Not(Eq(f, 0)))),
         ]),
     ],
     re: [
-        ("rule", (), [
+        ("rule", (), (), [
             (F(x), F(0), Eq(x, 0)),
             (Abs(a), a, Or(Ge(a, 0), Ge(a, 0))),
             (Abs(a), Mul(-1, a), Or(Le(a, 0), Le(a, 0))),
@@ -61,11 +63,12 @@ REFINE = {
             (conjugate(u), u, Or(Eq(re(u), u), Eq(re(u), u))),
             (conjugate(exp(z)), exp(conjugate(z)), true),
             (conjugate(Pow(b, e)), Pow(b, conjugate(e)), Gt(b, 0)),
+            (Mul(g, conjugate(g)), Pow(Abs(g), 2), true),
             (Mul(Pow(-1, a), Pow(-1, e)), Pow(-1, Add(a, e)), true),
         ]),
     ],
     im: [
-        ("rule", (), [
+        ("rule", (), (), [
             (F(x), F(0), Eq(x, 0)),
             (Abs(a), a, Or(Ge(a, 0), Ge(a, 0))),
             (Abs(a), Mul(-1, a), Or(Le(a, 0), Le(a, 0))),
@@ -78,11 +81,12 @@ REFINE = {
             (conjugate(u), u, Or(Eq(re(u), u), Eq(re(u), u))),
             (conjugate(exp(z)), exp(conjugate(z)), true),
             (conjugate(Pow(b, e)), Pow(b, conjugate(e)), Gt(b, 0)),
+            (Mul(g, conjugate(g)), Pow(Abs(g), 2), true),
             (Mul(Pow(-1, a), Pow(-1, e)), Pow(-1, Add(a, e)), true),
         ]),
     ],
     arg: [
-        ("rule", (), [
+        ("rule", (), (), [
             (F(x), F(0), Eq(x, 0)),
             (Abs(a), a, Or(Ge(a, 0), Ge(a, 0))),
             (Abs(a), Mul(-1, a), Or(Le(a, 0), Le(a, 0))),
@@ -95,20 +99,21 @@ REFINE = {
             (conjugate(u), u, Or(Eq(re(u), u), Eq(re(u), u))),
             (conjugate(exp(z)), exp(conjugate(z)), true),
             (conjugate(Pow(b, e)), Pow(b, conjugate(e)), Gt(b, 0)),
+            (Mul(g, conjugate(g)), Pow(Abs(g), 2), true),
             (Mul(Pow(-1, a), Pow(-1, e)), Pow(-1, Add(a, e)), true),
         ]),
-        ("identity", (floor, im), [
+        ("identity", (floor, im), ("node", (arg,), ()), [
             (arg(exp(z)), Add(Mul(2, pi, floor(Add(Pow(2, -1), Mul(Mul(-1, Pow(2, -1)), Pow(pi, -1), im(z))))), im(z)), true),
             (arg(Mul(r, y)), Add(Mul(2, pi, floor(Add(Pow(2, -1), Mul(Mul(-1, Pow(2, -1)), Pow(pi, -1), Add(arg(r), arg(y)))))), arg(r), arg(y)), true),
             (arg(Mul(r, y)), Add(Mul(2, pi, floor(Add(Pow(2, -1), Mul(Mul(-1, Pow(2, -1)), Pow(pi, -1), Add(arg(Mul(-1, r)), arg(Mul(-1, y))))))), arg(Mul(-1, r)), arg(Mul(-1, y))), true),
             (arg(conjugate(w)), Add(Mul(-1, arg(w)), Mul(2, pi, floor(Add(Pow(2, -1), Mul(Pow(2, -1), Pow(pi, -1), arg(w)))))), true),
         ]),
-        ("identity", (sign,), [
+        ("identity", (sign,), ("default", (arg,), (Abs,)), [
             (arg(d), Mul(-1, I, log(sign(d))), Not(Eq(d, 0))),
         ]),
     ],
     sign: [
-        ("rule", (), [
+        ("rule", (), (), [
             (F(x), F(0), Eq(x, 0)),
             (Abs(a), a, Or(Ge(a, 0), Ge(a, 0))),
             (Abs(a), Mul(-1, a), Or(Le(a, 0), Le(a, 0))),
@@ -121,14 +126,15 @@ REFINE = {
             (conjugate(u), u, Or(Eq(re(u), u), Eq(re(u), u))),
             (conjugate(exp(z)), exp(conjugate(z)), true),
             (conjugate(Pow(b, e)), Pow(b, conjugate(e)), Gt(b, 0)),
+            (Mul(g, conjugate(g)), Pow(Abs(g), 2), true),
             (Mul(Pow(-1, a), Pow(-1, e)), Pow(-1, Add(a, e)), true),
         ]),
-        ("identity", (floor, im, arg), [
+        ("identity", (floor, im, arg), ("node", (sign,), ()), [
             (sign(Mul(r, y)), Mul(sign(r), sign(y)), true),
         ]),
     ],
     conjugate: [
-        ("rule", (), [
+        ("rule", (), (), [
             (F(x), F(0), Eq(x, 0)),
             (Abs(a), a, Or(Ge(a, 0), Ge(a, 0))),
             (Abs(a), Mul(-1, a), Or(Le(a, 0), Le(a, 0))),
@@ -141,46 +147,48 @@ REFINE = {
             (conjugate(u), u, Or(Eq(re(u), u), Eq(re(u), u))),
             (conjugate(exp(z)), exp(conjugate(z)), true),
             (conjugate(Pow(b, e)), Pow(b, conjugate(e)), Gt(b, 0)),
+            (Mul(g, conjugate(g)), Pow(Abs(g), 2), true),
             (Mul(Pow(-1, a), Pow(-1, e)), Pow(-1, Add(a, e)), true),
         ]),
     ],
     Mul: [
-        ("rule", (), [
+        ("rule", (), (), [
+            (Mul(g, conjugate(g)), Pow(Abs(g), 2), true),
             (Mul(Pow(-1, a), Pow(-1, e)), Pow(-1, Add(a, e)), true),
         ]),
     ],
     sinh: [
-        ("rule", (), [
+        ("rule", (), (), [
             (F(x), F(0), Eq(x, 0)),
         ]),
     ],
     cosh: [
-        ("rule", (), [
+        ("rule", (), (), [
             (F(x), F(0), Eq(x, 0)),
         ]),
     ],
     tanh: [
-        ("rule", (), [
+        ("rule", (), (), [
             (F(x), F(0), Eq(x, 0)),
         ]),
     ],
     floor: [
-        ("rule", (), [
+        ("rule", (), (), [
             (floor(Add(x, ceiling(w))), Add(ceiling(w), floor(x)), true),
             (floor(Add(x, floor(w))), Add(floor(w), floor(x)), true),
         ]),
     ],
     ceiling: [
-        ("rule", (), [
+        ("rule", (), (), [
             (ceiling(Add(x, ceiling(w))), Add(ceiling(w), ceiling(x)), true),
             (ceiling(Add(x, floor(w))), Add(ceiling(x), floor(w)), true),
         ]),
     ],
     log: [
-        ("rule", (), [
+        ("rule", (), (), [
             (F(x), F(0), Eq(x, 0)),
         ]),
-        ("identity", (floor, im, arg), [
+        ("identity", (floor, im, arg), ("default", (log,), (Abs,)), [
             (log(exp(z)), Add(z, Mul(2, pi, I, floor(Add(Pow(2, -1), Mul(Mul(-1, Pow(2, -1)), Pow(pi, -1), im(z)))))), true),
             (log(Pow(b, e)), Add(Mul(e, log(b)), Mul(2, pi, I, floor(Add(Pow(2, -1), Mul(Mul(-1, Pow(2, -1)), Pow(pi, -1), im(Mul(e, log(b)))))))), And(Or(Gt(e, 0), Not(Eq(b, 0))), Or(true, Gt(e, 0), Eq(re(b), b)))),
             (log(Mul(r, y)), Add(Mul(2, pi, I, floor(Add(Pow(2, -1), Mul(Mul(-1, Pow(2, -1)), Pow(pi, -1), Add(arg(r), arg(y)))))), log(r), log(y)), true),
@@ -189,70 +197,70 @@ REFINE = {
         ]),
     ],
     Pow: [
-        ("rule", (), [
+        ("rule", (), (), [
             (Pow(E, x), exp(x), true),
             (Pow(Pow(b, p), e), Pow(b, Mul(e, p)), And(Gt(p, 0), Or(Ge(b, 0), Ge(b, 0)))),
             (Pow(Pow(p, t), e), Pow(p, Mul(e, t)), And(Gt(p, 0), Eq(re(t), t))),
             (Pow(0, p), 0, Gt(p, 0)),
             (exp(Mul(e, log(b))), Pow(b, e), Or(Gt(e, 0), Not(Eq(b, 0)))),
         ]),
-        ("identity", (floor, im, arg, log), [
+        ("identity", (floor, im, arg, log), ("node", (Pow, exp), ()), [
             (Pow(d, e), exp(Mul(e, log(d))), Not(Eq(d, 0))),
         ]),
     ],
     exp: [
-        ("rule", (), [
+        ("rule", (), (), [
             (F(x), F(0), Eq(x, 0)),
         ]),
-        ("rule", (), [
+        ("rule", (), (), [
             (Pow(E, x), exp(x), true),
             (Pow(Pow(b, p), e), Pow(b, Mul(e, p)), And(Gt(p, 0), Or(Ge(b, 0), Ge(b, 0)))),
             (Pow(Pow(p, t), e), Pow(p, Mul(e, t)), And(Gt(p, 0), Eq(re(t), t))),
             (Pow(0, p), 0, Gt(p, 0)),
             (exp(Mul(e, log(b))), Pow(b, e), Or(Gt(e, 0), Not(Eq(b, 0)))),
         ]),
-        ("identity", (floor, im, arg), [
+        ("identity", (floor, im, arg), ("count", (exp,), ()), [
             (exp(Add(a, b)), Mul(exp(a), exp(b)), true),
         ]),
     ],
     sin: [
-        ("rule", (), [
+        ("rule", (), (), [
             (F(x), F(0), Eq(x, 0)),
         ]),
     ],
     cos: [
-        ("rule", (), [
+        ("rule", (), (), [
             (F(x), F(0), Eq(x, 0)),
         ]),
     ],
     tan: [
-        ("rule", (), [
+        ("rule", (), (), [
             (F(x), F(0), Eq(x, 0)),
         ]),
     ],
 }
 
 TRIGSIMP = {
-    "normalize": ("rule", (), [
+    "normalize": ("rule", (), (), [
         (tan(u), Mul(Pow(cos(u), -1), sin(u)), true),
         (tanh(u), Mul(Pow(cosh(u), -1), sinh(u)), true),
     ]),
-    "conditional": ("rule", (), [
+    "conditional": ("rule", (), (), [
         (Pow(Pow(w, 2), Pow(2, -1)), Abs(w), Eq(re(w), w)),
         (Pow(Pow(w, 2), Mul(-1, Pow(2, -1))), Pow(Abs(w), -1), Eq(re(w), w)),
         (Pow(Pow(w, -2), Pow(2, -1)), Pow(Abs(w), -1), Eq(re(w), w)),
         (Abs(w), w, Ge(w, 0)),
         (Abs(w), Mul(-1, w), Le(w, 0)),
     ]),
-    "quotients": ("rule", (), [
+    "quotients": ("rule", (), (), [
     ]),
-    "pythagorean": ("substitution", (), [
+    "pythagorean": ("substitution", (), (), [
         (Pow(sin(u), 2), Add(1, Mul(-1, Pow(cos(u), 2))), true),
         (Pow(cos(u), 2), Add(1, Mul(-1, Pow(sin(u), 2))), true),
         (Pow(sinh(u), 2), Add(-1, Pow(cosh(u), 2)), true),
         (Pow(cosh(u), 2), Add(1, Pow(sinh(u), 2)), true),
     ]),
-    "substitutions": ("substitution", (), [
+    "substitutions": ("substitution", (), (), [
         (Mul(Pow(cos(u), -1), sin(u)), tan(u), true),
         (Mul(Pow(cosh(u), -1), sinh(u)), tanh(u), true),
         (Pow(sin(u), 2), Add(1, Mul(-1, Pow(cos(u), 2))), true),

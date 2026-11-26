@@ -3,7 +3,7 @@
     >>> trigsimp_tables()["normalize"][0]
     Row(Rule(tan(u), Mul(Pow(cos(u), -1), sin(u))), 'rule', strict=True)
     >>> sum(len(rows) for parts in refine_tables().values() for rows in parts), len(trigsimp_tables())
-    (119, 5)
+    (126, 5)
 """
 
 from functools import cache
@@ -23,6 +23,7 @@ class Row(NamedTuple):
     kind: str
     strict: bool
     opaque: tuple = ()
+    measure: tuple = ()
 
     def __repr__(self):
         return f"Row({self.rule!r}, {self.kind!r}, strict={self.strict})"
@@ -35,9 +36,9 @@ def strict(r):
     return prover(right if r.condition is None else And(r.condition, right))(left)
 
 
-def _rows(kind, opaque, rows):
+def _rows(kind, opaque, measure, rows):
     rules = [rule(lhs, rhs, when=None if condition == true else condition) for lhs, rhs, condition in rows]
-    return [Row(r, kind, strict(r), opaque) for r in rules]
+    return [Row(r, kind, strict(r), opaque, measure) for r in rules]
 
 
 @cache

@@ -12,15 +12,22 @@ Sums are measured without their sign when they lean negative.
 
     >>> measure(-nr.sin(x) - nr.cos(x)), measure(-nr.sin(x) - nr.cos(x), signless=True)
     ((2, 4, 9), (2, 3, 5))
+
+An identity table's ordering: factors under its heads, arguments not proved positive, then count_ops.
+
+    >>> from nary.satsimp.prove import prover
+    >>> measure = identity_measure("default", (nr.log,), (nr.Abs,), prover(nr.Gt(x, 0)))
+    >>> measure(nr.log(x * y)), measure(nr.log(x) + nr.log(y))
+    ((2, 1, 2), (0, 1, 3))
 """
 
 from fractions import Fraction
 from math import prod
 
-from nary import E, Add, Mul, Pow, exp
+from nary import Add, E, Gt, I, Lt, Mul, Pow, exp
 from nary.properties import negative, number, positive, rational
 
-__all__ = ["count_heads", "count_ops", "nodes", "trig_measure"]
+__all__ = ["count_heads", "count_ops", "identity_measure", "nodes", "trig_measure"]
 
 ONE = Fraction(1)
 
@@ -190,5 +197,62 @@ def trig_measure(heads):
     def measure(e, signless=False):
         s = _signless(e) if signless else e
         return count_heads(e, heads), count_ops(s), nodes(s)
+
+    return measure
+
+
+def _split(a):
+    c, rest = _coefficient(a)
+    others = [f for f in rest if f != I]
+    return c, len(rest) - len(others), others
+
+
+def _atom(a):
+    return a.head is None or rational(a) is not None
+
+
+def _negation(a):
+    c, imaginary, others = _split(a)
+    return a.head == Mul and abs(c) == 1 and (c != 1 or imaginary > 0) and len(others) == 1 and _atom(others[0])
+
+
+def _structure(found, modulus=(), units=True):
+    total = 0
+    for node in found:
+        a = node.args[0]
+        if _negation(a) or a.head in modulus:
+            continue
+        if a.head == Add:
+            total += len(a.args)
+        elif a.head == Mul:
+            c, imaginary, others = _split(a)
+            total += len(others) + ((c != 1 or imaginary > 0) and (units or abs(c) != 1))
+        elif not _atom(a):
+            total += 1
+    return total
+
+
+def _headed(e, heads, found):
+    if e.head is not None:
+        if e.head in heads:
+            found.add(e)
+        for arg in e.args:
+            _headed(arg, heads, found)
+    return found
+
+
+def _positive(a, known):
+    return known(Gt(a, 0)) or (_leans_negative(a) and known(Lt(_signless(a), 0)))
+
+
+def identity_measure(kind, heads, modulus, known):
+    def measure(e):
+        found = _headed(e, heads, set())
+        if kind == "node":
+            return len(found), _structure(found), count_ops(e)
+        if kind == "count":
+            return len(found), count_ops(e)
+        bad = sum(not _positive(node.args[0], known) for node in found)
+        return _structure(found, modulus, units=False), bad, count_ops(e)
 
     return measure
