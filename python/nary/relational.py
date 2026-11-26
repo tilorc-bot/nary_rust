@@ -2,7 +2,8 @@
 part of a number, which the domains of the comparisons need."""
 
 from ._core import set_operator
-from .domains import Family, declare_function
+from .domains import declare_function
+from .generic import Generic, kind_variable
 from .kinds import BoolKind, NumberKind
 from .logic import And, true
 
@@ -32,16 +33,5 @@ set_operator(NumberKind, "<=", Le)
 set_operator(NumberKind, ">=", Ge)
 
 
-_equal_functions = Family("Equal", lambda kind: ((kind("lhs"), kind("rhs")), BoolKind, true))
-
-
-def Equal(lhs, rhs):
-    """Both sides have no value, or the same value, for any kind; Eq is for numbers with values:
-
-    >>> from nary import Lambda
-    >>> from nary.logic import Not, false
-    >>> x = NumberKind("x")
-    >>> Equal(x / x, 1), Equal(true, Not(false)).kind, Equal(Lambda(x, x), Lambda(x, x * 1)).lhs
-    (Equal(Mul(x, Pow(x, -1)), 1), BoolKind, Lambda(x, x))
-    """
-    return _equal_functions(lhs.kind)(lhs, rhs)
+K = kind_variable("K")
+Equal = Generic("Equal", K("lhs"), K("rhs"), returns=BoolKind, domain=true)

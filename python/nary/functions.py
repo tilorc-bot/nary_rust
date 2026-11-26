@@ -26,18 +26,29 @@ is substituted.
 """
 
 from ._core import Expr, FunctionKind, Symbol
-from .domains import Family
+from .generic import Generic, kind_variable
 from .logic import true
 
 __all__ = ["Lambda", "is_lambda"]
 
-def _lambda_signature(*kinds):
-    *variable_kinds, body_kind = kinds
-    parameters = (*(Symbol(kind) for kind in variable_kinds), body_kind)
-    return parameters, FunctionKind(tuple(variable_kinds), body_kind), true
+_body_kind = kind_variable("B")
+_variable_kinds = []
+_lambdas = {}
 
 
-_lambda_functions = Family("Lambda", _lambda_signature)
+def _lambda(arity):
+    while len(_variable_kinds) < arity:
+        _variable_kinds.append(kind_variable(f"K{len(_variable_kinds) + 1}"))
+    if arity not in _lambdas:
+        kinds = tuple(_variable_kinds[:arity])
+        _lambdas[arity] = Generic(
+            "Lambda",
+            *(Symbol(kind) for kind in kinds),
+            _body_kind,
+            returns=FunctionKind(kinds, _body_kind),
+            domain=true,
+        )
+    return _lambdas[arity]
 
 
 def Lambda(variables, body):
@@ -68,8 +79,7 @@ def Lambda(variables, body):
                 )
             names.add(variable.name)
 
-    variable_kinds = tuple(variable.kind for variable in variables)
-    return _lambda_functions(*variable_kinds, body.kind)(*variables, body)
+    return _lambda(len(variables))(*variables, body)
 
 
 def is_lambda(e):
@@ -77,4 +87,4 @@ def is_lambda(e):
     named "Lambda" declared here."""
     if not isinstance(e, Expr) or e.head is None:
         return False
-    return e.head in _lambda_functions
+    return any(e.head in generic for generic in _lambdas.values())

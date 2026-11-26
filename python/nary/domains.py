@@ -58,7 +58,7 @@ from . import _core
 from ._core import Expr
 from .kinds import BoolKind
 
-__all__ = ["Family", "declare_function", "domain", "domain_of"]
+__all__ = ["declare_function", "domain", "domain_of"]
 
 # The domain of each declared function that has one.
 _domains = {}
@@ -114,33 +114,6 @@ def declare_function(name, *parameters, rest=None, returns, domain):
     if domain is not None:
         _domains[function] = domain
     return function
-
-
-class Family:
-    """One function name, declared once for each combination of kinds:
-
-    >>> from nary import BoolKind, NumberKind
-    >>> from nary.logic import true
-    >>> Both = Family("Both", lambda k: ((k, k), BoolKind, true))
-    >>> Both(NumberKind) is Both(NumberKind), Both(BoolKind).kind
-    (True, FunctionKind((BoolKind, BoolKind), BoolKind))
-    >>> Both(BoolKind) in Both, Both(BoolKind) in Family("Both", Both.signature)
-    (True, False)
-    """
-
-    def __init__(self, name, signature):
-        self.name, self.signature, self.members = name, signature, {}
-
-    def __call__(self, *kinds):
-        if kinds not in self.members:
-            parameters, returns, domain = self.signature(*kinds)
-            self.members[kinds] = declare_function(
-                self.name, *parameters, returns=returns, domain=domain
-            )
-        return self.members[kinds]
-
-    def __contains__(self, function):
-        return any(member is function for member in self.members.values())
 
 
 def _subexpressions(e):
