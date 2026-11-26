@@ -197,3 +197,40 @@ def random_expressions(count, seed=0):
     rng = random.Random(seed)
     return [random_expression(rng, 3, rng.random() < 0.15) for _ in range(count)]
 
+
+FACTS = [nr.Gt, nr.Lt, nr.Ge, nr.Le, nr.Ne]
+ATOMS = [
+    "x", "y", Mul(-1, nr.NumberKind("x")), Add(1, nr.NumberKind("x")), Add(I, nr.NumberKind("x")),
+    Add(1, Mul(-1, Pow(2, Pow(2, -1)))), Mul(-2, I), exp(Mul(5, I)), E, Add(-1, I),
+]
+EXPONENTS = [
+    2, -1, 3, 4, -2, I, "y", Pow(2, -1), Mul(-1, Pow(2, -1)), Pow(3, -1), Mul(4, Pow(3, -1)),
+    Mul(3, Pow(2, -1)), Mul(2, nr.NumberKind("y")),
+]
+
+
+def _pick(rng, items):
+    item = rng.choice(items)
+    return nr.NumberKind(item) if isinstance(item, (int, str)) else item
+
+
+def random_tower(rng):
+    e = _pick(rng, ATOMS)
+    for _ in range(rng.choice([2, 2, 3])):
+        e = Pow(e, _pick(rng, EXPONENTS))
+    return e if rng.random() < 0.7 else rng.choice([Add, Mul])(e, random_tower(rng))
+
+
+def random_known(rng):
+    known = []
+    for v in map(nr.NumberKind, "xy"):
+        if rng.random() < 0.7:
+            fact = rng.choice([*FACTS, nr.Eq])
+            known.append(nr.Eq(re(v), v) if fact == nr.Eq else rng.choice([fact(v, 0), FLIPPED[fact](0, v)]))
+    return known
+
+
+def random_with_known(count, seed=0):
+    rng = random.Random(seed)
+    exprs = random_expressions(count, seed) + [random_tower(rng) for _ in range(count)]
+    return [(e, random_known(rng)) for e in exprs]

@@ -8,11 +8,12 @@ from nary.functions import is_lambda
 from nary.lean import to_lean_rule
 from nary.logic import And, Not, Or, false, true
 from numeric import counterexamples
-from sympy_bridge import agrees, classify, random_expressions, subterms
+from sympy_bridge import agrees, classify, random_expressions, random_with_known, subterms
 
 a, b, c, p, x, y = (nr.NumberKind(n) for n in "abcpxy")
 H = Pow(2, -1)
 RANDOM = random_expressions(500, seed=1)
+RANDOM_WITH_KNOWN = random_with_known(300, seed=2)
 
 
 def q(n, d):
@@ -39,6 +40,14 @@ def test_idempotent_and_every_node_is_a_fixpoint():
 
 def test_sound_on_random_expressions():
     assert [e for e in RANDOM if counterexamples(e, autosimp(e))] == []
+
+
+def test_sound_idempotent_and_fixpoint_with_random_known_facts():
+    for e, known in RANDOM_WITH_KNOWN:
+        s = autosimp(e, known)
+        assert autosimp(s, known) == s and not counterexamples(e, s, known)
+        nodes = [t for t in subterms(s) if t.head is not None and not is_lambda(t)]
+        assert all(node(t.head, list(t.args), frozenset(known)) == t for t in nodes)
 
 
 def test_agreement_with_sympy_on_random_expressions():
