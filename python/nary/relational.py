@@ -1,7 +1,7 @@
 """Comparisons of numbers, each returning a BoolKind, and ``re``, the real
 part of a number, which the domains of the comparisons need."""
 
-from ._core import Expr, set_operator
+from ._core import set_operator
 from .domains import Family, declare_function
 from .kinds import BoolKind, NumberKind
 from .logic import And, true
@@ -44,6 +44,4 @@ def Equal(lhs, rhs):
     >>> Equal(x / x, 1), Equal(true, Not(false)).kind, Equal(Lambda(x, x), Lambda(x, x * 1)).lhs
     (Equal(Mul(x, Pow(x, -1)), 1), BoolKind, Lambda(x, x))
     """
-    if not isinstance(rhs, Expr):
-        rhs = lhs.kind(rhs)
     return _equal_functions(lhs.kind)(lhs, rhs)
