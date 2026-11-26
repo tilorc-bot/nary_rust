@@ -1,9 +1,9 @@
 """satsimp's rows as nary rules, from tables.py; a row is strict when its left side has a value wherever the condition and the right side do.
 
-    >>> trigsimp_tables()["normalize"]
-    [Row(Rule(tan(u), Mul(Pow(cos(u), -1), sin(u))), 'rule', strict=True)]
+    >>> trigsimp_tables()["normalize"][0]
+    Row(Rule(tan(u), Mul(Pow(cos(u), -1), sin(u))), 'rule', strict=True)
     >>> sum(len(rows) for parts in refine_tables().values() for rows in parts), len(trigsimp_tables())
-    (21, 5)
+    (119, 5)
 """
 
 from functools import cache

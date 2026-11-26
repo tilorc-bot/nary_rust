@@ -10,10 +10,10 @@
 
 What nary lacks is named.
 
-    >>> from_sympy(sympy.Abs(x))
+    >>> from_sympy(sympy.cot(x))
     Traceback (most recent call last):
         ...
-    nary.satsimp.translate.Untranslatable: function Abs
+    nary.satsimp.translate.Untranslatable: function cot
     >>> from_sympy(Q.integer(x))
     Traceback (most recent call last):
         ...
@@ -59,6 +59,9 @@ _FUNCTIONS = {
     sympy.Add: nr.Add, sympy.Mul: nr.Mul, sympy.Pow: nr.Pow,
     sympy.sin: nr.sin, sympy.cos: nr.cos, sympy.tan: nr.tan,
     sympy.exp: nr.exp, sympy.log: nr.log, sympy.re: nr.re,
+    sympy.sinh: nr.sinh, sympy.cosh: nr.cosh, sympy.tanh: nr.tanh,
+    sympy.Abs: nr.Abs, sympy.im: nr.im, sympy.arg: nr.arg, sympy.conjugate: nr.conjugate,
+    sympy.sign: nr.sign, sympy.floor: nr.floor, sympy.ceiling: nr.ceiling,
     sympy.And: logic.And, sympy.Or: logic.Or, sympy.Not: logic.Not,
     sympy.Eq: nr.Eq, sympy.Ne: nr.Ne, sympy.Lt: nr.Lt, sympy.Gt: nr.Gt,
     sympy.Le: nr.Le, sympy.Ge: nr.Ge,

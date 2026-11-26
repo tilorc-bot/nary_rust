@@ -1,20 +1,20 @@
 """satsimp's tables translated to nary rules, written as tables.py by python -m nary.satsimp.generate.
 
     >>> rows, report = trigsimp_tables()
-    >>> rows["normalize"]
-    ('rule', (), [Row(Rule(tan(u), Mul(Pow(cos(u), -1), sin(u))), 'rule', strict=True)])
+    >>> rows["normalize"][2][0]
+    Row(Rule(tan(u), Mul(Pow(cos(u), -1), sin(u))), 'rule', strict=True)
     >>> report.translated, len(report.skipped)
-    (21, 47)
+    (47, 21)
 
 A row that is not translated is counted with everything it lacks.
 
     >>> report.lacking().most_common(2)
-    [('function cosh', 26), ('function sinh', 24)]
+    [('function cot', 5), ('function coth', 5)]
 
 needs orders what nary lacks by the rows each addition would translate.
 
     >>> report.needs()[:3]
-    [('function Abs', 5), ('function cot', 9), ('function atan', 11)]
+    [('function cot', 4), ('function coth', 8), ('row with unless', 12)]
 """
 
 import json
@@ -92,6 +92,7 @@ def _parts(parts):
 
 
 def refine_tables():
+    from satsimp.engine import hooks
     from satsimp.engine.spec import Identities
     from satsimp.methods.refine.identities import families, family_spec
 
@@ -99,8 +100,9 @@ def refine_tables():
     for family in families():
         for key, parts in family_spec(family).handlers.items():
             for part in _parts(parts):
-                kind = "identity" if isinstance(part, Identities) else "rule"
-                opaque = tuple(filter(None, map(head_of, getattr(part, "opaque", None) or ())))
+                kind, opaque = ("identity", hooks.opaque if part.opaque is None else part.opaque) \
+                    if isinstance(part, Identities) else ("rule", ())
+                opaque = tuple(filter(None, map(head_of, opaque)))
                 rows = [r for r in (report.add(row, kind, opaque) for row in part.rows) if r]
                 if rows and head_named(key) is not None:
                     handlers.setdefault(head_named(key), []).append((kind, opaque, rows))
