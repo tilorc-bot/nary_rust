@@ -1,18 +1,23 @@
 from collections import Counter
 
-import nary as nr
 import pytest
+
+pytest.importorskip("sympy")
+pytest.importorskip("mpmath")
+
+import nary as nr
 from nary import E, Add, Eq, Ge, Gt, I, Le, Lt, Mul, Ne, Pow, cos, exp, log, pi, re, sin, tan
 from nary.autosimp import RULES, autosimp, node
 from nary.functions import is_lambda
 from nary.lean import to_lean_rule
 from nary.logic import And, Not, Or, false, true
 from numeric import counterexamples
-from sympy_bridge import agrees, classify, random_expressions, subterms
+from sympy_bridge import agrees, classify, random_expressions, random_with_known, subterms
 
 a, b, c, p, x, y = (nr.NumberKind(n) for n in "abcpxy")
 H = Pow(2, -1)
 RANDOM = random_expressions(500, seed=1)
+RANDOM_WITH_KNOWN = random_with_known(300, seed=2)
 
 
 def q(n, d):
@@ -41,6 +46,14 @@ def test_sound_on_random_expressions():
     assert [e for e in RANDOM if counterexamples(e, autosimp(e))] == []
 
 
+def test_sound_idempotent_and_fixpoint_with_random_known_facts():
+    for e, known in RANDOM_WITH_KNOWN:
+        s = autosimp(e, known)
+        assert autosimp(s, known) == s and not counterexamples(e, s, known)
+        nodes = [t for t in subterms(s) if t.head is not None and not is_lambda(t)]
+        assert all(node(t.head, list(t.args), frozenset(known)) == t for t in nodes)
+
+
 def test_agreement_with_sympy_on_random_expressions():
     assert Counter(classify(e)[0] for e in RANDOM) == {
         "same": 440, "same once assumed": 15, "different": 28, "not yet": 17,
@@ -64,6 +77,8 @@ GATED = [
     (re(x), [real(x)], re(x)),
     (Pow(0, x), [Gt(x, 0)], Pow(0, x)),
     (Pow(Pow(x, 2), H), [Gt(x, 0)], Pow(Pow(x, 2), H)),
+    (Pow(Pow(x, 2), H), [Lt(x, 0)], Pow(Pow(x, 2), H)),
+    (Pow(Pow(x, 4), q(1, 3)), [Gt(0, x)], Pow(Pow(x, 4), Pow(3, -1))),
     (Lt(x, x + 1), [real(x)], Lt(x, Add(1, x))),
     (Lt(y, 0), [Lt(y, 0)], Lt(y, 0)),
     (Ge(y, 0), [Lt(y, 0)], Ge(y, 0)),
