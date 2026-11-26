@@ -1,6 +1,3 @@
-"""Functions are expressions of function kinds, Symbol(kind) positions, and
-Lambda, defined in nary.functions."""
-
 import nary as nr
 import pytest
 from nary import (
@@ -19,9 +16,7 @@ x, y = NumberKind("x"), NumberKind("y")
 p = BoolKind("p")
 NumToNum = FunctionKind((NumberKind,), NumberKind)
 f = NumToNum("f")
-# A function that takes a function.
 Apply = declare_function("Apply", NumToNum("fn"), NumberKind("point"), returns=NumberKind, domain=true)
-# A function whose second position accepts only a symbol.
 Derivative = declare_function("Derivative", NumberKind, Symbol(NumberKind), returns=NumberKind, domain=true)
 
 
@@ -101,7 +96,6 @@ def test_symbol_positions():
         Derivative(x, nr.sin(x))
     with pytest.raises(TypeError, match=r"^Derivative expects NumberKind, got BoolKind: p$"):
         Derivative(x, p)
-    # An unknown function of the same kind has no Symbol(kind) positions.
     unknown = Derivative.kind("unknown")
     assert repr(unknown(x, nr.sin(x))) == "unknown(x, sin(x))"
 
@@ -115,7 +109,6 @@ def test_lambda_is_an_application_of_a_function_named_lambda():
     two = Lambda((x, y), x < y)
     assert two.kind is FunctionKind((NumberKind, NumberKind), BoolKind)
     assert repr(two) == "Lambda(x, y, Lt(x, y))"
-    # The function for a combination of kinds is declared once.
     assert Lambda(y, nr.cos(y)).head is one.head
     assert Lambda((x,), x) == Lambda(x, x)
     assert not is_lambda(nr.sin(x)) and not is_lambda(x) and not is_lambda(1)
@@ -157,10 +150,8 @@ def test_equality_and_hash_across_forms():
             assert (a == b) is (i == j)
     assert repr(nr.Add()) == repr(NumberKind("Add")) == "Add"
     assert len(set(forms)) == len(forms)
-    # Equal expressions have equal hashes.
     assert hash(nr.sin(x)) == hash(sin_x) and hash(NumberKind("sin")) == hash(named)
     assert hash(Lambda(x, sin_x)) == hash(Lambda(NumberKind("x"), nr.sin(x)))
-    # Lambdas are compared with their variable names: no renaming.
     assert Lambda(x, x) != Lambda(y, y)
     assert hash(f(x)) == hash(NumToNum("f")(x)) and f(x) == NumToNum("f")(x)
 

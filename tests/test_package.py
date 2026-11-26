@@ -1,5 +1,3 @@
-"""The package: what ``import nary`` gives, and how its modules plug in."""
-
 import importlib
 
 import nary
@@ -23,8 +21,6 @@ def test_import_nary_exposes_the_core_and_the_declarations():
 
 
 def test_a_name_in_a_module_all_is_reexported():
-    # Re-running nary/__init__.py does not re-run the modules it imports, so
-    # nothing is declared twice.
     relational.Extra = Extra = object()
     relational.__all__.append("Extra")
     try:
@@ -35,6 +31,5 @@ def test_a_name_in_a_module_all_is_reexported():
         relational.__all__.remove("Extra")
         del relational.Extra
         importlib.reload(nary)
-        # A reload keeps the names it does not set again.
         vars(nary).pop("Extra", None)
     assert "Extra" not in nary.__all__

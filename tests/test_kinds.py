@@ -1,12 +1,8 @@
-"""Kinds are declared in Python. The compiled module defines none."""
-
 import nary as nr
 import pytest
 from nary import BoolKind, Expr, Kind, NumberKind, _core, declare_function, declare_kind, set_operator
 from nary.logic import true
 
-# A kind that nary does not have, declared here with its functions and an
-# operator. Nothing in Rust knows about it.
 SetKind = declare_kind("SetKind")
 
 Union = declare_function("Union", rest=SetKind, returns=SetKind, domain=true)
@@ -55,7 +51,6 @@ def test_calling_a_kind_makes_a_leaf_of_that_kind():
 
 
 def test_calling_a_kind_takes_only_the_name():
-    # Calling a kind cannot build a node: that would skip every kind check.
     message = r"^{} takes 1 argument, the name of a leaf, got {}; a node is built by calling a function$"
     with pytest.raises(TypeError, match=message.format("NumberKind", 4)):
         NumberKind("Add", x, 1, [2])
@@ -76,7 +71,6 @@ def test_a_leaf_has_no_arguments_and_nodes_are_built_by_functions():
     assert nr.Add(x, y).args == (x, y)
     assert nr.sin(x).args == (x,)
     assert Contains(x, SetKind("S")).args == (x, SetKind("S"))
-    # Every argument of every node is an expression that passed a kind check.
     stack = [nr.Eq(nr.sin(x) * y + x, nr.Pow(x, y)), Contains(x, Union(Interval(x, y)))]
     while stack:
         node = stack.pop()
@@ -132,12 +126,10 @@ def test_operators_are_registered_for_each_kind():
     assert repr(s + t) == "Union(S, T)"
     assert repr(x + y) == "Add(x, y)"
     assert (s + t).kind is SetKind
-    # The function of the left operand's kind is the one that is built.
     with pytest.raises(TypeError, match=r"^Union expects SetKind, got NumberKind: x$"):
         s + x
     with pytest.raises(TypeError, match=r"^Add expects NumberKind, got SetKind: S$"):
         x + s
-    # SetKind has + but not * or <.
     with pytest.raises(TypeError, match="unsupported operand"):
         s * t
     with pytest.raises(TypeError, match="not supported between instances"):
@@ -157,7 +149,6 @@ def test_set_operator_once_for_each_kind_and_operator():
 
 def test_only_a_kind_is_accepted_where_a_kind_is_expected():
     for not_a_kind, text in ((Expr, "<class 'nary.Expr'>"), (int, "<class 'int'>"), (x + 1, r"Add\(x, 1\)"), ("NumberKind", "'NumberKind'"), (Kind, "<class 'nary.Kind'>")):
-        # A symbol is a parameter, so x + 1 stands for an expression here.
         with pytest.raises(TypeError, match=f"^expected a kind, got {text}$"):
             declare_function("f", not_a_kind, returns=NumberKind, domain=true)
         with pytest.raises(TypeError, match=f"^expected a kind, got {text}$"):
