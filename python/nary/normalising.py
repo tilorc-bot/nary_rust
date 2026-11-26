@@ -12,10 +12,14 @@
     (0, Mul(0, log(x)), Pow(1, log(x)))
 """
 
+from __future__ import annotations
+
+from typing import Callable
+
 from . import arithmetic_rules, logic_rules  # noqa: F401
 from ._core import Expr
 from ._identities import (
-    absorbing, associative, commutative, idempotent, identities, identity, involution,
+    Law, absorbing, associative, commutative, idempotent, identities, identity, involution,
     left_absorbing, right_identity,
 )
 from .functions import is_lambda
@@ -26,30 +30,30 @@ from .rewriting import _has_a_value
 __all__ = ["normalise"]
 
 
-def normalise(e, known=None):
+def normalise(e: Expr, known: Callable[[Expr], object] | None = None) -> Expr:
     if not isinstance(e, Expr):
         raise TypeError(f"normalise expects an expression, got {e!r}")
     known = known or (lambda condition: False)
     done = {}
 
-    def normal(e):
+    def normal(e: Expr) -> Expr:
         if e.head is None or is_lambda(e):
             return e
         if e not in done:
             done[e] = _node(normal(e.head), [normal(arg) for arg in e.args], has_a_value)
         return done[e]
 
-    def holds(condition):
+    def holds(condition: Expr) -> bool:
         condition = normal(condition)
         return condition == true or known(condition) is True
 
-    def has_a_value(e):
+    def has_a_value(e: Expr) -> bool:
         return _has_a_value(e, holds)
 
     return normal(e)
 
 
-def _node(head, args, has_a_value):
+def _node(head: Expr, args: list[Expr], has_a_value: Callable[[Expr], bool]) -> Expr:
     laws = {item.of: item for item in identities(head)}
     for law, step in _STEPS:
         if law in laws:
@@ -62,11 +66,11 @@ def _node(head, args, has_a_value):
     return head(*args)
 
 
-def _element(head, value):
+def _element(head: Expr, value: Expr | int) -> Expr:
     return value if isinstance(value, Expr) else head.kind.output(value)
 
 
-def _key(e):
+def _key(e: Expr) -> tuple:
     if e.is_literal:
         return 0, type(e.value).__name__, e.value
     if e.is_constant:
@@ -76,7 +80,7 @@ def _key(e):
     return 3, _key(e.head), tuple(_key(arg) for arg in e.args)
 
 
-def _flatten(head, args):
+def _flatten(head: Expr, args: list[Expr]) -> list[Expr]:
     """
     >>> from nary import Add, NumberKind
     >>> x, y, z = NumberKind("x"), NumberKind("y"), NumberKind("z")
@@ -86,7 +90,7 @@ def _flatten(head, args):
     return [part for arg in args for part in (arg.args if arg.head == head else (arg,))]
 
 
-def _sort(head, args):
+def _sort(head: Expr, args: list[Expr]) -> list[Expr]:
     """
     >>> from nary import Add, NumberKind, pi, sin
     >>> x, y = NumberKind("x"), NumberKind("y")
@@ -96,7 +100,7 @@ def _sort(head, args):
     return sorted(args, key=_key)
 
 
-def _drop_duplicates(head, args):
+def _drop_duplicates(head: Expr, args: list[Expr]) -> list[Expr]:
     """
     >>> from nary import BoolKind
     >>> from nary.logic import And
@@ -107,7 +111,9 @@ def _drop_duplicates(head, args):
     return [arg for i, arg in enumerate(args) if arg not in args[:i]]
 
 
-def _absorb(head, args, z, has_a_value):
+def _absorb(
+    head: Expr, args: list[Expr], z: Expr, has_a_value: Callable[[Expr], bool],
+) -> list[Expr] | Expr:
     """
     >>> from nary import Mul, NumberKind, log
     >>> x, zero = NumberKind("x"), Mul.kind.output(0)
@@ -121,7 +127,9 @@ def _absorb(head, args, z, has_a_value):
     return args
 
 
-def _absorb_left(head, args, z, has_a_value):
+def _absorb_left(
+    head: Expr, args: list[Expr], z: Expr, has_a_value: Callable[[Expr], bool],
+) -> list[Expr] | Expr:
     """
     >>> from nary import NumberKind, Pow
     >>> x, one = NumberKind("x"), Pow.kind.output(1)
@@ -135,7 +143,7 @@ def _absorb_left(head, args, z, has_a_value):
     return args
 
 
-def _drop_units(head, args, unit):
+def _drop_units(head: Expr, args: list[Expr], unit: Expr) -> list[Expr] | Expr:
     """
     >>> from nary import Add, NumberKind
     >>> x, y, zero = NumberKind("x"), NumberKind("y"), Add.kind.output(0)
@@ -153,7 +161,7 @@ def _drop_units(head, args, unit):
     return kept
 
 
-def _drop_right_unit(head, args, unit):
+def _drop_right_unit(head: Expr, args: list[Expr], unit: Expr) -> list[Expr] | Expr:
     """
     >>> from nary import NumberKind, Pow
     >>> x, one = NumberKind("x"), Pow.kind.output(1)
@@ -163,7 +171,7 @@ def _drop_right_unit(head, args, unit):
     return args[0] if len(args) == 2 and args[1] == unit else args
 
 
-def _cancel(head, args):
+def _cancel(head: Expr, args: list[Expr]) -> list[Expr] | Expr:
     """
     >>> from nary import BoolKind
     >>> from nary.logic import Not
@@ -177,7 +185,7 @@ def _cancel(head, args):
 
 _ERASING = {absorbing, left_absorbing}
 
-_STEPS = [
+_STEPS: list[tuple[Law, Callable[..., list[Expr] | Expr]]] = [
     (associative, _flatten),
     (commutative, _sort),
     (idempotent, _drop_duplicates),
