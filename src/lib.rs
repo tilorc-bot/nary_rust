@@ -1,3 +1,7 @@
+mod deciding {
+    pub mod simplex;
+}
+
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{LazyLock, Mutex, PoisonError};
@@ -1049,5 +1053,8 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(declare_function, m)?)?;
     m.add_function(wrap_pyfunction!(declare_constant, m)?)?;
     m.add_function(wrap_pyfunction!(set_operator, m)?)?;
+    let simplex = PyModule::new(m.py(), "_simplex")?;
+    simplex.add_class::<deciding::simplex::Simplex>()?;
+    m.add_submodule(&simplex)?;
     Ok(())
 }
