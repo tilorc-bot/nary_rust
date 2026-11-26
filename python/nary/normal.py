@@ -24,7 +24,7 @@ from .constants import I, pi
 from .elementary import exp
 from .kinds import NumberKind
 from .logic import And
-from .numbers import Number, compare, power, real_part, to_expr, value
+from .numbers import Number, _mul, compare, power, real_part, to_expr, value
 from .relational import Eq, Ge, Gt, Le, Lt, Ne, re
 from .rewriting import has_a_value, holds
 from .rules import rule
@@ -104,7 +104,8 @@ def _atom_key(e):
 
 def _collect(head, args, known):
     adding = head == Add
-    number, groups = Number(0 if adding else 1), {}
+    identity = 0 if adding else 1
+    number, groups = Number(identity), {}
     args = _flatten(head, args)
     for arg in args if adding else _flatten(head, _combine_radicals(args, known)):
         v = _coefficient(head, arg)
@@ -116,7 +117,8 @@ def _collect(head, args, known):
     joined = []
     for key, coefficients in groups.items():
         for coefficient in _merge(head, key, coefficients, known):
-            joined.append(_join(head, key, coefficient, known))
+            joined.append(_collect(Mul, [coefficient, key], known) if adding
+                          else _pow(key, coefficient, known))
     radicals = [e for e in map(_radical_exponent, joined) if e is not None]
     if not adding and len(set(radicals)) < len(radicals) or any(
             _coefficient(head, j) is not None or j.head == head for j in joined):
@@ -128,7 +130,6 @@ def _collect(head, args, known):
         if number != 1 and number.im == 0 and len(joined) == 1 and joined[0].head == Add:
             return _collect(Add, [_collect(Mul, [to_expr(number), t], known)
                                   for t in joined[0].args], known)
-    identity = 0 if adding else 1
     first = [] if number == identity else _flatten(head, [to_expr(number)])
     result = [*first, *joined]
     if not result:
@@ -153,7 +154,7 @@ def _split_term(t):
         return t, NumberKind(1)
     numbers = [f for f in t.args if _is_real(f)]
     rest = [f for f in t.args if not _is_real(f)]
-    return _product(rest), _product(numbers or [NumberKind(1)])
+    return _mul(rest), _mul(numbers or [NumberKind(1)])
 
 
 def _is_real(e):
@@ -168,10 +169,6 @@ def _is_integer(e):
 
 def _sum(terms):
     return terms[0] if len(terms) == 1 else Add(*terms)
-
-
-def _product(factors):
-    return factors[0] if len(factors) == 1 else Mul(*factors)
 
 
 def _split_factor(f):
@@ -212,7 +209,7 @@ def _combine_radicals(factors, known):
         else:
             radicals.setdefault(e, []).append(f)
     return others + [
-        _pow(to_expr(value(_product([f.args[0] for f in fs]))), fs[0].args[1], known)
+        _pow(to_expr(value(_mul([f.args[0] for f in fs]))), fs[0].args[1], known)
         for fs in radicals.values()
     ]
 
@@ -220,12 +217,6 @@ def _combine_radicals(factors, known):
 def _nonzero(e, known):
     v = value(e)
     return v != 0 if v is not None else holds(Ne(e, 0), known)
-
-
-def _join(head, key, coefficient, known):
-    if head == Add:
-        return _collect(Mul, [coefficient, key], known)
-    return _pow(key, coefficient, known)
 
 
 def _pow(base, exponent, known):
@@ -255,9 +246,9 @@ def _pow(base, exponent, known):
     if vx.im == 0 and base.head == Mul:
         numbers = [f for f in base.args if value(f) is not None]
         rest = [f for f in base.args if value(f) is None]
-        c = value(_product(numbers)) if numbers else None
+        c = value(_mul(numbers)) if numbers else None
         if c is not None and c.im == 0 and c.re > 0:
-            return _collect(Mul, [_pow(_product(numbers), exponent, known),
-                                  _pow(_product(rest), exponent, known)], known)
+            return _collect(Mul, [_pow(_mul(numbers), exponent, known),
+                                  _pow(_mul(rest), exponent, known)], known)
     return Pow(base, exponent)
 

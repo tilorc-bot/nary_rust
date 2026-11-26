@@ -54,7 +54,7 @@ from .kinds import NumberKind
 from .logic import And, Or, true
 from .relational import Eq, Ge, Gt, Le, Lt, Ne, re
 from ._identities import Law, identities
-from .rules import is_flat, is_run, is_unordered
+from .rules import _is_declared_function, is_flat, is_run, is_unordered
 
 __all__ = ["beta", "has_a_value", "holds", "implications", "rewrite"]
 
@@ -99,7 +99,7 @@ def holds(c, known=None, depth=2):
 def has_a_value(e, known=None):
     if e.is_symbol or e.is_literal or e.is_constant:
         return True
-    if not _is_declared(e.head):
+    if not _is_declared_function(e.head):
         return False
     condition = domain_of(e)
     if condition is None:
@@ -175,7 +175,7 @@ def _apply(rule, e, known):
 
 
 def _flatten(e):
-    if not (_is_declared(e.head) and is_flat(e.head)):
+    if not (_is_declared_function(e.head) and is_flat(e.head)):
         return e
     args = []
     for arg in e.args:
@@ -183,11 +183,7 @@ def _flatten(e):
     unit = _unit(e.head)
     if unit is not None and len(args) < 2:
         return args[0] if args else unit
-    return e.head(*args) if len(args) != len(e.args) or args != list(e.args) else e
-
-
-def _is_declared(head):
-    return head is not None and head.is_constant
+    return e if args == list(e.args) else e.head(*args)
 
 
 def _match_top(pattern, e):
@@ -227,7 +223,7 @@ def _match(pattern, e, bindings):
 
 
 def _unit(head):
-    if not (_is_declared(head) and is_flat(head)):
+    if not (_is_declared_function(head) and is_flat(head)):
         return None
     units = [law.args[0] for law in identities(head) if isinstance(law, Law) and law.title == "identity"]
     if not units:
@@ -238,7 +234,7 @@ def _unit(head):
 def _match_args(pattern, args, bindings):
     runs = [p for p in pattern.args if is_run(p)]
     fixed = [p for p in pattern.args if not is_run(p)]
-    if _is_declared(pattern.head) and is_unordered(pattern.head):
+    if _is_declared_function(pattern.head) and is_unordered(pattern.head):
         for new, used in _match_unordered(fixed, args, bindings, ()):
             yield from _bind_run(runs, tuple(a for i, a in enumerate(args) if i not in used), new)
     elif len(fixed) <= len(args) and (runs or len(fixed) == len(args)):

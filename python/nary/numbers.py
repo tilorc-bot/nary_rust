@@ -202,7 +202,7 @@ def _positive_power(b, x):
 def _product(coefficient, factors):
     c = to_expr(coefficient)
     head = [] if coefficient == 1 and factors else c.args if c.head == Mul else [c]
-    return _mul([*head, *factors]) if head or factors else c
+    return _mul([*head, *factors])
 
 
 def _radical(base, e):
