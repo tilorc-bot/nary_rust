@@ -3,6 +3,7 @@ import random
 from fractions import Fraction
 
 import sympy
+from sympy.core.facts import InconsistentAssumptions
 
 import nary as nr
 from nary import Add, E, I, Mul, Pow, cos, exp, log, pi, re, sin, tan
@@ -21,7 +22,11 @@ FUNCTIONS = {
 CONSTANTS = {pi: sympy.pi, E: sympy.E, I: sympy.I, true: sympy.true, false: sympy.false}
 BACK = {v: k for k, v in FUNCTIONS.items()}
 BACK_CONSTANTS = {v: k for k, v in CONSTANTS.items()}
-SIGNS = {nr.Lt: "negative", nr.Le: "nonpositive", nr.Ge: "nonnegative"}
+SIGNS = {
+    nr.Ne: ("zero", False), nr.Gt: ("positive", True), nr.Lt: ("negative", True),
+    nr.Le: ("nonpositive", True), nr.Ge: ("nonnegative", True),
+}
+FLIPPED = {nr.Gt: nr.Lt, nr.Lt: nr.Gt, nr.Ge: nr.Le, nr.Le: nr.Ge, nr.Ne: nr.Ne}
 NO_VALUE = (sympy.zoo, sympy.nan, sympy.oo, -sympy.oo)
 
 
@@ -30,17 +35,15 @@ class Unrepresentable(Exception):
 
 
 def sympy_assumptions(known):
-    assumptions = {}
+    assumptions, zero = {}, nr.NumberKind(0)
     for c in known:
         lhs, rhs = c.args
-        if c.head == nr.Ne and lhs.is_symbol and rhs == nr.NumberKind(0):
-            assumptions.setdefault(lhs.name, {})["zero"] = False
-        elif c.head == nr.Gt and lhs.is_symbol and rhs == nr.NumberKind(0):
-            assumptions.setdefault(lhs.name, {})["positive"] = True
-        elif c.head == nr.Eq and rhs.is_symbol and lhs == re(rhs):
+        if c.head == nr.Eq and rhs.is_symbol and lhs == re(rhs):
             assumptions.setdefault(rhs.name, {})["real"] = True
-        elif c.head in SIGNS and lhs.is_symbol and rhs == nr.NumberKind(0):
-            assumptions.setdefault(lhs.name, {})[SIGNS[c.head]] = True
+        elif c.head in SIGNS and lhs.is_symbol and rhs == zero:
+            assumptions.setdefault(lhs.name, {}).update([SIGNS[c.head]])
+        elif c.head in FLIPPED and rhs.is_symbol and lhs == zero:
+            assumptions.setdefault(rhs.name, {}).update([SIGNS[FLIPPED[c.head]]])
     return assumptions
 
 
@@ -110,6 +113,8 @@ def sympy_result(e, known=()):
         theirs = to_sympy(e, known)
     except TypeError as error:
         raise Unrepresentable("SymPy raises") from error
+    except InconsistentAssumptions as error:
+        raise Unrepresentable("inconsistent assumptions") from error
     return from_sympy(theirs, symbol_kinds(e))
 
 
@@ -191,3 +196,4 @@ def random_expression(rng, depth=3, boolean=False):
 def random_expressions(count, seed=0):
     rng = random.Random(seed)
     return [random_expression(rng, 3, rng.random() < 0.15) for _ in range(count)]
+

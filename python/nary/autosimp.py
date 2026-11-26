@@ -576,7 +576,7 @@ def _branch(b, y, x, known):
         rest = node(Pow, [_negative(b, known), _negative(x, known)], known)
         return node(Mul, [node(Pow, [MINUS_ONE, x], known), rest], known)
     if r is not None and r % 2 == 0 and negative(b, known):
-        return node(Pow, [node(Pow, [_negative(b, known), y], known), x], known)
+        return node(Pow, [_negative(b, known), node(Mul, [y, x], known)], known)
     if r is not None and abs(r) < 2 and _nonnegative(node(re, [b], known), known):
         k = 0
     elif real(y, known) and not half:
