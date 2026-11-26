@@ -80,10 +80,11 @@ def test_generated_lean_file_is_current():
     spec = importlib.util.spec_from_file_location("generate_rules", script)
     generate = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(generate)
-    assert generate.PATH.read_text(encoding="utf-8") == generate.render(), (
-        "lean/Nary/ArithmeticRules/Statements.lean is out of date: run "
-        ".venv/bin/python lean/generate_rules.py, then prove any new statement"
-    )
+    for target in generate.TARGETS:
+        path = generate.NARY / target / "Statements.lean"
+        assert path.read_text(encoding="utf-8") == generate.render(target), (
+            f"{path} is out of date: run .venv/bin/python lean/generate_rules.py"
+        )
 
 
 LEAN = Path(__file__).resolve().parents[1] / "lean"
