@@ -17,13 +17,15 @@ A step that is sound only under a condition waits for the condition.
 """
 
 from fractions import Fraction
+from functools import lru_cache
 from math import gcd, prod
 
-from . import arithmetic_rules
+from . import arithmetic_rules, intervals
 from ._core import Expr
 from .arithmetic import Add, Mul, Pow
 from .constants import E, I, pi
 from .elementary import cos, exp, log, sin, tan
+from .domains import domain_of
 from .functions import Lambda, is_lambda
 from .kinds import BoolKind, NumberKind
 from .logic import And, Not, Or, false, true
@@ -97,12 +99,47 @@ def node(head, args, known=frozenset()):
     >>> node(Mul, [x, Pow(x, 2)]), node(sin, [Mul(-1, x)])
     (Pow(x, 3), Mul(-1, sin(x)))
     """
+    if head in (Add, Mul):
+        args = _siblings(head, args, known)
     e = head(*args)
     for r in RULES.get(head, ()):
         bindings = _match(r.pattern, e, {})
         if bindings is not None and _allowed(r, bindings, known):
             return _build(r.replacement, bindings, known)
-    return STEPS[head](list(e.args), known) if head in STEPS else e
+    if head not in STEPS:
+        return e
+    out = STEPS[head](list(e.args), known)
+    if head in (Add, Mul) and out.head == head and _siblings(head, out.args, known) != list(out.args):
+        return node(head, list(out.args), known)
+    return out
+
+
+@lru_cache(maxsize=4096)
+def _defined(e, known):
+    if e.head in (None, And, Or) or is_lambda(e):
+        return frozenset()
+    found = frozenset().union(*(_defined(a, known) for a in e.args))
+    c = _simp(domain_of(e), known) if domain_of(e) not in (None, true) else true
+    return found | (frozenset(c.args) if c.head == And else frozenset({c}) - {true})
+
+
+def _siblings(head, args, known):
+    """
+    >>> from nary import NumberKind
+    >>> x = NumberKind("x")
+    >>> node(Add, [Mul(0, cos(x) ** -2), cos(x) ** -4]), node(Mul, [cos(x) ** -4, Pow(cos(x) ** -1, -3)])
+    (Pow(cos(x), -4), Pow(cos(x), -1))
+    """
+    args = _flatten(head, args)
+    defined = [_defined(a, known) for a in args]
+    for i, a in enumerate(args):
+        extra = frozenset().union(*defined[:i], *defined[i + 1:]) - known
+        if extra and a.head is not None and not is_lambda(a):
+            new = node(a.head, list(a.args), known | extra)
+            if new.head == head:
+                return _siblings(head, args[:i] + list(new.args) + args[i + 1:], known)
+            args[i], defined[i] = new, _defined(new, known)
+    return args
 
 
 def _match(pattern, e, bindings):
@@ -424,11 +461,81 @@ def _pow(args, known):
         return node(Pow, [base.args[0], node(Mul, [base.args[1], x], known)], known)
     if base.head == exp and (n is not None or real(base.args[0], known)):
         return node(exp, [node(Mul, [x, base.args[0]], known)], known)
+    if base.head in (Pow, exp) and (value := _branch(*_base_exp(base), x, known)) is not None:
+        return value
     if base.head == Mul and n:
         return node(Mul, [node(Pow, [f, x], known) for f in base.args], known)
+    if base.head == Mul and rational(x) is not None and _coeff(base)[1] == I:
+        value = _imaginary_power(_coeff(base)[0], rational(x), known)
+        if value is not None:
+            return value
     if base.head == Mul and rational(x) is not None:
         return _split_power(base, x, known)
+    if _gaussian(base) and rational(x) is not None:
+        value = _gaussian_power(*_gaussian(base), rational(x), known)
+        if value is not None:
+            return value
+    if base == ZERO and _coeff(x)[0] > 0 and _coeff(x)[0] != 1:
+        return node(Pow, [ZERO, _coeff(x)[1]], known)
     return Pow(base, x)
+
+
+def _gaussian(e):
+    if e.head != Add or len(e.args) != 2 or rational(e.args[0]) is None:
+        return None
+    c, rest = _coeff(e.args[1])
+    return (rational(e.args[0]), c) if rest == I else None
+
+
+def _complex(z, known):
+    return node(Add, [number(z[0]), node(Mul, [number(z[1]), I], known)], known)
+
+
+def _times(z, n):
+    out = (Fraction(1), Fraction(0))
+    for _ in range(n):
+        out = (out[0] * z[0] - out[1] * z[1], out[0] * z[1] + out[1] * z[0])
+    return out
+
+
+def _square_root(r):
+    p, q = _root(r.numerator, 2), _root(r.denominator, 2)
+    return Fraction(p, q) if p * p == r.numerator and q * q == r.denominator else None
+
+
+def _complex_power(scale, z, p, known):
+    if p > 0:
+        return node(Mul, [scale, _complex(_times(z, p), known)], known)
+    w = _times(z, -p)
+    conjugate = _times((z[0], -z[1]), -p)
+    return node(Mul, [scale, number(1 / (w[0] ** 2 + w[1] ** 2)), _complex(conjugate, known)], known)
+
+
+def _gaussian_power(r, i, s, known):
+    """
+    >>> node(Pow, [3 + 4 * I, HALF]), node(Pow, [3 + I, -1])
+    (Add(2, I), Add(Mul(3, Pow(10, -1)), Mul(-1, Pow(10, -1), I)))
+    """
+    if s == -1:
+        return _complex_power(ONE, (r, i), -1, known)
+    d = _square_root(r * r + i * i)
+    if s.denominator != 2 or d is None:
+        return None
+    scale = node(Pow, [number((d - r) / 2), number(s)], known)
+    return _complex_power(scale, ((d + r) / abs(i), Fraction(1 if i > 0 else -1)), s.numerator, known)
+
+
+def _imaginary_power(c, s, known):
+    """
+    >>> node(Pow, [2 * I, HALF]), node(Pow, [-8 * I, HALF])
+    (Add(1, I), Add(2, Mul(-2, I)))
+    """
+    r = _square_root(abs(c) / 2)
+    if s.denominator != 2 or r is None:
+        return None
+    unit = _complex((1, 1 if c > 0 else -1), known)
+    return node(Mul, [node(Pow, [number(r), number(s.numerator)], known),
+                      node(Pow, [unit, number(s.numerator)], known)], known)
 
 
 def _nested(inner, y, x, known):
@@ -445,6 +552,41 @@ def _nested(inner, y, x, known):
     if integer(x) is None and not (rational(y) is not None and abs(rational(y)) < 1):
         return False
     return nonzero(inner, known) or _nonnegative(y, known) or _nonnegative(x, known)
+
+
+def _turns(b, y, known):
+    r = rational(y)
+    if r is not None and negative(b, known):
+        return int((HALF_FRACTION - r / 2) // 1)
+    return intervals.turns(Mul(y, log(b)))
+
+
+def _branch(b, y, x, known):
+    """
+    >>> node(Pow, [exp(5 * I), HALF])
+    Mul(-1, exp(Mul(5, Pow(2, -1), I)))
+    >>> node(Pow, [Pow(1 - Pow(2, HALF), -1), HALF])
+    Mul(I, Pow(Add(-1, Pow(2, Pow(2, -1))), Mul(-1, Pow(2, -1))))
+    """
+    r, s = rational(y), rational(x)
+    half = s is not None and s.denominator == 2
+    if not nonzero(b, known) or r == 0:
+        return None
+    if r == -1 and half and negative(b, known):
+        rest = node(Pow, [_negative(b, known), _negative(x, known)], known)
+        return node(Mul, [node(Pow, [MINUS_ONE, x], known), rest], known)
+    if r is not None and r % 2 == 0 and negative(b, known):
+        return node(Pow, [node(Pow, [_negative(b, known), y], known), x], known)
+    if r is not None and abs(r) < 2 and _nonnegative(node(re, [b], known), known):
+        k = 0
+    elif real(y, known) and not half:
+        return None
+    else:
+        k = _turns(b, y, known)
+    if k is None or (k and not half):
+        return None
+    power = node(Pow, [b, node(Mul, [y, x], known)], known)
+    return node(Mul, [MINUS_ONE, power], known) if k and k * s.numerator % 2 else power
 
 
 def _split_power(base, x, known):
@@ -719,8 +861,10 @@ def _equality(head, when_zero):
     return step
 
 
-def _order(head, test):
+def _order(head, test, opposite):
     def step(args, known):
+        if holds(head(*args), known) or holds(opposite(*args), known):
+            return true if holds(head(*args), known) else false
         d = _difference(args, known)
         if not all(real(arg, known) for arg in args):
             return head(*args)
@@ -759,10 +903,10 @@ STEPS = {
     re: _re,
     Eq: _equality(Eq, when_zero=True),
     Ne: _equality(Ne, when_zero=False),
-    Lt: _order(Lt, lambda d: d < 0),
-    Gt: _order(Gt, lambda d: d > 0),
-    Le: _order(Le, lambda d: d <= 0),
-    Ge: _order(Ge, lambda d: d >= 0),
+    Lt: _order(Lt, lambda d: d < 0, Ge),
+    Gt: _order(Gt, lambda d: d > 0, Le),
+    Le: _order(Le, lambda d: d <= 0, Gt),
+    Ge: _order(Ge, lambda d: d >= 0, Lt),
     And: _lattice(And, true, false),
     Or: _lattice(Or, false, true),
 }

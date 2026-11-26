@@ -18,6 +18,7 @@ A canonical rational number is a literal, Pow(q, -1) or Mul(p, Pow(q, -1)).
 
 from fractions import Fraction
 
+from . import intervals
 from .arithmetic import Add, Mul, Pow
 from .constants import E, I, pi
 from .domains import domain_of
@@ -25,7 +26,7 @@ from .elementary import cos, exp, log, sin
 from .functions import is_lambda
 from .kinds import NumberKind
 from .logic import And, Or, true
-from .relational import Eq, Gt, Ne, re
+from .relational import Eq, Ge, Gt, Le, Lt, Ne, re
 
 __all__ = [
     "has_value", "holds", "integer", "negative", "nonzero", "number", "positive", "rational", "real",
@@ -76,7 +77,19 @@ def holds(condition, known=()):
         return positive(args[0], known)
     if head == Eq and args[0] == re(args[1]):
         return real(args[1], known)
-    return False
+    return head in _ORDER and _known(*_ordered(condition), known)
+
+
+_ORDER = {Gt: (Gt, False), Lt: (Gt, True), Ge: (Ge, False), Le: (Ge, True)}
+
+
+def _ordered(c):
+    head, swap = _ORDER[c.head]
+    return head, c.args[::-1] if swap else c.args
+
+
+def _known(head, args, known):
+    return any(c.head in _ORDER and _ordered(c) == (head, args) for c in known)
 
 
 def has_value(e, known=()):
@@ -91,7 +104,21 @@ def _all(test):
     return lambda known, *args: all(test(a, known) for a in args)
 
 
+def _imaginary_sign(t, known):
+    rest = list(t.args) if t.head == Mul else [t]
+    if rest.count(I) != 1:
+        return None
+    rest.remove(I)
+    return 1 if all(positive(f, known) for f in rest) else -1 if negative(Mul(*rest, 1), known) else None
+
+
+def _nonreal(known, *terms):
+    signs = {_imaginary_sign(t, known) for t in terms if not real(t, known)}
+    return len(signs) == 1 and None not in signs
+
+
 _NONZERO = {
+    Add: _nonreal,
     Mul: _all(lambda a, known: nonzero(a, known)),
     Pow: lambda known, b, x: nonzero(b, known) and has_value(x, known),
     exp: lambda known, a: has_value(a, known),
@@ -127,18 +154,22 @@ def nonzero(e, known=()):
         return rational(e) != 0
     if e in (pi, E, I) or Ne(e, 0) in known or positive(e, known) or negative(e, known):
         return True
-    return _decide(_NONZERO, e, known)
+    return _decide(_NONZERO, e, known) or intervals.nonzero(e)
 
 
 def positive(e, known=()):
     if rational(e) is not None:
         return rational(e) > 0
-    return e in (pi, E) or Gt(e, 0) in known or _decide(_POSITIVE, e, known)
+    if e in (pi, E) or _known(Gt, (e, ZERO), known) or _decide(_POSITIVE, e, known):
+        return True
+    return intervals.sign(e) == 1
 
 
 def negative(e, known=()):
     if rational(e) is not None:
         return rational(e) < 0
+    if _known(Gt, (ZERO, e), known) or intervals.sign(e) == -1:
+        return True
     if e.head == Mul:
         signs = [negative(f, known) for f in e.args if not positive(f, known)]
         return all(signs) and len(signs) % 2 == 1
@@ -150,4 +181,6 @@ def real(e, known=()):
         return True
     if Eq(re(e), e) in known or positive(e, known) or negative(e, known):
         return True
-    return _decide(_REAL, e, known)
+    if any(c.head in _ORDER and e in c.args for c in known):
+        return True
+    return _decide(_REAL, e, known) or intervals.real(e)

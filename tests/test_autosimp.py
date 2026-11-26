@@ -43,7 +43,7 @@ def test_sound_on_random_expressions():
 
 def test_agreement_with_sympy_on_random_expressions():
     assert Counter(classify(e)[0] for e in RANDOM) == {
-        "same": 435, "same once assumed": 15, "different": 28, "not yet": 22,
+        "same": 440, "same once assumed": 15, "different": 28, "not yet": 17,
     }
 
 
@@ -52,6 +52,7 @@ GATED = [
     (x ** 0, [Ne(x, 0)], Pow(x, 0)),
     (x ** 2 / x, [Ne(x, 0)], Mul(Pow(x, -1), Pow(x, 2))),
     (Pow(Pow(x, -1), -1), [Ne(x, 0)], Pow(Pow(x, -1), -1)),
+    (Pow(Pow(x, -1), -1) * x ** -1, [Ne(x, 0)], Pow(x, 0)),
     (Pow(x, y) * Pow(x, -y), [Ne(x, 0)], Mul(Pow(x, y), Pow(x, Mul(-1, y)))),
     (0 * log(x), [Ne(x, 0)], Mul(0, log(x))),
     (log(x) - log(x), [Ne(x, 0)], Mul(0, log(x))),
@@ -64,6 +65,10 @@ GATED = [
     (Pow(0, x), [Gt(x, 0)], Pow(0, x)),
     (Pow(Pow(x, 2), H), [Gt(x, 0)], Pow(Pow(x, 2), H)),
     (Lt(x, x + 1), [real(x)], Lt(x, Add(1, x))),
+    (Lt(y, 0), [Lt(y, 0)], Lt(y, 0)),
+    (Ge(y, 0), [Lt(y, 0)], Ge(y, 0)),
+    (Le(y, 0), [Le(y, 0)], Le(y, 0)),
+    (log(exp(y)), [Lt(y, 0)], log(exp(y))),
     (And(Lt(x, y), Ge(x, y)), [real(x), real(y)], And(Ge(x, y), Lt(x, y))),
     (Or(Lt(x, y), Ge(x, y)), [real(x), real(y)], Or(Ge(x, y), Lt(x, y))),
 ]
@@ -76,6 +81,35 @@ def test_gated_step_matches_sympy_when_assumed_and_waits_otherwise(e, known, wit
     assert autosimp(e) == without
 
 
+NUMERIC = [
+    Lt(E, 3), Mul(cos(2), cos(2) ** -1), log(1 - Pow(2, H)), Pow(exp(5 * I), H),
+    Pow(Pow(1 - Pow(2, H), -1), H), Pow(Pow(1 + q(1, 5) * I, 6), H),
+]
+ZERO_UNDECIDED = Pow(3 + 2 * Pow(2, H), H) - Pow(2, H) - 1
+
+
+@pytest.mark.parametrize("e", NUMERIC, ids=repr)
+def test_sign_decided_by_interval_arithmetic(e):
+    assert agrees(e) and not counterexamples(e, autosimp(e))
+
+
+def test_step_waits_when_the_interval_contains_zero():
+    z = autosimp(ZERO_UNDECIDED)
+    assert autosimp(Lt(z, 0)) == Lt(z, 0) and autosimp(z / z) == Pow(z, 0)
+
+
+SIBLINGS = [
+    Add(Mul(0, cos(x) ** -2), cos(x) ** -4), Mul(cos(x) ** -4, Pow(cos(x) ** -1, -3)),
+    Add(tan(x), Mul(0, cos(x) ** -1)), Add(Mul(0, log(x)), x ** -1),
+]
+
+
+@pytest.mark.parametrize("e", SIBLINGS, ids=repr)
+def test_step_allowed_where_a_sibling_has_a_value(e):
+    s = autosimp(e)
+    assert agrees(e) and autosimp(s) == s and not counterexamples(e, s)
+
+
 FROM_SYMPY_TESTS = [
     ("test_power", "same", [
         Pow(Pow(5, -1), Pow(2, -1)), Mul(2, Pow(Pow(5, -1), Pow(2, -1))),
@@ -86,21 +120,10 @@ FROM_SYMPY_TESTS = [
         (Pow(Pow(a, 3), Mul(2, Pow(5, -1))), [Gt(a, 0)]),
         (Pow(Pow(a, 2), b), [Gt(a, 0), Eq(re(b), b)]),
         Mul(-1, Mul(-1, Pow(Add(Pow(5, Pow(2, -1)), Mul(-1, 1)), Pow(2, -1)))), Pow(123, 789),
-        Pow(1, I), Pow(-2, -5),
-        Pow(Mul(Mul(-1, Pow(3, Pow(2, -1))), Add(1, Mul(2, I))), Pow(2, -1)),
-        (Pow(Pow(p, 2), Pow(3, -1)), [Gt(p, 0)]), Pow(Mul(2, Pow(3, -1)), Mul(3, Pow(2, -1))),
-        Pow(Pow(6, -1), Mul(9, Pow(4, -1))), Pow(Mul(3, Pow(7, -1)), Mul(7, Pow(3, -1))),
-        Pow(2, 3), Pow(Pow(I, Pow(2, -1)), Mul(9, Pow(2, -1))),
-    ]),
-    ("test_power", "same once assumed", [
-        Mul(1, Pow(Pow(x, y), -1)), Pow(0, Mul(2, x)), Pow(0, Mul(Mul(2, x), y)),
-    ]),
-    ("test_power", "different", [
-        Pow(Pow(Add(1, I), Mul(Mul(12, I), Mul(pi, Pow(log(Pow(2, Pow(2, -1))), -1)))), Pow(3, -1)),
-    ]),
-    ("test_power", "not yet", [
+        Pow(1, I), Pow(-2, -5), Pow(0, Mul(2, x)), Pow(0, Mul(Mul(2, x), y)),
         Pow(Pow(33, Mul(Mul(I, 9), Pow(10, -1))), Pow(2, -1)), Pow(exp(Mul(3, I)), Pow(2, -1)),
-        Pow(exp(Mul(5, I)), Pow(2, -1)), Pow(Mul(1, Pow(Add(1, I), -1)), Pow(2, -1)),
+        Pow(Mul(Mul(-1, Pow(3, Pow(2, -1))), Add(1, Mul(2, I))), Pow(2, -1)),
+        Pow(exp(Mul(5, I)), Pow(2, -1)), (Pow(Pow(p, 2), Pow(3, -1)), [Gt(p, 0)]),
         Pow(Mul(1, Pow(Add(1, Mul(-1, Pow(2, Pow(2, -1)))), -1)), Pow(2, -1)),
         Pow(Mul(1, Pow(Add(1, Mul(-1, Pow(2, Pow(2, -1)))), -1)), Mul(-1, Pow(2, -1))),
         (Pow(Pow(Add(p, I), Mul(4, Pow(3, -1))), Pow(2, -1)), [Gt(p, 0)]),
@@ -114,14 +137,26 @@ FROM_SYMPY_TESTS = [
         Pow(Mul(Add(8, Mul(15, I)), Pow(8, -1)), Pow(2, -1)),
         Pow(Mul(Add(3, Mul(-1, Mul(4, I))), Pow(25, -1)), Pow(2, -1)),
         Pow(Mul(Add(3, Mul(-1, Mul(4, I))), Pow(26, -1)), Pow(2, -1)),
-        Pow(Mul(Add(3, Mul(4, I)), Pow(Add(3, Mul(-1, Mul(4, I))), -1)), Pow(2, -1)),
         Pow(Mul(2, Pow(Add(3, Mul(4, I)), -1)), Pow(2, -1)),
-        Pow(Mul(-2, Pow(Add(3, Mul(4, I)), -1)), Pow(2, -1)),
         Pow(Mul(1, Pow(Add(3, Mul(I, 4)), -1)), Pow(2, -1)),
-        Pow(Mul(1, Pow(Add(3, Mul(-1, I)), -1)), Pow(2, -1)),
         Pow(Pow(Add(3, Mul(4, I)), Pow(2, -1)), 3), Pow(Add(3, Mul(4, I)), Mul(3, Pow(2, -1))),
         Pow(Add(6, Mul(8, I)), Mul(3, Pow(2, -1))), Pow(Mul(2, I), Pow(2, -1)),
         Pow(Mul(2, I), Mul(3, Pow(2, -1))), Pow(Mul(Mul(-9, Pow(2, -1)), I), Mul(3, Pow(2, -1))),
+        Pow(Mul(2, Pow(3, -1)), Mul(3, Pow(2, -1))), Pow(Pow(6, -1), Mul(9, Pow(4, -1))),
+        Pow(Mul(3, Pow(7, -1)), Mul(7, Pow(3, -1))), Pow(2, 3),
+        Pow(Pow(I, Pow(2, -1)), Mul(9, Pow(2, -1))),
+    ]),
+    ("test_power", "same once assumed", [
+        Mul(1, Pow(Pow(x, y), -1)),
+    ]),
+    ("test_power", "different", [
+        Pow(Pow(Add(1, I), Mul(Mul(12, I), Mul(pi, Pow(log(Pow(2, Pow(2, -1))), -1)))), Pow(3, -1)),
+    ]),
+    ("test_power", "not yet", [
+        Pow(Mul(1, Pow(Add(1, I), -1)), Pow(2, -1)),
+        Pow(Mul(Add(3, Mul(4, I)), Pow(Add(3, Mul(-1, Mul(4, I))), -1)), Pow(2, -1)),
+        Pow(Mul(-2, Pow(Add(3, Mul(4, I)), -1)), Pow(2, -1)),
+        Pow(Mul(1, Pow(Add(3, Mul(-1, I)), -1)), Pow(2, -1)),
         Pow(Mul(1, Pow(tan(Add(1, I)), -1)), Pow(2, -1)),
     ]),
     ("test_trigonometric", "same", [
@@ -173,6 +208,12 @@ FROM_SYMPY_TESTS = [
 def test_case_from_sympy_tests(source, category, case):
     e, given = case if isinstance(case, tuple) else (case, [])
     assert classify(e, given)[0] == category
+    assert not counterexamples(e, autosimp(e, given), given)
+
+
+@pytest.mark.parametrize("e", [Pow(3 + I, -1), Pow(-8 * I, H), Pow(2 * I, -H)], ids=repr)
+def test_sympy_result_that_sympy_changes_when_evaluated_again(e):
+    assert classify(e) == ("different", "SymPy changes its own result")
 
 
 def test_refusal_and_lambda():
