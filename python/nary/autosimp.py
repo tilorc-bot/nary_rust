@@ -100,13 +100,18 @@ def node(head, args, known=frozenset()):
     (Pow(x, 3), Mul(-1, sin(x)))
     """
     if head in (Add, Mul):
-        args = _siblings(args, known)
+        args = _siblings(head, args, known)
     e = head(*args)
     for r in RULES.get(head, ()):
         bindings = _match(r.pattern, e, {})
         if bindings is not None and _allowed(r, bindings, known):
             return _build(r.replacement, bindings, known)
-    return STEPS[head](list(e.args), known) if head in STEPS else e
+    if head not in STEPS:
+        return e
+    out = STEPS[head](list(e.args), known)
+    if head in (Add, Mul) and out.head == head and _siblings(head, out.args, known) != list(out.args):
+        return node(head, list(out.args), known)
+    return out
 
 
 @lru_cache(maxsize=4096)
@@ -118,19 +123,22 @@ def _defined(e, known):
     return found | (frozenset(c.args) if c.head == And else frozenset({c}) - {true})
 
 
-def _siblings(args, known):
+def _siblings(head, args, known):
     """
     >>> from nary import NumberKind
     >>> x = NumberKind("x")
     >>> node(Add, [Mul(0, cos(x) ** -2), cos(x) ** -4]), node(Mul, [cos(x) ** -4, Pow(cos(x) ** -1, -3)])
     (Pow(cos(x), -4), Pow(cos(x), -1))
     """
-    args, defined = list(args), [_defined(a, known) for a in args]
+    args = _flatten(head, args)
+    defined = [_defined(a, known) for a in args]
     for i, a in enumerate(args):
         extra = frozenset().union(*defined[:i], *defined[i + 1:]) - known
         if extra and a.head is not None and not is_lambda(a):
-            args[i] = node(a.head, list(a.args), known | extra)
-            defined[i] = _defined(args[i], known)
+            new = node(a.head, list(a.args), known | extra)
+            if new.head == head:
+                return _siblings(head, args[:i] + list(new.args) + args[i + 1:], known)
+            args[i], defined[i] = new, _defined(new, known)
     return args
 
 
