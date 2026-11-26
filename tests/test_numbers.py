@@ -1,6 +1,6 @@
 import nary as nr
 import pytest
-from nary import BoolKind, NumberKind, Symbol, declare_function, declare_kind
+from nary import BoolKind, Bound, NumberKind, declare_function, declare_kind
 from nary.logic import And, true
 
 x, y = NumberKind("x"), NumberKind("y")
@@ -49,8 +49,8 @@ def test_a_value_takes_the_kind_of_its_position():
         And(p, 1)
     with pytest.raises(TypeError, match="^Add expects NumberKind, got bool: True$"):
         nr.Add(x, True)
-    D = declare_function("D", NumberKind, Symbol(NumberKind), returns=NumberKind, domain=true)
-    with pytest.raises(TypeError, match="^D expects a NumberKind symbol, got NumberKind: 1$"):
+    D = declare_function("D", NumberKind("expr"), Bound(NumberKind("variable")), returns=NumberKind, domain=true)
+    with pytest.raises(TypeError, match="^D expects a NumberKind symbol, got 1$"):
         D(x, 1)
 
 

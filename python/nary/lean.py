@@ -56,7 +56,7 @@ to_lean_facts writes the facts recorded for a function.
 import re as _re
 
 from . import arithmetic, calculus, constants, elementary, logic, relational
-from ._core import Expr
+from ._core import Expr, Many
 from .calculus import NumberFunction
 from .functions import is_lambda
 from .kinds import BoolKind, NumberKind
@@ -274,11 +274,13 @@ class _Printer:
             if head not in LEAN_NAMES:
                 raise _not_in_table(head)
             name = LEAN_NAMES[head]
-            fixed = len(head.kind.inputs)
-            parts = [name] + [self.argument(a) for a in e.args[:fixed]]
-            if head.kind.rest is not None:
-                rest = ", ".join(self.print(a)[0] for a in e.args[fixed:])
-                parts.append(f"[{rest}]")
+            parts = [name]
+            for param in head.params:
+                if isinstance(param, Many):
+                    run = getattr(e, param.of.name)
+                    parts.append(f"[{', '.join(self.print(a)[0] for a in run)}]")
+                else:
+                    parts.append(self.argument(getattr(e, param.name)))
             if len(parts) == 1:
                 return name, True
             return " ".join(parts), False
@@ -345,7 +347,7 @@ def to_lean_rule(r):
 def to_lean_facts(f):
     if not _is_declared_function(f) or f not in LEAN_NAMES:
         raise _not_in_table(f)
-    if f.kind.inputs or f.kind.rest is None:
+    if len(f.kind.inputs) != 1 or not isinstance(f.kind.inputs[0], Many):
         raise ValueError(
             f"the facts about {f!r} cannot be stated in Lean: Nary.Unordered and "
             f"Nary.Flat are defined only for a function that takes a list"

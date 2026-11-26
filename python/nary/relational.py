@@ -5,10 +5,10 @@ from .logic import And, true
 
 __all__ = ["Eq", "Ge", "Gt", "Le", "Lt", "Ne", "re"]
 
-x = NumberKind("x")
+arg = NumberKind("arg")
 lhs, rhs = NumberKind("lhs"), NumberKind("rhs")
 
-re = declare_function("re", x, returns=NumberKind, domain=true)
+re = declare_function("re", arg, returns=NumberKind, domain=true)
 Eq = declare_function("Eq", lhs, rhs, returns=BoolKind, domain=true)
 Ne = declare_function("Ne", lhs, rhs, returns=BoolKind, domain=true)
 both_real = And(Eq(re(lhs), lhs), Eq(re(rhs), rhs))

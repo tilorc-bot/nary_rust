@@ -4,7 +4,7 @@
     >>> from nary.domains import domain, domain_of
     >>> from nary.logic import true
     >>> domain(log), domain(sin), domain(Pow)
-    (Ne(x, 0), true, Or(Ne(base, 0), Gt(re(exp), 0)))
+    (Ne(arg, 0), true, Or(Ne(base, 0), Gt(re(exp), 0)))
 
 domain_of puts the arguments of an application in place of the parameters.
 
@@ -40,16 +40,9 @@ _AWAITING_A_DECISION = {
 }
 
 
-def declare_function(name, *parameters, rest=None, returns, domain):
-    symbols = [p for p in parameters if isinstance(p, Expr) and p.is_symbol]
-    if symbols and len(symbols) != len(parameters):
-        raise TypeError(
-            f"either every parameter of {name} is a symbol or none is, got {parameters!r}"
-        )
-    names = [symbol.name for symbol in symbols]
-    for n in names:
-        if names.count(n) > 1:
-            raise ValueError(f"{name} has two parameters named {n}")
+def declare_function(name, *parameters, returns, domain):
+    function = _core.declare_function(name, *parameters, returns=returns)
+    symbols = [p for p in function.params if isinstance(p, Expr)]
 
     if domain is None and name in _AWAITING_A_DECISION:
         pass
@@ -62,11 +55,6 @@ def declare_function(name, *parameters, rest=None, returns, domain):
                     f"the domain of {name} mentions {e!r}, which is not one of its parameters"
                 )
 
-    if symbols:
-        parameters = [symbol.kind for symbol in symbols]
-    function = _core.declare_function(
-        name, *parameters, rest=rest, returns=returns, names=tuple(names)
-    )
     if domain is not None:
         _domains[function] = domain
     return function
@@ -96,8 +84,8 @@ def domain_of(e):
     condition = domain(e.head)
     if condition is None:
         return None
-    parameters = [kind(name) for kind, name in zip(e.head.kind.inputs, e.head.names)]
-    return _replace(condition, dict(zip(parameters, e.args)))
+    parameters = [p for p in e.head.params if isinstance(p, Expr)]
+    return _replace(condition, {p: getattr(e, p.name) for p in parameters})
 
 
 def _replace(e, replacements):

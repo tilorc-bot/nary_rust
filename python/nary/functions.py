@@ -18,7 +18,7 @@ The arguments of a lambda are its variables and then its body.
     ((x,), Mul(x, x), True)
 """
 
-from ._core import Expr, FunctionKind, Symbol
+from ._core import Bound, Expr, FunctionKind
 from .domains import declare_function
 from .logic import true
 
@@ -30,10 +30,11 @@ _lambda_functions = {}
 def _lambda_function(variable_kinds, body_kind):
     key = (*variable_kinds, body_kind)
     if key not in _lambda_functions:
+        variables = (Bound(kind(f"variable{i}")) for i, kind in enumerate(variable_kinds, 1))
         _lambda_functions[key] = declare_function(
             "Lambda",
-            *(Symbol(kind) for kind in variable_kinds),
-            body_kind,
+            *variables,
+            body_kind("expr"),
             returns=FunctionKind(variable_kinds, body_kind),
             domain=true,
         )

@@ -38,7 +38,7 @@ def test_refused():
         to_lean(Integral(nr.sin, 0, x))
     with pytest.raises(ValueError, match="^Trace has no Lean definition"):
         to_lean(Trace(Matrix("A")) + 1)
-    other_sin = nr.declare_function("sin", nr.NumberKind, returns=nr.NumberKind, domain=true)
+    other_sin = nr.declare_function("sin", x, returns=nr.NumberKind, domain=true)
     with pytest.raises(ValueError, match="^sin has no Lean definition"):
         to_lean(other_sin(x))
     with pytest.raises(ValueError, match="only a Lambda of one NumberKind variable"):

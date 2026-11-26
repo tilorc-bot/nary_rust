@@ -47,7 +47,7 @@ def test_refusals():
     with pytest.raises(ValueError, match="already recorded as unordered"):
         unordered(Add)
     with pytest.raises(ValueError, match="arguments all have one kind"):
-        unordered(declare_function("Pair", NumberKind, BoolKind, returns=NumberKind, domain=true))
+        unordered(declare_function("Pair", NumberKind("left"), BoolKind("right"), returns=NumberKind, domain=true))
     with pytest.raises(ValueError, match="flat needs a function taking any number"):
         flat(Pow)
     with pytest.raises(TypeError, match="expects a declared function, got a"):

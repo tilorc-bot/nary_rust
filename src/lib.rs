@@ -21,8 +21,31 @@ struct KindData {
 
 struct Signature {
     inputs: Box<[KindRef]>,
-    rest: Option<KindRef>,
+    run: Option<usize>,
     output: KindRef,
+}
+
+impl Signature {
+    fn fits(&self, given: usize) -> bool {
+        match self.run {
+            Some(_) => given + 1 >= self.inputs.len(),
+            None => given == self.inputs.len(),
+        }
+    }
+
+    fn positions(&self, slot: usize, given: usize) -> std::ops::Range<usize> {
+        match self.run {
+            Some(run) if slot >= run => {
+                let taken = given + 1 - self.inputs.len();
+                if slot == run {
+                    run..run + taken
+                } else {
+                    slot + taken - 1..slot + taken
+                }
+            }
+            _ => slot..slot + 1,
+        }
+    }
 }
 
 type KindRef = &'static KindData;
@@ -145,15 +168,18 @@ impl Kind {
 
     #[getter]
     fn inputs<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyTuple>>> {
-        self.data.signature.as_ref().map(|sig| kind_tuple(py, &sig.inputs)).transpose()
-    }
-
-    #[getter]
-    fn rest(&self, py: Python<'_>) -> PyResult<Option<Py<Kind>>> {
-        match &self.data.signature {
-            Some(Signature { rest: Some(rest), .. }) => Ok(Some(kind_object(py, rest)?)),
-            _ => Ok(None),
+        let Some(sig) = &self.data.signature else {
+            return Ok(None);
+        };
+        let mut inputs = Vec::with_capacity(sig.inputs.len());
+        for (slot, &kind) in sig.inputs.iter().enumerate() {
+            let mut input = kind_object(py, kind)?.into_any();
+            if sig.run == Some(slot) {
+                input = Py::new(py, Many { of: input })?.into_any();
+            }
+            inputs.push(input);
         }
+        PyTuple::new(py, inputs).map(Some)
     }
 
     #[getter]
@@ -211,27 +237,31 @@ fn declare_kind(
 static FUNCTION_KINDS: LazyLock<Mutex<HashMap<Box<[usize]>, KindRef>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-fn function_kind_name(inputs: &[KindRef], rest: Option<KindRef>, output: KindRef) -> String {
-    let names: Vec<&str> = inputs.iter().map(|kind| kind.name.as_str()).collect();
+fn function_kind_name(inputs: &[KindRef], run: Option<usize>, output: KindRef) -> String {
+    let names: Vec<String> = inputs
+        .iter()
+        .enumerate()
+        .map(|(slot, kind)| match run {
+            Some(run) if run == slot => format!("Many({})", kind.name),
+            _ => kind.name.clone(),
+        })
+        .collect();
     let inputs = match names.len() {
         1 => format!("({},)", names[0]),
         _ => format!("({})", names.join(", ")),
     };
-    match rest {
-        Some(rest) => format!("FunctionKind({inputs}, {}, rest={})", output.name, rest.name),
-        None => format!("FunctionKind({inputs}, {})", output.name),
-    }
+    format!("FunctionKind({inputs}, {})", output.name)
 }
 
 fn function_kind(
     py: Python<'_>,
     inputs: &[KindRef],
-    rest: Option<KindRef>,
+    run: Option<usize>,
     output: KindRef,
 ) -> PyResult<KindRef> {
     let mut key = Vec::with_capacity(inputs.len() + 2);
     key.push(output.id);
-    key.push(rest.map_or(usize::MAX, |kind| kind.id));
+    key.push(run.unwrap_or(usize::MAX));
     key.extend(inputs.iter().map(|kind| kind.id));
     let data = {
         // No Python code runs while the table is locked, so the lock cannot
@@ -243,10 +273,10 @@ fn function_kind(
             Some(&data) => data,
             None => {
                 let data = new_kind_data(
-                    function_kind_name(inputs, rest, output),
+                    function_kind_name(inputs, run, output),
                     None,
                     Box::new([]),
-                    Some(Signature { inputs: inputs.into(), rest, output }),
+                    Some(Signature { inputs: inputs.into(), run, output }),
                     Box::new([]),
                 );
                 table.insert(key.into_boxed_slice(), data);
@@ -261,12 +291,10 @@ fn function_kind(
 }
 
 #[pyfunction(name = "FunctionKind")]
-#[pyo3(signature = (inputs, output, rest=None))]
 fn function_kind_py(
     py: Python<'_>,
     inputs: &Bound<'_, PyAny>,
     output: &Bound<'_, PyAny>,
-    rest: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<Py<Kind>> {
     let Ok(inputs) = inputs.cast_exact::<PyTuple>() else {
         return Err(PyTypeError::new_err(format!(
@@ -275,12 +303,23 @@ fn function_kind_py(
         )));
     };
     let mut kinds = Vec::with_capacity(inputs.len());
-    for input in inputs.iter() {
-        kinds.push(expect_kind(&input)?);
+    let mut run = None;
+    for (slot, input) in inputs.iter().enumerate() {
+        match input.cast_exact::<Many>() {
+            Ok(many) => {
+                if run.replace(slot).is_some() {
+                    return Err(PyTypeError::new_err(format!(
+                        "FunctionKind: at most one input can be Many, got {}",
+                        describe(inputs)
+                    )));
+                }
+                kinds.push(expect_kind(many.get().of.bind(py))?);
+            }
+            Err(_) => kinds.push(expect_kind(&input)?),
+        }
     }
     let output = expect_kind(output)?;
-    let rest = rest.map(expect_kind).transpose()?;
-    kind_object(py, function_kind(py, &kinds, rest, output)?)
+    kind_object(py, function_kind(py, &kinds, run, output)?)
 }
 
 #[pyclass(frozen, module = "nary")]
@@ -389,25 +428,75 @@ fn expect_kind(obj: &Bound<'_, PyAny>) -> PyResult<KindRef> {
     }
 }
 
-#[pyclass(frozen, module = "nary", name = "Symbol")]
-struct SymbolMarker {
-    kind: KindRef,
+fn is_symbol(obj: &Bound<'_, PyAny>) -> bool {
+    obj.cast_exact::<Expr>().is_ok_and(|expr| expr.get().is_symbol())
+}
+
+#[pyclass(frozen, module = "nary")]
+struct Many {
+    #[pyo3(get)]
+    of: Py<PyAny>,
 }
 
 #[pymethods]
-impl SymbolMarker {
+impl Many {
     #[new]
-    fn new(kind: &Bound<'_, PyAny>) -> PyResult<Self> {
-        Ok(SymbolMarker { kind: expect_kind(kind)? })
+    fn new(of: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let kind = of.cast_exact::<Kind>().is_ok();
+        if kind || is_symbol(of) || of.cast_exact::<BoundVariable>().is_ok() {
+            return Ok(Many { of: of.clone().unbind() });
+        }
+        Err(PyTypeError::new_err(format!(
+            "Many takes a kind or a symbol, got {}",
+            describe(of)
+        )))
     }
 
-    #[getter]
-    fn kind(&self, py: Python<'_>) -> PyResult<Py<Kind>> {
-        kind_object(py, self.kind)
+    fn __eq__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<bool> {
+        match other.cast_exact::<Many>() {
+            Ok(other) => self.of.bind(py).eq(other.get().of.bind(py)),
+            Err(_) => Ok(false),
+        }
     }
 
-    fn __repr__(&self) -> String {
-        format!("Symbol({})", self.kind.name)
+    fn __hash__(&self, py: Python<'_>) -> PyResult<isize> {
+        self.of.bind(py).hash()
+    }
+
+    fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
+        Ok(format!("Many({})", self.of.bind(py).repr()?))
+    }
+}
+
+#[pyclass(frozen, module = "nary", name = "Bound")]
+struct BoundVariable {
+    #[pyo3(get)]
+    of: Py<PyAny>,
+}
+
+#[pymethods]
+impl BoundVariable {
+    #[new]
+    fn new(of: &Bound<'_, PyAny>) -> PyResult<Self> {
+        if is_symbol(of) {
+            return Ok(BoundVariable { of: of.clone().unbind() });
+        }
+        Err(PyTypeError::new_err(format!("Bound takes a symbol, got {}", describe(of))))
+    }
+
+    fn __eq__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<bool> {
+        match other.cast_exact::<BoundVariable>() {
+            Ok(other) => self.of.bind(py).eq(other.get().of.bind(py)),
+            Err(_) => Ok(false),
+        }
+    }
+
+    fn __hash__(&self, py: Python<'_>) -> PyResult<isize> {
+        self.of.bind(py).hash()
+    }
+
+    fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
+        Ok(format!("Bound({})", self.of.bind(py).repr()?))
     }
 }
 
@@ -423,7 +512,7 @@ enum Form {
     Declared {
         name: Py<PyString>,
         names: Option<Py<PyTuple>>,
-        symbols: Option<Box<[bool]>>,
+        bound: Option<Box<[bool]>>,
     },
     Apply { head: Py<Expr>, args: Py<PyTuple> },
 }
@@ -521,30 +610,14 @@ fn wrong_kind(py: Python<'_>, head: &Expr, expected: KindRef, arg: &Bound<'_, Py
     }
 }
 
-fn check_symbols(
-    py: Python<'_>,
-    head: &Expr,
-    inputs: &[KindRef],
-    symbols: &[bool],
-    args: &Bound<'_, PyTuple>,
-) -> PyResult<()> {
-    for (position, &only_symbol) in symbols.iter().enumerate() {
-        if !only_symbol {
-            continue;
-        }
-        let arg = args.get_borrowed_item(position)?;
-        if !arg.cast_exact::<Expr>().is_ok_and(|arg| arg.get().is_symbol()) {
-            let kind = &inputs[position].name;
-            return Err(PyTypeError::new_err(format!(
-                "{} expects a {} symbol, got {}: {}",
-                head.label(py)?,
-                kind,
-                kind,
-                arg.repr()?
-            )));
-        }
+fn not_a_symbol(py: Python<'_>, head: &Expr, expected: KindRef, arg: &Bound<'_, PyAny>) -> PyErr {
+    let text = (|| -> PyResult<String> {
+        Ok(format!("{} expects a {} symbol, got {}", head.label(py)?, expected.name, arg.repr()?))
+    })();
+    match text {
+        Ok(text) => PyTypeError::new_err(text),
+        Err(error) => error,
     }
-    Ok(())
 }
 
 fn apply<'py>(head: &Bound<'py, Expr>, args: &Bound<'py, PyTuple>) -> PyResult<Bound<'py, Expr>> {
@@ -557,13 +630,11 @@ fn apply<'py>(head: &Bound<'py, Expr>, args: &Bound<'py, PyTuple>) -> PyResult<B
             expr.kind.name
         )));
     };
-    let fixed = sig.inputs.len();
     let given = args.len();
-    if given < fixed || (sig.rest.is_none() && given > fixed) {
-        let expected = if sig.rest.is_some() {
-            format!("at least {}", fixed)
-        } else {
-            fixed.to_string()
+    if !sig.fits(given) {
+        let expected = match sig.run {
+            Some(_) => format!("at least {}", sig.inputs.len() - 1),
+            None => sig.inputs.len().to_string(),
         };
         return Err(PyTypeError::new_err(format!(
             "{} takes {} arguments, got {}",
@@ -572,34 +643,41 @@ fn apply<'py>(head: &Bound<'py, Expr>, args: &Bound<'py, PyTuple>) -> PyResult<B
             given
         )));
     }
+    let bound = match &expr.form {
+        Form::Declared { bound: Some(bound), .. } => Some(bound),
+        _ => None,
+    };
     let mut converted: Option<Vec<Bound<'py, PyAny>>> = None;
-    for (position, arg) in args.iter_borrowed().enumerate() {
-        let expected = match sig.inputs.get(position) {
-            Some(&kind) => kind,
-            None => sig.rest.unwrap(),
-        };
-        match arg.cast_exact::<Expr>() {
-            Ok(expr_arg) if same_kind(expr_arg.get().kind, expected) => {
-                if let Some(converted) = converted.as_mut() {
-                    converted.push(arg.to_owned());
+    let mut items = args.iter_borrowed();
+    for (slot, &expected) in sig.inputs.iter().enumerate() {
+        let only_symbol = bound.is_some_and(|bound| bound[slot]);
+        for (position, arg) in sig.positions(slot, given).zip(&mut items) {
+            match arg.cast_exact::<Expr>() {
+                Ok(expr_arg) if same_kind(expr_arg.get().kind, expected) => {
+                    if only_symbol && !expr_arg.get().is_symbol() {
+                        return Err(not_a_symbol(py, expr, expected, &arg));
+                    }
+                    if let Some(converted) = converted.as_mut() {
+                        converted.push(arg.to_owned());
+                    }
                 }
+                Err(_) if expected.accepts(&arg) => {
+                    if only_symbol {
+                        return Err(not_a_symbol(py, expr, expected, &arg));
+                    }
+                    let node = literal(expected, &arg)?.into_any();
+                    converted
+                        .get_or_insert_with(|| args.iter().take(position).collect())
+                        .push(node);
+                }
+                _ => return Err(wrong_kind(py, expr, expected, &arg)),
             }
-            Err(_) if expected.accepts(&arg) => {
-                let node = literal(expected, &arg)?.into_any();
-                converted
-                    .get_or_insert_with(|| args.iter().take(position).collect())
-                    .push(node);
-            }
-            _ => return Err(wrong_kind(py, expr, expected, &arg)),
         }
     }
     let args = match converted {
         Some(converted) => PyTuple::new(py, converted)?,
         None => args.clone(),
     };
-    if let Form::Declared { symbols: Some(symbols), .. } = &expr.form {
-        check_symbols(py, expr, &sig.inputs, symbols, &args)?;
-    }
     Bound::new(
         py,
         Expr {
@@ -742,26 +820,23 @@ impl Expr {
     }
 
     #[getter]
-    fn names<'py>(&self, py: Python<'py>) -> Bound<'py, PyTuple> {
-        match &self.form {
-            Form::Declared { names: Some(names), .. } => names.bind(py).clone(),
-            _ => PyTuple::empty(py),
-        }
-    }
-
-    #[getter]
     fn params<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyTuple>>> {
-        let (Form::Declared { symbols, .. }, Some(sig)) = (&self.form, &self.kind.signature) else {
+        let (Form::Declared { names: Some(names), bound, .. }, Some(sig)) =
+            (&self.form, &self.kind.signature)
+        else {
             return Ok(None);
         };
         let mut params = Vec::with_capacity(sig.inputs.len());
-        for (position, &kind) in sig.inputs.iter().enumerate() {
-            let only_symbol = symbols.as_ref().is_some_and(|symbols| symbols[position]);
-            params.push(if only_symbol {
-                Bound::new(py, SymbolMarker { kind })?.into_any()
-            } else {
-                kind_object(py, kind)?.into_bound(py).into_any()
-            });
+        for (slot, (&kind, name)) in sig.inputs.iter().zip(names.bind(py).iter()).enumerate() {
+            let name = name.cast_into::<PyString>()?.unbind();
+            let mut param = Py::new(py, Expr { kind, form: Form::Symbol { name } })?.into_any();
+            if bound.as_ref().is_some_and(|bound| bound[slot]) {
+                param = Py::new(py, BoundVariable { of: param })?.into_any();
+            }
+            if sig.run == Some(slot) {
+                param = Py::new(py, Many { of: param })?.into_any();
+            }
+            params.push(param);
         }
         PyTuple::new(py, params).map(Some)
     }
@@ -893,10 +968,19 @@ impl Expr {
 
     fn __getattr__(&self, py: Python<'_>, name: &Bound<'_, PyString>) -> PyResult<Py<PyAny>> {
         if let Form::Apply { head, args } = &self.form {
-            if let Form::Declared { names: Some(names), .. } = &head.get().form {
-                for (index, declared) in names.bind(py).iter().enumerate() {
+            let head = head.get();
+            if let (Form::Declared { names: Some(names), .. }, Some(sig)) =
+                (&head.form, &head.kind.signature)
+            {
+                for (slot, declared) in names.bind(py).iter().enumerate() {
                     if declared.eq(name)? {
-                        return Ok(args.bind(py).get_item(index)?.unbind());
+                        let args = args.bind(py);
+                        let positions = sig.positions(slot, args.len());
+                        return Ok(if sig.run == Some(slot) {
+                            args.get_slice(positions.start, positions.end).into_any().unbind()
+                        } else {
+                            args.get_item(positions.start)?.unbind()
+                        });
                     }
                 }
             }
@@ -907,16 +991,44 @@ impl Expr {
     }
 }
 
+struct Parameter<'py> {
+    kind: KindRef,
+    name: Bound<'py, PyString>,
+    run: bool,
+    bound: bool,
+}
+
+fn parameter<'py>(function: &str, param: &Bound<'py, PyAny>) -> PyResult<Parameter<'py>> {
+    let py = param.py();
+    let (inner, run) = match param.cast_exact::<Many>() {
+        Ok(many) => (many.get().of.bind(py).clone(), true),
+        Err(_) => (param.clone(), false),
+    };
+    let (inner, bound) = match inner.cast_exact::<BoundVariable>() {
+        Ok(marker) => (marker.get().of.bind(py).clone(), true),
+        Err(_) => (inner, false),
+    };
+    if let Ok(symbol) = inner.cast_exact::<Expr>() {
+        if let Form::Symbol { name } = &symbol.get().form {
+            let name = name.bind(py).clone();
+            return Ok(Parameter { kind: symbol.get().kind, name, run, bound });
+        }
+    }
+    Err(PyTypeError::new_err(format!(
+        "{function}: a parameter must be a symbol, such as NumberKind(\"x\"), got {}",
+        describe(param)
+    )))
+}
+
 #[pyfunction]
-#[pyo3(signature = (name, *arg_kinds, rest=None, returns, names=None))]
+#[pyo3(signature = (name, *params, returns))]
 fn declare_function<'py>(
     py: Python<'py>,
     name: Py<PyString>,
-    arg_kinds: &Bound<'py, PyTuple>,
-    rest: Option<&Bound<'py, PyAny>>,
+    params: &Bound<'py, PyTuple>,
     returns: &Bound<'py, PyAny>,
-    names: Option<Py<PyTuple>>,
 ) -> PyResult<Bound<'py, Expr>> {
+    let function = name.bind(py).to_string();
     let returns = match returns.cast_exact::<Kind>() {
         Ok(kind) => kind.get().data,
         Err(_) => {
@@ -926,34 +1038,38 @@ fn declare_function<'py>(
             )));
         }
     };
-    let mut kinds = Vec::with_capacity(arg_kinds.len());
-    let mut symbols = Vec::with_capacity(arg_kinds.len());
-    for param in arg_kinds.iter() {
-        match param.cast_exact::<SymbolMarker>() {
-            Ok(marker) => {
-                kinds.push(marker.get().kind);
-                symbols.push(true);
-            }
-            Err(_) => {
-                kinds.push(expect_kind(&param)?);
-                symbols.push(false);
-            }
-        }
-    }
-    let symbols = symbols.contains(&true).then(|| symbols.into_boxed_slice());
-    let rest = rest.map(expect_kind).transpose()?;
-    let names = match names {
-        Some(names) if names.bind(py).len() > kinds.len() => {
+    let mut kinds = Vec::with_capacity(params.len());
+    let mut names: Vec<Bound<'py, PyString>> = Vec::with_capacity(params.len());
+    let mut bound = Vec::with_capacity(params.len());
+    let mut run = None;
+    for (slot, param) in params.iter().enumerate() {
+        let param = parameter(&function, &param)?;
+        let param_name = param.name;
+        if py.get_type::<Expr>().hasattr(&param_name)? {
             return Err(PyValueError::new_err(format!(
-                "{}: more names than declared arguments",
-                name.bind(py)
+                "{function}: the parameter name {param_name} clashes with the attribute \
+                 Expr.{param_name}"
             )));
         }
-        Some(names) if names.bind(py).is_empty() => None,
-        other => other,
-    };
-    let kind = function_kind(py, &kinds, rest, returns)?;
-    Bound::new(py, Expr { kind, form: Form::Declared { name, names, symbols } })
+        if names.iter().any(|earlier| earlier.as_any().eq(&param_name).is_ok_and(|same| same)) {
+            return Err(PyValueError::new_err(format!(
+                "{function} has two parameters named {param_name}"
+            )));
+        }
+        if param.run && run.replace(slot).is_some() {
+            return Err(PyTypeError::new_err(format!(
+                "{function}: at most one parameter can be Many, got {}",
+                describe(params)
+            )));
+        }
+        kinds.push(param.kind);
+        names.push(param_name);
+        bound.push(param.bound);
+    }
+    let bound = bound.contains(&true).then(|| bound.into_boxed_slice());
+    let names = Some(PyTuple::new(py, names)?.unbind());
+    let kind = function_kind(py, &kinds, run, returns)?;
+    Bound::new(py, Expr { kind, form: Form::Declared { name, names, bound } })
 }
 
 #[pyfunction]
@@ -963,7 +1079,7 @@ fn declare_constant<'py>(
     kind: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, Expr>> {
     let kind = expect_kind(kind)?;
-    Bound::new(py, Expr { kind, form: Form::Declared { name, names: None, symbols: None } })
+    Bound::new(py, Expr { kind, form: Form::Declared { name, names: None, bound: None } })
 }
 
 #[pyfunction]
@@ -1002,7 +1118,8 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Expr>()?;
     m.add_class::<Kind>()?;
     m.add_class::<KindFamily>()?;
-    m.add_class::<SymbolMarker>()?;
+    m.add_class::<Many>()?;
+    m.add_class::<BoundVariable>()?;
     m.add_function(wrap_pyfunction!(declare_kind, m)?)?;
     m.add_function(wrap_pyfunction!(declare_kind_family, m)?)?;
     m.add_function(wrap_pyfunction!(function_kind_py, m)?)?;

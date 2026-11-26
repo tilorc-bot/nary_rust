@@ -3,7 +3,7 @@ import threading
 import nary as nr
 import pytest
 from nary import (
-    BoolKind, Expr, Kind, KindFamily, NumberKind, declare_function, declare_kind,
+    BoolKind, Expr, Kind, KindFamily, Many, NumberKind, declare_function, declare_kind,
     declare_kind_family, set_operator,
 )
 from nary.logic import true
@@ -103,9 +103,9 @@ def test_an_instantiated_kind_in_signatures():
     assert repr(p) == "Piece(x, Lt(x, y))"
     assert (p.expr, p.condition) == (x, x < y)
     Matrix = MatrixKind(NumberKind)
-    MatAdd = declare_function("MatAdd", rest=Matrix, returns=Matrix, domain=true)
-    Trace = declare_function("Trace", Matrix, returns=NumberKind, domain=true)
-    First = declare_function("First", Pair, returns=NumberKind, domain=true)
+    MatAdd = declare_function("MatAdd", Many(Matrix("terms")), returns=Matrix, domain=true)
+    Trace = declare_function("Trace", Matrix("arg"), returns=NumberKind, domain=true)
+    First = declare_function("First", Pair("arg"), returns=NumberKind, domain=true)
     A, B = Matrix("A"), Matrix("B")
     assert MatAdd(A, B).kind is Matrix
     assert Trace(MatAdd(A, B)).kind is NumberKind
@@ -116,21 +116,22 @@ def test_an_instantiated_kind_in_signatures():
 
 def test_a_function_shows_what_was_declared():
     Matrix = MatrixKind(NumberKind)
-    MatAdd = declare_function("MatAdd", Matrix, rest=Matrix, returns=Matrix, domain=true)
+    first, rest = Matrix("first"), Matrix("rest")
+    MatAdd = declare_function("MatAdd", first, Many(rest), returns=Matrix, domain=true)
     assert MatAdd.name == "MatAdd"
-    assert len(MatAdd.kind.inputs) == 1 and MatAdd.kind.inputs[0] is Matrix
-    assert MatAdd.kind.rest is Matrix and MatAdd.kind.output is Matrix
-    assert MatAdd.names == ()
-    assert Piece.kind.inputs == (NumberKind, BoolKind) and Piece.kind.rest is None
-    assert Piece.kind.output is Pair and Piece.names == ("expr", "condition")
-    assert nr.Add.kind.inputs == () and nr.Add.kind.rest is NumberKind
+    assert MatAdd.kind.inputs == (Matrix, Many(Matrix)) and MatAdd.kind.inputs[0] is Matrix
+    assert MatAdd.kind.output is Matrix
+    assert MatAdd.params == (first, Many(rest))
+    assert Piece.kind.inputs == (NumberKind, BoolKind)
+    assert Piece.kind.output is Pair and Piece.params == (NumberKind("expr"), BoolKind("condition"))
+    assert nr.Add.kind.inputs == (Many(NumberKind),)
     with pytest.raises(AttributeError):
-        Piece.names = ()
+        Piece.params = ()
 
 
 def test_an_instantiated_kind_is_checked():
     Matrix = MatrixKind(NumberKind)
-    Trace = declare_function("Trace", Matrix, returns=NumberKind, domain=true)
+    Trace = declare_function("Trace", Matrix("arg"), returns=NumberKind, domain=true)
     with pytest.raises(TypeError, match=r"^Trace expects MatrixKind\(NumberKind\), got MatrixKind\(BoolKind\): P$"):
         Trace(MatrixKind(BoolKind)("P"))
     with pytest.raises(TypeError, match=r"^Trace expects MatrixKind\(NumberKind\), got NumberKind: x$"):
@@ -142,13 +143,13 @@ def test_an_instantiated_kind_is_checked():
 
 
 def test_the_result_kind_is_the_declared_one():
-    Wrap = declare_function("Wrap", rest=MatrixKind(NumberKind), returns=Pair, domain=true)
+    Wrap = declare_function("Wrap", Many(MatrixKind(NumberKind)("parts")), returns=Pair, domain=true)
     assert Wrap(MatrixKind(NumberKind)("A")).kind is Pair
 
 
 def test_an_instantiated_kind_has_its_own_operators():
     Matrix = MatrixKind(declare_kind("Scalar"))
-    MatMul = declare_function("MatMul", rest=Matrix, returns=Matrix, domain=true)
+    MatMul = declare_function("MatMul", Many(Matrix("factors")), returns=Matrix, domain=true)
     set_operator(Matrix, "*", MatMul)
     A, B = Matrix("A"), MatrixKind(Matrix.params[0])("B")
     assert repr(A * B) == "MatMul(A, B)"
@@ -212,10 +213,10 @@ def test_a_parameter_must_be_a_kind():
 
 
 def test_a_family_is_not_a_kind():
-    with pytest.raises(TypeError, match=r"^expected a kind, got <kind family TupleKind>$"):
+    with pytest.raises(TypeError, match=r"^f: a parameter must be a symbol, .*, got <kind family TupleKind>$"):
         declare_function("f", TupleKind, returns=NumberKind, domain=true)
     with pytest.raises(ValueError, match=r"^returns must be a kind, got <kind family TupleKind>$"):
-        declare_function("f", NumberKind, returns=TupleKind, domain=true)
+        declare_function("f", NumberKind("x"), returns=TupleKind, domain=true)
     with pytest.raises(TypeError, match=r"^expected a kind, got <kind family TupleKind>$"):
         set_operator(TupleKind, "+", nr.Add)
 

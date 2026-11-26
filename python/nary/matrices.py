@@ -20,7 +20,7 @@ A number is not accepted where a matrix is expected.
     TypeError: Determinant expects MatrixKind(NumberKind), got NumberKind: x
 """
 
-from ._core import declare_kind_family, set_operator
+from ._core import Many, declare_kind_family, set_operator
 from .domains import declare_function
 from .kinds import NumberKind
 
@@ -33,12 +33,14 @@ MatrixKind = declare_kind_family("MatrixKind", params=1)
 
 Matrix = MatrixKind(NumberKind)
 
-MatAdd = declare_function("MatAdd", rest=Matrix, returns=Matrix, domain=None)
-MatMul = declare_function("MatMul", rest=Matrix, returns=Matrix, domain=None)
-Transpose = declare_function("Transpose", Matrix, returns=Matrix, domain=None)
-Inverse = declare_function("Inverse", Matrix, returns=Matrix, domain=None)
-Determinant = declare_function("Determinant", Matrix, returns=NumberKind, domain=None)
-Trace = declare_function("Trace", Matrix, returns=NumberKind, domain=None)
+terms, factors, arg = Matrix("terms"), Matrix("factors"), Matrix("arg")
+
+MatAdd = declare_function("MatAdd", Many(terms), returns=Matrix, domain=None)
+MatMul = declare_function("MatMul", Many(factors), returns=Matrix, domain=None)
+Transpose = declare_function("Transpose", arg, returns=Matrix, domain=None)
+Inverse = declare_function("Inverse", arg, returns=Matrix, domain=None)
+Determinant = declare_function("Determinant", arg, returns=NumberKind, domain=None)
+Trace = declare_function("Trace", arg, returns=NumberKind, domain=None)
 
 set_operator(Matrix, "+", MatAdd)
 set_operator(Matrix, "*", MatMul)

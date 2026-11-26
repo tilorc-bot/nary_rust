@@ -5,10 +5,10 @@ from .relational import Ne
 
 __all__ = ["cos", "exp", "log", "sin", "tan"]
 
-x = NumberKind("x")
+arg = NumberKind("arg")
 
-sin = declare_function("sin", x, returns=NumberKind, domain=true)
-cos = declare_function("cos", x, returns=NumberKind, domain=true)
-tan = declare_function("tan", x, returns=NumberKind, domain=Ne(cos(x), 0))
-exp = declare_function("exp", x, returns=NumberKind, domain=true)
-log = declare_function("log", x, returns=NumberKind, domain=Ne(x, 0))
+sin = declare_function("sin", arg, returns=NumberKind, domain=true)
+cos = declare_function("cos", arg, returns=NumberKind, domain=true)
+tan = declare_function("tan", arg, returns=NumberKind, domain=Ne(cos(arg), 0))
+exp = declare_function("exp", arg, returns=NumberKind, domain=true)
+log = declare_function("log", arg, returns=NumberKind, domain=Ne(arg, 0))

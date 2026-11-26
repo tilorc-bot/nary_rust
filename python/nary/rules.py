@@ -32,7 +32,7 @@ Every symbol of the replacement must be in the pattern.
 
 """
 
-from ._core import Expr, Kind
+from ._core import Expr, Many
 from .functions import is_lambda
 from .kinds import BoolKind
 
@@ -147,13 +147,13 @@ def _check_declared_function(caller, f):
 
 def unordered(f):
     _check_declared_function("unordered", f)
-    positions = f.params + ((f.kind.rest,) if f.kind.rest is not None else ())
-    if not positions or not all(isinstance(p, Kind) for p in positions):
+    positions = [p.of if isinstance(p, Many) else p for p in f.params or ()]
+    if not positions or not all(isinstance(p, Expr) for p in positions):
         raise ValueError(
             f"unordered needs a function whose arguments can be reordered, got {f!r} "
-            f"declared with {f.params!r}, rest={f.kind.rest!r}"
+            f"declared with {f.params!r}"
         )
-    if len(set(positions)) != 1:
+    if len({p.kind for p in positions}) != 1:
         raise ValueError(
             f"unordered needs a function whose arguments all have one kind, got {f!r} "
             f"of kind {f.kind!r}"
@@ -165,7 +165,7 @@ def unordered(f):
 
 def flat(f):
     _check_declared_function("flat", f)
-    if f.kind.inputs or f.kind.rest is not f.kind.output:
+    if f.kind.inputs != (Many(f.kind.output),):
         raise ValueError(
             f"flat needs a function taking any number of arguments of the kind it "
             f"returns, and no others, got {f!r} of kind {f.kind!r}"

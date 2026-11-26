@@ -1,10 +1,11 @@
 from . import arithmetic, constants, elementary, functions, kinds, relational
 from ._core import (
+    Bound,
     Expr,
     FunctionKind,
     Kind,
     KindFamily,
-    Symbol,
+    Many,
     declare_constant,
     declare_kind,
     declare_kind_family,
@@ -19,7 +20,7 @@ from .kinds import *  # noqa: F403
 from .relational import *  # noqa: F403
 
 __all__ = [
-    "Expr", "FunctionKind", "Kind", "KindFamily", "Symbol",
+    "Bound", "Expr", "FunctionKind", "Kind", "KindFamily", "Many",
     "declare_constant", "declare_function", "declare_kind", "declare_kind_family",
     "set_operator",
     *kinds.__all__,

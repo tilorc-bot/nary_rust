@@ -26,7 +26,7 @@ def test_a_constant_is_accepted_where_its_kind_is_expected():
 
 
 def test_a_constant_cannot_be_bound_by_lambda():
-    with pytest.raises(TypeError, match=r"^Lambda expects a NumberKind symbol, got NumberKind: pi$"):
+    with pytest.raises(TypeError, match=r"^Lambda expects a NumberKind symbol, got pi$"):
         Lambda(pi, x)
 
 

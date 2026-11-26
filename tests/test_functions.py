@@ -4,11 +4,12 @@ import nary as nr
 import pytest
 from nary import (
     BoolKind,
+    Bound,
     Expr,
     FunctionKind,
     Lambda,
+    Many,
     NumberKind,
-    Symbol,
     declare_function,
     is_lambda,
 )
@@ -19,29 +20,39 @@ p = BoolKind("p")
 NumToNum = FunctionKind((NumberKind,), NumberKind)
 f = NumToNum("f")
 Apply = declare_function("Apply", NumToNum("fn"), NumberKind("point"), returns=NumberKind, domain=true)
-Derivative = declare_function("Derivative", NumberKind, Symbol(NumberKind), returns=NumberKind, domain=true)
+expr, variable = NumberKind("expr"), NumberKind("variable")
+Derivative = declare_function("Derivative", expr, Bound(variable), returns=NumberKind, domain=true)
 
 
 def test_a_declared_function_is_an_expression_of_a_function_kind():
     assert type(nr.sin) is Expr
     assert nr.sin.kind is NumToNum
     assert nr.Eq.kind is FunctionKind((NumberKind, NumberKind), BoolKind)
-    assert (NumToNum.inputs, NumToNum.rest, NumToNum.output) == ((NumberKind,), None, NumberKind)
+    assert (NumToNum.inputs, NumToNum.output) == ((NumberKind,), NumberKind)
     assert (nr.sin.name, nr.sin.head, nr.sin.args, nr.sin.is_symbol) == ("sin", None, (), False)
     assert repr(nr.sin) == "sin"
-    assert repr(FunctionKind((), NumberKind, rest=NumberKind)) == "FunctionKind((), NumberKind, rest=NumberKind)"
+    assert repr(FunctionKind((Many(NumberKind),), NumberKind)) == "FunctionKind((Many(NumberKind),), NumberKind)"
     assert NumberKind.inputs is None and NumberKind.output is None
 
 
 def test_function_kinds_are_compared_by_identity_and_nest():
     assert FunctionKind((NumberKind,), NumberKind) is NumToNum
     assert FunctionKind((NumberKind,), BoolKind) is not NumToNum
-    assert FunctionKind((), NumberKind, rest=NumberKind) is not FunctionKind((), NumberKind)
+    assert FunctionKind((Many(NumberKind),), NumberKind) is not FunctionKind((NumberKind,), NumberKind)
+    assert FunctionKind((NumberKind, Many(NumberKind)), NumberKind) is not FunctionKind((Many(NumberKind), NumberKind), NumberKind)
+    for kind in (nr.Add.kind, nr.Pow.kind, FunctionKind((NumberKind, Many(BoolKind), NumberKind), BoolKind)):
+        assert FunctionKind(kind.inputs, kind.output) is kind
     higher = FunctionKind((NumToNum,), NumToNum)
     assert higher.inputs[0] is NumToNum and higher.output is NumToNum
     assert nr.declare_kind_family("Box", params=1)(NumToNum).params == (NumToNum,)
     with pytest.raises(TypeError, match="^FunctionKind: inputs must be a tuple of kinds, got NumberKind$"):
         FunctionKind(NumberKind, NumberKind)
+    with pytest.raises(TypeError, match=r"^FunctionKind: at most one input can be Many, got \(Many\(NumberKind\), Many\(BoolKind\)\)$"):
+        FunctionKind((Many(NumberKind), Many(BoolKind)), NumberKind)
+    with pytest.raises(TypeError, match="^expected a kind, got x$"):
+        FunctionKind((Many(x),), NumberKind)
+    with pytest.raises(TypeError, match="^Many takes a kind or a symbol, got 1$"):
+        Many(1)
 
 
 def test_declared_and_unknown_functions_can_be_passed_and_applied():
@@ -68,36 +79,54 @@ def test_wrong_kind_wrong_count_and_calling_a_non_function():
         (x + y)(y)
 
 
-def test_rest_functions():
-    Max = declare_function("Max", NumberKind, rest=NumberKind, returns=NumberKind, domain=true)
-    assert Max.kind is FunctionKind((NumberKind,), NumberKind, rest=NumberKind)
+def test_a_run_takes_any_number_of_arguments_and_may_sit_anywhere():
+    first, rest = NumberKind("first"), NumberKind("rest")
+    Max = declare_function("Max", first, Many(rest), returns=NumberKind, domain=true)
+    assert Max.kind is FunctionKind((NumberKind, Many(NumberKind)), NumberKind)
     assert repr(Max(x, y, x)) == "Max(x, y, x)"
+    assert (Max(x, y, 1).first, Max(x, y, 1).rest, Max(x).rest) == (x, (y, NumberKind(1)), ())
     with pytest.raises(TypeError, match=r"^Max takes at least 1 arguments, got 0$"):
         Max()
     with pytest.raises(TypeError, match=r"^Max expects NumberKind, got BoolKind: p$"):
         Max(x, p)
+    conditions, result = BoolKind("conditions"), NumberKind("result")
+    Guard = declare_function("Guard", Many(conditions), result, returns=NumberKind, domain=true)
+    g = Guard(x < y, p, 1)
+    assert (g.conditions, g.result, Guard(x).conditions) == ((x < y, p), NumberKind(1), ())
+    with pytest.raises(TypeError, match=r"^Guard expects NumberKind, got BoolKind: p$"):
+        Guard(p, p)
+    with pytest.raises(TypeError, match=r"^Guard expects BoolKind, got NumberKind: x$"):
+        Guard(x, p, x)
 
 
 def test_two_declarations_with_the_same_name_are_different():
-    a = declare_function("a", NumberKind, returns=NumberKind, domain=true)
-    b = declare_function("a", NumberKind, returns=NumberKind, domain=true)
+    a = declare_function("a", x, returns=NumberKind, domain=true)
+    b = declare_function("a", x, returns=NumberKind, domain=true)
     assert a.kind is b.kind
     assert a != b and a == a
     assert a(x) != b(x) and a(x) == a(x)
     assert repr(a(x)) == repr(b(x)) == "a(x)"
 
 
-def test_symbol_positions():
+def test_bound_positions():
     assert Derivative.kind is FunctionKind((NumberKind, NumberKind), NumberKind)
-    assert Derivative.kind.inputs == (NumberKind, NumberKind)
-    assert repr(Derivative.params) == "(NumberKind, Symbol(NumberKind))"
-    assert Derivative.params[1].kind is NumberKind
-    assert nr.sin.params == (NumberKind,) and x.params is None
+    assert Derivative.params == (expr, Bound(variable))
+    assert repr(Derivative.params) == "(expr, Bound(variable))"
+    assert Derivative.params[1].of == variable and Bound(variable) != variable
+    assert nr.sin.params == (NumberKind("arg"),) and x.params is None
     assert repr(Derivative(nr.sin(x), x)) == "Derivative(sin(x), x)"
-    with pytest.raises(TypeError, match=r"^Derivative expects a NumberKind symbol, got NumberKind: sin\(x\)$"):
+    with pytest.raises(TypeError, match=r"^Derivative expects a NumberKind symbol, got sin\(x\)$"):
         Derivative(x, nr.sin(x))
     with pytest.raises(TypeError, match=r"^Derivative expects NumberKind, got BoolKind: p$"):
         Derivative(x, p)
+    variables = NumberKind("variables")
+    D = declare_function("D", expr, Many(Bound(variables)), returns=NumberKind, domain=true)
+    assert D.params == (expr, Many(Bound(variables)))
+    assert D(x * y, x, y).variables == (x, y)
+    with pytest.raises(TypeError, match=r"^D expects a NumberKind symbol, got Add\(x, y\)$"):
+        D(x, y, x + y)
+    with pytest.raises(TypeError, match="^Bound takes a symbol, got NumberKind$"):
+        Bound(NumberKind)
     unknown = Derivative.kind("unknown")
     assert repr(unknown(x, nr.sin(x))) == "unknown(x, sin(x))"
 
@@ -106,7 +135,8 @@ def test_lambda_is_an_application_of_a_function_named_lambda():
     one = Lambda(x, nr.sin(x))
     assert is_lambda(one) and one.kind is NumToNum
     assert one.args == (x, nr.sin(x)) and one.head.name == "Lambda"
-    assert repr(one.head.params) == "(Symbol(NumberKind), NumberKind)"
+    assert repr(one.head.params) == "(Bound(variable1), expr)"
+    assert one.expr == nr.sin(x) and one.variable1 == x
     assert repr(one) == "Lambda(x, sin(x))"
     two = Lambda((x, y), x < y)
     assert two.kind is FunctionKind((NumberKind, NumberKind), BoolKind)
@@ -118,7 +148,7 @@ def test_lambda_is_an_application_of_a_function_named_lambda():
 
 
 def test_lambda_errors():
-    with pytest.raises(TypeError, match=r"^Lambda expects a NumberKind symbol, got NumberKind: Add\(x, y\)$"):
+    with pytest.raises(TypeError, match=r"^Lambda expects a NumberKind symbol, got Add\(x, y\)$"):
         Lambda(x + y, x)
     with pytest.raises(TypeError, match=r"^Lambda expects a FunctionKind\(\(NumberKind,\), NumberKind\) symbol, "):
         Lambda(nr.sin, x)
@@ -161,11 +191,31 @@ def test_equality_and_hash_across_forms():
 def test_named_arguments_come_from_the_head():
     a = Apply(nr.sin, x)
     assert (a.fn, a.point) == (nr.sin, x)
-    assert nr.Eq(x, y).lhs == x
-    assert Apply.names == ("fn", "point") and nr.sin.names == ("x",)
-    assert Derivative.names == ()
+    assert nr.Eq(x, y).lhs == x and nr.sin(y).arg == y
+    assert nr.Add(x, y, 1).terms == (x, y, NumberKind(1)) and nr.Mul().factors == ()
+    assert Apply.params == (NumToNum("fn"), NumberKind("point"))
+    assert Derivative(x, y).variable == y
     with pytest.raises(AttributeError):
         f(x).lhs
+
+
+def test_every_parameter_is_a_named_symbol():
+    with pytest.raises(TypeError, match=r'^f: a parameter must be a symbol, such as NumberKind\("x"\), got NumberKind$'):
+        declare_function("f", NumberKind, returns=NumberKind, domain=true)
+    for not_a_symbol in (x + 1, nr.sin, 1, Many(NumberKind)):
+        with pytest.raises(TypeError, match="^f: a parameter must be a symbol"):
+            declare_function("f", not_a_symbol, returns=NumberKind, domain=true)
+    with pytest.raises(TypeError, match=r"^f: at most one parameter can be Many, got \(Many\(x\), Many\(y\)\)$"):
+        declare_function("f", Many(x), Many(y), returns=NumberKind, domain=true)
+    with pytest.raises(ValueError, match="^f has two parameters named x$"):
+        declare_function("f", x, Many(BoolKind("x")), returns=NumberKind, domain=true)
+
+
+def test_a_parameter_name_cannot_hide_an_attribute_of_an_expression():
+    for attribute in ("kind", "args", "value", "head", "name", "params", "is_symbol", "__class__"):
+        with pytest.raises(ValueError, match=f"^f: the parameter name {attribute} clashes with the attribute Expr.{attribute}$"):
+            declare_function("f", NumberKind(attribute), returns=NumberKind, domain=true)
+    assert declare_function("f", NumberKind("names"), returns=NumberKind, domain=true)(x).names == x
 
 
 def test_set_operator_takes_any_expression_of_a_function_kind():
@@ -185,7 +235,7 @@ def test_the_same_function_kind_from_many_threads():
 
     def make():
         barrier.wait()
-        made.append([FunctionKind((Fresh, NumberKind), Fresh, rest=Fresh) for _ in range(200)])
+        made.append([FunctionKind((Fresh, NumberKind, Many(Fresh)), Fresh) for _ in range(200)])
 
     threads = [threading.Thread(target=make) for _ in range(8)]
     for thread in threads:
@@ -195,10 +245,10 @@ def test_the_same_function_kind_from_many_threads():
     assert len(made) == 8 and all(kind is made[0][0] for batch in made for kind in batch)
 
 
-def test_a_declared_constant_of_a_function_kind_is_a_function_without_names():
+def test_a_declared_constant_of_a_function_kind_is_a_function_without_params():
     c = nr.declare_constant("c", FunctionKind((NumberKind,), NumberKind))
     x = NumberKind("x")
-    assert c.is_constant and c.names == () and c.params == (NumberKind,)
+    assert c.is_constant and c.params is None and c.kind.inputs == (NumberKind,)
     assert repr(c(x)) == "c(x)"
 
 

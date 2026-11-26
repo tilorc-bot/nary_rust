@@ -1,6 +1,6 @@
 import nary.domains
 import pytest
-from nary import BoolKind, Eq, Lambda, Ne, NumberKind, Pow, Symbol, declare_function, log, sin, tan
+from nary import BoolKind, Bound, Eq, Lambda, Many, Ne, NumberKind, Pow, declare_function, log, sin, tan
 from nary.calculus import Derivative, Integral
 from nary.domains import domain, domain_of
 from nary.logic import true
@@ -10,8 +10,8 @@ x, y = NumberKind("x"), NumberKind("y")
 
 def test_declared_domains():
     assert domain(sin) == true
-    assert repr(domain(log)) == "Ne(x, 0)"
-    assert repr(domain(tan)) == "Ne(cos(x), 0)"
+    assert repr(domain(log)) == "Ne(arg, 0)"
+    assert repr(domain(tan)) == "Ne(cos(arg), 0)"
     assert repr(domain(nary.Lt)) == "And(Eq(re(lhs), lhs), Eq(re(rhs), rhs))"
     assert domain(Derivative) == true and domain(Lambda(x, x).head) == true
     assert domain(Integral) is None
@@ -38,10 +38,10 @@ def test_what_a_declaration_refuses():
     with pytest.raises(ValueError, match="mentions x, which is not one of its parameters"):
         declare_function("f", BoolKind("x"), returns=NumberKind, domain=Eq(x, 0))
     with pytest.raises(ValueError, match="mentions x, which is not one of its parameters"):
-        declare_function("f", NumberKind, returns=NumberKind, domain=Ne(x, 0))
+        declare_function("f", Many(x), returns=NumberKind, domain=Ne(x, 0))
+    with pytest.raises(ValueError, match="mentions x, which is not one of its parameters"):
+        declare_function("f", Bound(x), returns=NumberKind, domain=Ne(x, 0))
     with pytest.raises(ValueError, match="f has two parameters named x"):
         declare_function("f", x, BoolKind("x"), returns=NumberKind, domain=true)
-    with pytest.raises(TypeError, match="either every parameter of f is a symbol or none is"):
-        declare_function("f", x, Symbol(NumberKind), returns=NumberKind, domain=true)
     with pytest.raises(TypeError, match="domain expects a declared function, got x"):
         domain(x)

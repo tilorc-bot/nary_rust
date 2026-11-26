@@ -1,13 +1,13 @@
 import nary as nr
 import pytest
-from nary import BoolKind, Expr, Kind, NumberKind, _core, declare_function, declare_kind, set_operator
+from nary import BoolKind, Expr, Kind, Many, NumberKind, _core, declare_function, declare_kind, set_operator
 from nary.logic import true
 
 SetKind = declare_kind("SetKind")
 
-Union = declare_function("Union", rest=SetKind, returns=SetKind, domain=true)
+Union = declare_function("Union", Many(SetKind("sets")), returns=SetKind, domain=true)
 Interval = declare_function("Interval", NumberKind("start"), NumberKind("end"), returns=SetKind, domain=true)
-Contains = declare_function("Contains", NumberKind, SetKind, returns=BoolKind, domain=true)
+Contains = declare_function("Contains", NumberKind("element"), SetKind("set"), returns=BoolKind, domain=true)
 set_operator(SetKind, "+", Union)
 
 x, y = NumberKind("x"), NumberKind("y")
@@ -16,7 +16,7 @@ x, y = NumberKind("x"), NumberKind("y")
 def test_the_compiled_module_defines_no_kind_and_no_function():
     public = {name for name in dir(_core) if not name.startswith("_")}
     assert public == {
-        "Expr", "FunctionKind", "Kind", "KindFamily", "Symbol",
+        "Bound", "Expr", "FunctionKind", "Kind", "KindFamily", "Many",
         "declare_constant", "declare_function", "declare_kind", "declare_kind_family",
         "set_operator",
     }
@@ -33,7 +33,7 @@ def test_a_kind_is_an_object_declared_with_declare_kind():
 def test_every_call_of_declare_kind_makes_a_different_kind():
     a, b = declare_kind("Twin"), declare_kind("Twin")
     assert a is not b
-    f = declare_function("f", a, returns=a, domain=true)
+    f = declare_function("f", a("t"), returns=a, domain=true)
     with pytest.raises(TypeError, match=r"^f expects Twin, got Twin: t$"):
         f(b("t"))
     assert a("t") != b("t")
@@ -149,12 +149,8 @@ def test_set_operator_once_for_each_kind_and_operator():
 
 def test_only_a_kind_is_accepted_where_a_kind_is_expected():
     for not_a_kind, text in ((Expr, "<class 'nary.Expr'>"), (int, "<class 'int'>"), (x + 1, r"Add\(x, 1\)"), ("NumberKind", "'NumberKind'"), (Kind, "<class 'nary.Kind'>")):
-        with pytest.raises(TypeError, match=f"^expected a kind, got {text}$"):
-            declare_function("f", not_a_kind, returns=NumberKind, domain=true)
-        with pytest.raises(TypeError, match=f"^expected a kind, got {text}$"):
-            declare_function("f", rest=not_a_kind, returns=NumberKind, domain=true)
         with pytest.raises(ValueError, match=f"^returns must be a kind, got {text}$"):
-            declare_function("f", NumberKind, returns=not_a_kind, domain=true)
+            declare_function("f", x, returns=not_a_kind, domain=true)
         with pytest.raises(TypeError, match=f"^expected a kind, got {text}$"):
             set_operator(not_a_kind, "+", nr.Add)
 
