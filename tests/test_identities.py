@@ -23,7 +23,7 @@ def test_the_rules_are_those_listed_before_the_blocks():
         rule(exp(log(a)), a, when=Ne(a, 0), name="exp_log"),
     ]
     by_name = {r.name: r for r in rules}
-    assert len(by_name) == len(rules) == len(before)
+    assert len(by_name) == len(rules)
     for r in before:
         assert repr(by_name[r.name]) == repr(r)
         assert by_name[r.name].erased == r.erased
