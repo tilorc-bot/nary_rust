@@ -64,6 +64,10 @@ GATED = [
     (Pow(0, x), [Gt(x, 0)], Pow(0, x)),
     (Pow(Pow(x, 2), H), [Gt(x, 0)], Pow(Pow(x, 2), H)),
     (Lt(x, x + 1), [real(x)], Lt(x, Add(1, x))),
+    (Lt(y, 0), [Lt(y, 0)], Lt(y, 0)),
+    (Ge(y, 0), [Lt(y, 0)], Ge(y, 0)),
+    (Le(y, 0), [Le(y, 0)], Le(y, 0)),
+    (log(exp(y)), [Lt(y, 0)], log(exp(y))),
     (And(Lt(x, y), Ge(x, y)), [real(x), real(y)], And(Ge(x, y), Lt(x, y))),
     (Or(Lt(x, y), Ge(x, y)), [real(x), real(y)], Or(Ge(x, y), Lt(x, y))),
 ]

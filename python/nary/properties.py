@@ -25,7 +25,7 @@ from .elementary import cos, exp, log, sin
 from .functions import is_lambda
 from .kinds import NumberKind
 from .logic import And, Or, true
-from .relational import Eq, Gt, Ne, re
+from .relational import Eq, Ge, Gt, Le, Lt, Ne, re
 
 __all__ = [
     "has_value", "holds", "integer", "negative", "nonzero", "number", "positive", "rational", "real",
@@ -76,7 +76,19 @@ def holds(condition, known=()):
         return positive(args[0], known)
     if head == Eq and args[0] == re(args[1]):
         return real(args[1], known)
-    return False
+    return head in _ORDER and _known(*_ordered(condition), known)
+
+
+_ORDER = {Gt: (Gt, False), Lt: (Gt, True), Ge: (Ge, False), Le: (Ge, True)}
+
+
+def _ordered(c):
+    head, swap = _ORDER[c.head]
+    return head, c.args[::-1] if swap else c.args
+
+
+def _known(head, args, known):
+    return any(c.head in _ORDER and _ordered(c) == (head, args) for c in known)
 
 
 def has_value(e, known=()):
@@ -133,12 +145,14 @@ def nonzero(e, known=()):
 def positive(e, known=()):
     if rational(e) is not None:
         return rational(e) > 0
-    return e in (pi, E) or Gt(e, 0) in known or _decide(_POSITIVE, e, known)
+    return e in (pi, E) or _known(Gt, (e, ZERO), known) or _decide(_POSITIVE, e, known)
 
 
 def negative(e, known=()):
     if rational(e) is not None:
         return rational(e) < 0
+    if _known(Gt, (ZERO, e), known):
+        return True
     if e.head == Mul:
         signs = [negative(f, known) for f in e.args if not positive(f, known)]
         return all(signs) and len(signs) % 2 == 1
@@ -149,5 +163,7 @@ def real(e, known=()):
     if rational(e) is not None or e in (pi, E):
         return True
     if Eq(re(e), e) in known or positive(e, known) or negative(e, known):
+        return True
+    if any(c.head in _ORDER and e in c.args for c in known):
         return True
     return _decide(_REAL, e, known)

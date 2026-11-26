@@ -787,8 +787,10 @@ def _equality(head, when_zero):
     return step
 
 
-def _order(head, test):
+def _order(head, test, opposite):
     def step(args, known):
+        if holds(head(*args), known) or holds(opposite(*args), known):
+            return true if holds(head(*args), known) else false
         d = _difference(args, known)
         if not all(real(arg, known) for arg in args):
             return head(*args)
@@ -827,10 +829,10 @@ STEPS = {
     re: _re,
     Eq: _equality(Eq, when_zero=True),
     Ne: _equality(Ne, when_zero=False),
-    Lt: _order(Lt, lambda d: d < 0),
-    Gt: _order(Gt, lambda d: d > 0),
-    Le: _order(Le, lambda d: d <= 0),
-    Ge: _order(Ge, lambda d: d >= 0),
+    Lt: _order(Lt, lambda d: d < 0, Ge),
+    Gt: _order(Gt, lambda d: d > 0, Le),
+    Le: _order(Le, lambda d: d <= 0, Gt),
+    Ge: _order(Ge, lambda d: d >= 0, Lt),
     And: _lattice(And, true, false),
     Or: _lattice(Or, false, true),
 }

@@ -21,6 +21,7 @@ FUNCTIONS = {
 CONSTANTS = {pi: sympy.pi, E: sympy.E, I: sympy.I, true: sympy.true, false: sympy.false}
 BACK = {v: k for k, v in FUNCTIONS.items()}
 BACK_CONSTANTS = {v: k for k, v in CONSTANTS.items()}
+SIGNS = {nr.Lt: "negative", nr.Le: "nonpositive", nr.Ge: "nonnegative"}
 NO_VALUE = (sympy.zoo, sympy.nan, sympy.oo, -sympy.oo)
 
 
@@ -38,6 +39,8 @@ def sympy_assumptions(known):
             assumptions.setdefault(lhs.name, {})["positive"] = True
         elif c.head == nr.Eq and rhs.is_symbol and lhs == re(rhs):
             assumptions.setdefault(rhs.name, {})["real"] = True
+        elif c.head in SIGNS and lhs.is_symbol and rhs == nr.NumberKind(0):
+            assumptions.setdefault(lhs.name, {})[SIGNS[c.head]] = True
     return assumptions
 
 
