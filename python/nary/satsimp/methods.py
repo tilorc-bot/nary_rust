@@ -21,20 +21,27 @@ A step that gives a value where there was none is refused, unless strict is Fals
     >>> e = nr.cos(x) * nr.tan(x) ** 2 / nr.sin(x)
     >>> native.trigsimp(e) == e, Simplifier(strict=False).trigsimp(e)
     (True, tan(x))
+
+where runs a strict method assuming the input has a value, and returns the result with the condition it relied on.
+
+    >>> where(native.trigsimp, nr.cos(x) * nr.tan(x))
+    (sin(x), Ne(cos(x), 0))
+    >>> where(native.refine, x / x, nr.Gt(x, 0))
+    (1, true)
 """
 
 from nary import Add, Mul
 from nary.autosimp import autosimp
-from nary.logic import true
+from nary.logic import And, true
 
 from .engine import Engine, identity_handler, rule_handler
 from .measure import count_heads, trig_measure
-from .prove import conjuncts, decide, prover
+from .prove import conjuncts, decide, definedness, prover, relied
 from .rows import refine_tables, trigsimp_tables
 from .substitute import substitution_handler
 from .tables import TRIG_HEADS
 
-__all__ = ["Simplifier", "none"]
+__all__ = ["Simplifier", "none", "where"]
 
 
 def none(e, known=()):
@@ -110,3 +117,11 @@ class Simplifier:
             if not measure(out) < best_m:
                 return best
             best, best_m = out, measure(out)
+
+
+def where(method, e, assumptions=true):
+    domain = definedness(e)
+    if domain is None or domain == true:
+        return method(e, assumptions), true
+    result = method(e, domain if assumptions == true else And(assumptions, domain))
+    return result, relied(e, result, assumptions)

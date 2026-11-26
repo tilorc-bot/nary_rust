@@ -20,6 +20,11 @@ definedness is where an expression has a value: the domains of its parts.
     And(Ne(x, 0), Or(Ne(x, 0), Gt(re(-1), 0)))
     >>> definedness(nr.sin(x) + 1)
     true
+
+relied is the part of the input's domain that the result's domain and the assumptions do not give back.
+
+    >>> relied(nr.cos(x) * nr.tan(x), nr.sin(x)), relied(nr.log(x) / x, nr.log(x))
+    (Ne(cos(x), 0), true)
 """
 
 from functools import cache
@@ -31,7 +36,7 @@ from nary.logic import And, Not, Or, true
 from nary.properties import holds
 from nary.rewriting import _substitute
 
-__all__ = ["conjuncts", "decide", "definedness", "implies", "prover"]
+__all__ = ["conjuncts", "decide", "definedness", "implies", "prover", "relied"]
 
 
 def _parts(e):
@@ -54,6 +59,19 @@ def definedness(e):
         if condition != true:
             conditions[condition] = None
     return And(*conditions) if conditions else true
+
+
+def _all(conditions):
+    conditions = sorted(conditions - {true}, key=repr)
+    return true if not conditions else conditions[0] if len(conditions) == 1 else And(*conditions)
+
+
+def relied(e, result, assumptions=true):
+    before, after = definedness(e), definedness(result)
+    if after is None:
+        return before
+    known, given = prover(And(assumptions, after)), conjuncts(assumptions)
+    return _all({autosimp(c, given) for c in conjuncts(before) - conjuncts(after) if not known(c)})
 
 
 def implies(a, b):
