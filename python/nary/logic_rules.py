@@ -1,12 +1,12 @@
 from ._identities import (
-    absorbing, associative, commutative, declare_identities, idempotent, identity, involution,
+    associative, commutative, declare_identities, dominant, idempotent, identity, involution,
 )
 from .logic import And, Not, Or, false, true
 
 declare_identities(And, [
-    associative, commutative, identity(true), absorbing(false), idempotent,
+    associative, commutative, identity(true), dominant(false), idempotent,
 ])
 declare_identities(Or, [
-    associative, commutative, identity(false), absorbing(true), idempotent,
+    associative, commutative, identity(false), dominant(true), idempotent,
 ])
 declare_identities(Not, [involution])

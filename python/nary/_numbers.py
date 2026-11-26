@@ -9,10 +9,13 @@
     (None, true)
     >>> is_number(Mul(3, half)), is_number(Mul(2, I)), is_number(Add(1, I))
     (True, True, False)
+    >>> from nary import pi
+    >>> remainder(Add, Mul(5, half, pi), pi), sign(Mul(-3, half)), sign(I)
+    ((2, Mul(Pow(2, -1), pi)), -1, None)
 """
 
 from fractions import Fraction
-from math import lcm, prod
+from math import ceil, lcm, prod
 
 from ._core import Expr
 from .arithmetic import Add, Mul, Pow
@@ -21,7 +24,7 @@ from .kinds import NumberKind
 from .logic import false, true
 from .relational import Eq, Ge, Gt, Le, Lt, Ne, re
 
-__all__ = ["evaluate", "is_number"]
+__all__ = ["evaluate", "is_number", "remainder", "sign"]
 
 LARGEST_EXPONENT = 10_000
 TRIAL_DIVISION_LIMIT = 10_000
@@ -44,6 +47,34 @@ def evaluate(head, args):
         return None
     result = _OPERATIONS[head](*values)
     return None if result is None else _write(result)
+
+
+def sign(e):
+    value = _read(e)
+    if value is None or value[2]:
+        return None
+    return (value[0] > 0) - (value[0] < 0)
+
+
+def remainder(head, term, step):
+    if head is not Add:
+        return None
+    (a, rest), (b, step_rest) = _factors(term), _factors(step)
+    if sorted(map(repr, rest)) != sorted(map(repr, step_rest)):
+        return None
+    ratio = _rational(_multiply(a, _power(b, _make(Fraction(-1), {}, Fraction(0)))))
+    if ratio is None:
+        return None
+    k = ceil(ratio - Fraction(1, 2))
+    left = _multiply(_make(ratio - k, {}, Fraction(0)), b)
+    return k, Mul(_write(left), *step_rest)
+
+
+def _factors(e):
+    factors = e.args if e.head == Mul else (e,)
+    values = [_read(factor) for factor in factors]
+    rest = [factor for factor, value in zip(factors, values) if value is None]
+    return _multiply(*(value for value in values if value is not None)), rest
 
 
 def _make(coefficient, roots, turn):

@@ -15,13 +15,17 @@ The rule a * 0 -> 0 erases a.
 """
 
 from .arithmetic import Add, Mul, Pow
+from .constants import I, pi
+from .elementary import exp
 from ._identities import (
-    absorbing, associative, commutative, declare_identities, identity, inverse, repeats,
+    absorbing, associative, commutative, composes, declare_identities, identity, inverse, maps,
+    repeats,
 )
 from .kinds import NumberKind
-from .relational import Ne
+from .relational import Eq, Gt, Ne
 
 a, n = NumberKind("a"), NumberKind("n")
+whole = Eq(exp(Mul(2, pi, I, n)), 1)
 
 add = declare_identities(Add, [
     associative,
@@ -38,4 +42,10 @@ mul = declare_identities(Mul, [
     repeats(Pow(a, n), n),
     inverse(Pow(a, -1), when=Ne(a, 0)),
 ])
+declare_identities(Pow, [
+    maps(Pow(a, n), a, Mul, Mul, normal="split", when=whole, name="pow_whole_split"),
+    maps(Pow(a, n), a, Mul, Mul, normal="split", when=Gt(a, 0), name="pow_positive_split"),
+    composes(Pow(a, n), n, Mul, when=whole),
+])
+
 rules = add + mul

@@ -53,18 +53,18 @@ to_lean_facts states the laws declared for a function.
       Nary.Unordered Nary.Add
     abbrev add_identity_law : Prop :=
       Nary.Identity Nary.Add (Nary.lit 0)
-    abbrev add_repeats_law : Prop :=
+    abbrev add_self_law : Prop :=
       Nary.Repeats Nary.Add (fun a n => Nary.Mul [n, a])
 """
 
 import re as _re
 
 from . import arithmetic, calculus, constants, elementary, logic, relational
-from . import arithmetic_rules, logic_rules  # noqa: F401
+from . import arithmetic_rules, elementary_rules, logic_rules  # noqa: F401
 from ._core import Expr
 from ._identities import (
-    Law, absorbing, associative, commutative, idempotent, identities, identity, involution,
-    repeats,
+    Law, absorbing, associative, commutative, composes, dominant, idempotent, identities, identity,
+    involution, maps, repeats, undoes,
 )
 from .calculus import NumberFunction
 from .functions import is_lambda
@@ -359,30 +359,62 @@ def to_lean_facts(f):
     laws = [item for item in identities(f) if isinstance(item, Law) and item.of in _LAW_CLAIMS]
     if not laws:
         raise ValueError(f"the facts about {f!r} cannot be stated in Lean: it declares no laws")
+    return [_law_statement(f, law) for law in laws]
+
+
+def _law_statement(f, law):
     printer = _Printer(rule=True)
-    statements = []
-    for law in laws:
-        fact, claim = _LAW_CLAIMS[law.of]
-        parts = [claim, LEAN_NAMES[f]]
-        if law.of is repeats:
-            form, count = law.args
-            base = next(arg for arg in form.args if arg != count)
-            variables = f"{printer.symbol(base)} {printer.symbol(count)}"
-            parts.append(f"(fun {variables} => {printer.print(form)[0]})")
-        elif law.args:
-            (value,) = law.args
-            parts.append(printer.argument(value if isinstance(value, Expr) else f.kind.output(value)))
-        name = _declaration_name(f"{f.name.lower()}_{fact}", repr(f))
-        statements.append(f"abbrev {name} : Prop :=\n  {' '.join(parts)}")
-    return statements
+
+    def fun(variables, body):
+        return f"(fun {' '.join(printer.symbol(v) for v in variables)} => {printer.print(body)[0]})"
+
+    def condition(variables):
+        if law.when is None:
+            return f"(fun {' '.join('_' for _ in variables)} => True)"
+        return f"(fun {' '.join(printer.symbol(v) for v in variables)} => Nary.Holds {printer.argument(law.when)})"
+
+    name, claim = _LAW_CLAIMS[law.of]
+    parts, bound = [claim], []
+    if law.of in (associative, commutative, idempotent, involution):
+        parts.append(LEAN_NAMES[f])
+    elif law.of in (identity, absorbing, dominant):
+        (value,) = law.args
+        parts += [LEAN_NAMES[f], printer.argument(value if isinstance(value, Expr) else f.kind.output(value))]
+    elif law.of is repeats:
+        form, count = law.args
+        base = next(arg for arg in form.args if arg != count)
+        parts += [LEAN_NAMES[f], fun([base, count], form)]
+    elif law.of is maps:
+        form, hole, F, G = law.args
+        if _is_declared_function(F):
+            bound = [arg for arg in form.args if arg != hole]
+            parts += [fun([hole], form), LEAN_NAMES[F], LEAN_NAMES[G], condition([hole])]
+        else:
+            parts = ["Nary.Maps₁", fun([hole], form), fun([hole], F), fun([hole], G)]
+    elif law.of is undoes:
+        (inner,) = law.args
+        (variable,) = inner.args
+        parts += [fun([variable], f(variable)), fun([variable], inner), condition([variable])]
+    elif law.of is composes:
+        form, count, F = law.args
+        parts += [fun(form.args, form), LEAN_NAMES[F], condition(form.args)]
+    claim = " ".join(parts)
+    if bound:
+        claim = f"∀ ({' '.join(printer.symbol(v) for v in bound)} : Nary.Number), {claim}"
+    title = f"{f.name.lower()}_{name}" if name else f"{law.name}_law"
+    return f"abbrev {_declaration_name(title, repr(f))} : Prop :=\n  {claim}"
 
 
 _LAW_CLAIMS = {
     associative: ("flat", "Nary.Flat"),
     commutative: ("unordered", "Nary.Unordered"),
-    identity: ("identity_law", "Nary.Identity"),
-    absorbing: ("absorbing_law", "Nary.Absorbing"),
-    idempotent: ("idempotent_law", "Nary.Idempotent"),
-    involution: ("involution_law", "Nary.Involution"),
-    repeats: ("repeats_law", "Nary.Repeats"),
+    identity: (None, "Nary.Identity"),
+    absorbing: (None, "Nary.Absorbing"),
+    dominant: (None, "Nary.Dominant"),
+    idempotent: (None, "Nary.Idempotent"),
+    involution: (None, "Nary.Involution"),
+    repeats: (None, "Nary.Repeats"),
+    maps: (None, "Nary.Maps"),
+    undoes: (None, "Nary.Undoes"),
+    composes: (None, "Nary.Composes"),
 }
