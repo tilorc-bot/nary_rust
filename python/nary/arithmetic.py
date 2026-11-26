@@ -1,4 +1,4 @@
-from ._core import ManyAlike, set_operator
+from ._core import Many, set_operator
 from .domains import declare_function
 from .kinds import NumberKind
 from .logic import Or, true
@@ -9,8 +9,8 @@ __all__ = ["Add", "Mul", "Pow", "NegativeOne"]
 terms, factors = NumberKind("terms"), NumberKind("factors")
 base, exponent = NumberKind("base"), NumberKind("exp")
 
-Add = declare_function("Add", ManyAlike(terms), returns=NumberKind, domain=true)
-Mul = declare_function("Mul", ManyAlike(factors), returns=NumberKind, domain=true)
+Add = declare_function("Add", Many(terms), returns=NumberKind, domain=true)
+Mul = declare_function("Mul", Many(factors), returns=NumberKind, domain=true)
 Pow = declare_function(
     "Pow", base, exponent, returns=NumberKind,
     domain=Or(Ne(base, 0), Gt(re(exponent), 0)),

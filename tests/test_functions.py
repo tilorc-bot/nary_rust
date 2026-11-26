@@ -8,7 +8,7 @@ from nary import (
     Expr,
     FunctionKind,
     Lambda,
-    ManyAlike,
+    Many,
     NumberKind,
     declare_function,
     is_lambda,
@@ -31,28 +31,28 @@ def test_a_declared_function_is_an_expression_of_a_function_kind():
     assert (NumToNum.inputs, NumToNum.output) == ((NumberKind,), NumberKind)
     assert (nr.sin.name, nr.sin.head, nr.sin.args, nr.sin.is_symbol) == ("sin", None, (), False)
     assert repr(nr.sin) == "sin"
-    assert repr(FunctionKind((ManyAlike(NumberKind),), NumberKind)) == "FunctionKind((ManyAlike(NumberKind),), NumberKind)"
+    assert repr(FunctionKind((Many(NumberKind),), NumberKind)) == "FunctionKind((Many(NumberKind),), NumberKind)"
     assert NumberKind.inputs is None and NumberKind.output is None
 
 
 def test_function_kinds_are_compared_by_identity_and_nest():
     assert FunctionKind((NumberKind,), NumberKind) is NumToNum
     assert FunctionKind((NumberKind,), BoolKind) is not NumToNum
-    assert FunctionKind((ManyAlike(NumberKind),), NumberKind) is not FunctionKind((NumberKind,), NumberKind)
-    assert FunctionKind((NumberKind, ManyAlike(NumberKind)), NumberKind) is not FunctionKind((ManyAlike(NumberKind), NumberKind), NumberKind)
-    for kind in (nr.Add.kind, nr.Pow.kind, FunctionKind((NumberKind, ManyAlike(BoolKind), NumberKind), BoolKind)):
+    assert FunctionKind((Many(NumberKind),), NumberKind) is not FunctionKind((NumberKind,), NumberKind)
+    assert FunctionKind((NumberKind, Many(NumberKind)), NumberKind) is not FunctionKind((Many(NumberKind), NumberKind), NumberKind)
+    for kind in (nr.Add.kind, nr.Pow.kind, FunctionKind((NumberKind, Many(BoolKind), NumberKind), BoolKind)):
         assert FunctionKind(kind.inputs, kind.output) is kind
     higher = FunctionKind((NumToNum,), NumToNum)
     assert higher.inputs[0] is NumToNum and higher.output is NumToNum
     assert nr.declare_kind_family("Box", params=1)(NumToNum).params == (NumToNum,)
     with pytest.raises(TypeError, match="^FunctionKind: inputs must be a tuple of kinds, got NumberKind$"):
         FunctionKind(NumberKind, NumberKind)
-    with pytest.raises(TypeError, match=r"^FunctionKind: at most one input can be ManyAlike, got \(ManyAlike\(NumberKind\), ManyAlike\(BoolKind\)\)$"):
-        FunctionKind((ManyAlike(NumberKind), ManyAlike(BoolKind)), NumberKind)
+    with pytest.raises(TypeError, match=r"^FunctionKind: at most one input can be Many, got \(Many\(NumberKind\), Many\(BoolKind\)\)$"):
+        FunctionKind((Many(NumberKind), Many(BoolKind)), NumberKind)
     with pytest.raises(TypeError, match="^expected a kind, got x$"):
-        FunctionKind((ManyAlike(x),), NumberKind)
-    with pytest.raises(TypeError, match="^ManyAlike takes a kind or a symbol, got 1$"):
-        ManyAlike(1)
+        FunctionKind((Many(x),), NumberKind)
+    with pytest.raises(TypeError, match="^Many takes a kind or a symbol, got 1$"):
+        Many(1)
 
 
 def test_declared_and_unknown_functions_can_be_passed_and_applied():
@@ -81,8 +81,8 @@ def test_wrong_kind_wrong_count_and_calling_a_non_function():
 
 def test_a_run_takes_any_number_of_arguments_and_may_sit_anywhere():
     first, rest = NumberKind("first"), NumberKind("rest")
-    Max = declare_function("Max", first, ManyAlike(rest), returns=NumberKind, domain=true)
-    assert Max.kind is FunctionKind((NumberKind, ManyAlike(NumberKind)), NumberKind)
+    Max = declare_function("Max", first, Many(rest), returns=NumberKind, domain=true)
+    assert Max.kind is FunctionKind((NumberKind, Many(NumberKind)), NumberKind)
     assert repr(Max(x, y, x)) == "Max(x, y, x)"
     assert (Max(x, y, 1).first, Max(x, y, 1).rest, Max(x).rest) == (x, (y, NumberKind(1)), ())
     with pytest.raises(TypeError, match=r"^Max takes at least 1 arguments, got 0$"):
@@ -90,7 +90,7 @@ def test_a_run_takes_any_number_of_arguments_and_may_sit_anywhere():
     with pytest.raises(TypeError, match=r"^Max expects NumberKind, got BoolKind: p$"):
         Max(x, p)
     conditions, result = BoolKind("conditions"), NumberKind("result")
-    Guard = declare_function("Guard", ManyAlike(conditions), result, returns=NumberKind, domain=true)
+    Guard = declare_function("Guard", Many(conditions), result, returns=NumberKind, domain=true)
     g = Guard(x < y, p, 1)
     assert (g.conditions, g.result, Guard(x).conditions) == ((x < y, p), NumberKind(1), ())
     with pytest.raises(TypeError, match=r"^Guard expects NumberKind, got BoolKind: p$"):
@@ -120,8 +120,8 @@ def test_bound_positions():
     with pytest.raises(TypeError, match=r"^Derivative expects NumberKind, got BoolKind: p$"):
         Derivative(x, p)
     variables = NumberKind("variables")
-    D = declare_function("D", expr, ManyAlike(Bound(variables)), returns=NumberKind, domain=true)
-    assert D.params == (expr, ManyAlike(Bound(variables)))
+    D = declare_function("D", expr, Many(Bound(variables)), returns=NumberKind, domain=true)
+    assert D.params == (expr, Many(Bound(variables)))
     assert D(x * y, x, y).variables == (x, y)
     with pytest.raises(TypeError, match=r"^D expects a NumberKind symbol, got Add\(x, y\)$"):
         D(x, y, x + y)
@@ -202,13 +202,13 @@ def test_named_arguments_come_from_the_head():
 def test_every_parameter_is_a_named_symbol():
     with pytest.raises(TypeError, match=r'^f: a parameter must be a symbol, such as NumberKind\("x"\), got NumberKind$'):
         declare_function("f", NumberKind, returns=NumberKind, domain=true)
-    for not_a_symbol in (x + 1, nr.sin, 1, ManyAlike(NumberKind)):
+    for not_a_symbol in (x + 1, nr.sin, 1, Many(NumberKind)):
         with pytest.raises(TypeError, match="^f: a parameter must be a symbol"):
             declare_function("f", not_a_symbol, returns=NumberKind, domain=true)
-    with pytest.raises(TypeError, match=r"^f: at most one parameter can be ManyAlike, got \(ManyAlike\(x\), ManyAlike\(y\)\)$"):
-        declare_function("f", ManyAlike(x), ManyAlike(y), returns=NumberKind, domain=true)
+    with pytest.raises(TypeError, match=r"^f: at most one parameter can be Many, got \(Many\(x\), Many\(y\)\)$"):
+        declare_function("f", Many(x), Many(y), returns=NumberKind, domain=true)
     with pytest.raises(ValueError, match="^f has two parameters named x$"):
-        declare_function("f", x, ManyAlike(BoolKind("x")), returns=NumberKind, domain=true)
+        declare_function("f", x, Many(BoolKind("x")), returns=NumberKind, domain=true)
 
 
 def test_a_parameter_name_cannot_hide_an_attribute_of_an_expression():
@@ -235,7 +235,7 @@ def test_the_same_function_kind_from_many_threads():
 
     def make():
         barrier.wait()
-        made.append([FunctionKind((Fresh, NumberKind, ManyAlike(Fresh)), Fresh) for _ in range(200)])
+        made.append([FunctionKind((Fresh, NumberKind, Many(Fresh)), Fresh) for _ in range(200)])
 
     threads = [threading.Thread(target=make) for _ in range(8)]
     for thread in threads:

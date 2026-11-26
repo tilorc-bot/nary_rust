@@ -1,11 +1,11 @@
 import nary as nr
 import pytest
-from nary import BoolKind, Expr, Kind, ManyAlike, NumberKind, _core, declare_function, declare_kind, set_operator
+from nary import BoolKind, Expr, Kind, Many, NumberKind, _core, declare_function, declare_kind, set_operator
 from nary.logic import true
 
 SetKind = declare_kind("SetKind")
 
-Union = declare_function("Union", ManyAlike(SetKind("sets")), returns=SetKind, domain=true)
+Union = declare_function("Union", Many(SetKind("sets")), returns=SetKind, domain=true)
 Interval = declare_function("Interval", NumberKind("start"), NumberKind("end"), returns=SetKind, domain=true)
 Contains = declare_function("Contains", NumberKind("element"), SetKind("set"), returns=BoolKind, domain=true)
 set_operator(SetKind, "+", Union)
@@ -16,7 +16,7 @@ x, y = NumberKind("x"), NumberKind("y")
 def test_the_compiled_module_defines_no_kind_and_no_function():
     public = {name for name in dir(_core) if not name.startswith("_")}
     assert public == {
-        "Bound", "Expr", "FunctionKind", "Kind", "KindFamily", "ManyAlike",
+        "Bound", "Expr", "FunctionKind", "Kind", "KindFamily", "Many",
         "declare_constant", "declare_function", "declare_kind", "declare_kind_family",
         "set_operator",
     }

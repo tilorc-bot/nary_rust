@@ -51,7 +51,7 @@ def test_a_kind_without_minus_or_divide_does_not_support_them():
 def test_a_python_operator_must_return_an_expression():
     Point = nr.declare_kind("Point")
     nr.set_operator(Point, "-", lambda a, b: (a, b))
-    nr.set_operator(Point, "neg", lambda a: nr.ManyAlike)
+    nr.set_operator(Point, "neg", lambda a: nr.Many)
     P, Q = Point("P"), Point("Q")
     with pytest.raises(TypeError, match=r"^the - operator for Point must return an expression, got tuple: \(P, Q\)$"):
         P - Q

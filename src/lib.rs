@@ -175,7 +175,7 @@ impl Kind {
         for (slot, &kind) in sig.inputs.iter().enumerate() {
             let mut input = kind_object(py, kind)?.into_any();
             if sig.run == Some(slot) {
-                input = Py::new(py, ManyAlike { of: input })?.into_any();
+                input = Py::new(py, Many { of: input })?.into_any();
             }
             inputs.push(input);
         }
@@ -242,7 +242,7 @@ fn function_kind_name(inputs: &[KindRef], run: Option<usize>, output: KindRef) -
         .iter()
         .enumerate()
         .map(|(slot, kind)| match run {
-            Some(run) if run == slot => format!("ManyAlike({})", kind.name),
+            Some(run) if run == slot => format!("Many({})", kind.name),
             _ => kind.name.clone(),
         })
         .collect();
@@ -305,11 +305,11 @@ fn function_kind_py(
     let mut kinds = Vec::with_capacity(inputs.len());
     let mut run = None;
     for (slot, input) in inputs.iter().enumerate() {
-        match input.cast_exact::<ManyAlike>() {
+        match input.cast_exact::<Many>() {
             Ok(many) => {
                 if run.replace(slot).is_some() {
                     return Err(PyTypeError::new_err(format!(
-                        "FunctionKind: at most one input can be ManyAlike, got {}",
+                        "FunctionKind: at most one input can be Many, got {}",
                         describe(inputs)
                     )));
                 }
@@ -433,27 +433,27 @@ fn is_symbol(obj: &Bound<'_, PyAny>) -> bool {
 }
 
 #[pyclass(frozen, module = "nary")]
-struct ManyAlike {
+struct Many {
     #[pyo3(get)]
     of: Py<PyAny>,
 }
 
 #[pymethods]
-impl ManyAlike {
+impl Many {
     #[new]
     fn new(of: &Bound<'_, PyAny>) -> PyResult<Self> {
         let kind = of.cast_exact::<Kind>().is_ok();
         if kind || is_symbol(of) || of.cast_exact::<BoundVariable>().is_ok() {
-            return Ok(ManyAlike { of: of.clone().unbind() });
+            return Ok(Many { of: of.clone().unbind() });
         }
         Err(PyTypeError::new_err(format!(
-            "ManyAlike takes a kind or a symbol, got {}",
+            "Many takes a kind or a symbol, got {}",
             describe(of)
         )))
     }
 
     fn __eq__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<bool> {
-        match other.cast_exact::<ManyAlike>() {
+        match other.cast_exact::<Many>() {
             Ok(other) => self.of.bind(py).eq(other.get().of.bind(py)),
             Err(_) => Ok(false),
         }
@@ -464,7 +464,7 @@ impl ManyAlike {
     }
 
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
-        Ok(format!("ManyAlike({})", self.of.bind(py).repr()?))
+        Ok(format!("Many({})", self.of.bind(py).repr()?))
     }
 }
 
@@ -834,7 +834,7 @@ impl Expr {
                 param = Py::new(py, BoundVariable { of: param })?.into_any();
             }
             if sig.run == Some(slot) {
-                param = Py::new(py, ManyAlike { of: param })?.into_any();
+                param = Py::new(py, Many { of: param })?.into_any();
             }
             params.push(param);
         }
@@ -1000,7 +1000,7 @@ struct Parameter<'py> {
 
 fn parameter<'py>(function: &str, param: &Bound<'py, PyAny>) -> PyResult<Parameter<'py>> {
     let py = param.py();
-    let (inner, run) = match param.cast_exact::<ManyAlike>() {
+    let (inner, run) = match param.cast_exact::<Many>() {
         Ok(many) => (many.get().of.bind(py).clone(), true),
         Err(_) => (param.clone(), false),
     };
@@ -1058,7 +1058,7 @@ fn declare_function<'py>(
         }
         if param.run && run.replace(slot).is_some() {
             return Err(PyTypeError::new_err(format!(
-                "{function}: at most one parameter can be ManyAlike, got {}",
+                "{function}: at most one parameter can be Many, got {}",
                 describe(params)
             )));
         }
@@ -1118,7 +1118,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Expr>()?;
     m.add_class::<Kind>()?;
     m.add_class::<KindFamily>()?;
-    m.add_class::<ManyAlike>()?;
+    m.add_class::<Many>()?;
     m.add_class::<BoundVariable>()?;
     m.add_function(wrap_pyfunction!(declare_kind, m)?)?;
     m.add_function(wrap_pyfunction!(declare_kind_family, m)?)?;
