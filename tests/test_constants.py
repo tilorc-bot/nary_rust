@@ -35,3 +35,9 @@ def test_is_constant_tells_the_leaf_forms_apart():
     assert [e.is_constant for e in (pi, sin, x, literal)] == [True, True, False, False]
     assert [e.is_symbol for e in (pi, sin, x, literal)] == [False, False, True, False]
     assert [e.is_literal for e in (pi, sin, x, literal)] == [False, False, False, True]
+
+
+def test_is_atom_is_true_for_every_leaf_and_false_for_an_application():
+    leaves = (pi, sin, x, NumberKind(3))
+    assert all(e.is_atom and e.head is None and e.args == () for e in leaves)
+    assert not any(e.is_atom for e in (sin(x), x + 1, sin(pi)))
