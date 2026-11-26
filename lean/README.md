@@ -132,8 +132,7 @@ value at some points). `Nary.Holds c` is false where `c` has no value. A
 rule without a condition has no `Nary.Holds` hypothesis, and one that erases
 no variable has no `≠ none` hypothesis.
 
-The name of a rule (its `name=`, or `<function>_<law>` for a law listed
-in a block of `nary.identities`, here `mul_inverse`) is the name of the
+The name given with `rule(..., name="mul_inverse")` is the name of the
 statement, `Nary.ArithmeticRules.Statement.mul_inverse`, and of its theorem,
 `Nary.ArithmeticRules.mul_inverse`. The namespace keeps them apart from
 Mathlib's `pow_one`, `pow_zero` and so on. A rule without a name, or whose

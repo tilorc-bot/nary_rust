@@ -1,8 +1,6 @@
 """Rules about numbers: the facts about ``Add`` and ``Mul``, and the first
 rewrite rules.
 
-Each function's identities are declared in one block below
-(``nary.identities``), which records its facts and gives its rules.
 Importing this module records the facts. The rules are the list ``rules``,
 which is what ``nary.rewriting.rewrite`` is given.
 
@@ -64,6 +62,4 @@ exponential = declare_identities(exp, [
     Equal(exp(log(a)), a, when=Ne(a, 0), name="exp_log"),
 ])
 
-# Rules for different functions never match the same expression, so only
-# the order within each block matters to rewriting.
 rules = add + mul + power + exponential

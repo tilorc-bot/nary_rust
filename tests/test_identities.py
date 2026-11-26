@@ -1,11 +1,9 @@
-"""The blocks in nary.arithmetic_rules give the rules and facts of main."""
-
 import doctest
 
 import pytest
 
 import nary.identities
-from nary import Add, Mul, NumberKind, exp, log
+from nary import Add, BoolKind, Expr, Mul, NumberKind, exp, log
 from nary._core import declare_function
 from nary.arithmetic_rules import rules
 from nary.identities import Equal, declare_identities, identities, identity, inverse
@@ -65,3 +63,11 @@ def test_generated_names_and_override():
     Q = declare_function("Q", NumberKind, NumberKind, returns=NumberKind)
     made = declare_identities(Q, [identity(0), inverse(Q(a, a), name="q_self")])
     assert [r.name for r in made] == ["q_identity", "q_self"]
+
+
+def test_an_equal_is_an_expression():
+    e = Equal(a + a, 2 * a)
+    assert isinstance(e, Expr) and e.kind is BoolKind and e in identities(Add)
+    assert inverse.statement.kind is BoolKind
+    with pytest.raises(ValueError, match="already named"):
+        Equal(a + a, 2 * a, name="twice")
