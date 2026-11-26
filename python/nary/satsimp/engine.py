@@ -32,7 +32,7 @@ Rows that undo each other stop at a guard, and the input comes back.
 
 from nary import arithmetic_rules  # noqa: F401
 from nary.functions import is_lambda
-from nary.rewriting import _flatten, _has_a_value, _match_top, _substitute
+from nary.rewriting import _flatten, _match_top, _substitute, has_a_value
 
 from .measure import identity_measure
 from .prove import conjuncts, definedness, implies
@@ -130,7 +130,7 @@ class Engine:
 
     def _sound(self, row, bindings):
         if row.strict:
-            return all(_has_a_value(bindings[v], self.known) for v in row.rule.erased)
+            return all(has_a_value(bindings[v], self.known) for v in row.rule.erased)
         condition = definedness(_substitute(row.rule.pattern, bindings))
         return condition is not None and self.known(condition)
 
