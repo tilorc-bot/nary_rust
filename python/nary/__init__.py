@@ -5,10 +5,14 @@ from ._core import (
     FunctionKind,
     Kind,
     KindFamily,
+    KindVariable,
     Many,
+    ManyMixed,
+    concretize,
     declare_constant,
     declare_kind,
     declare_kind_family,
+    generic_of,
     set_operator,
 )
 from .domains import declare_function
@@ -20,9 +24,9 @@ from .kinds import *  # noqa: F403
 from .relational import *  # noqa: F403
 
 __all__ = [
-    "Bound", "Expr", "FunctionKind", "Kind", "KindFamily", "Many",
-    "declare_constant", "declare_function", "declare_kind", "declare_kind_family",
-    "set_operator",
+    "Bound", "Expr", "FunctionKind", "Kind", "KindFamily", "KindVariable", "Many", "ManyMixed",
+    "concretize", "declare_constant", "declare_function", "declare_kind",
+    "declare_kind_family", "generic_of", "set_operator",
     *kinds.__all__,
     *arithmetic.__all__,
     *constants.__all__,

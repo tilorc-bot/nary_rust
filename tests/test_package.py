@@ -6,9 +6,9 @@ from nary import functions, relational
 
 def test_import_nary_exposes_the_core_and_the_declarations():
     assert set(nary.__all__) >= {
-        "Bound", "Expr", "FunctionKind", "Kind", "KindFamily", "Many",
-        "declare_constant", "declare_function", "declare_kind", "declare_kind_family",
-        "set_operator", "Lambda", "is_lambda",
+        "Bound", "Expr", "FunctionKind", "Kind", "KindFamily", "KindVariable", "Many", "ManyMixed",
+        "concretize", "declare_constant", "declare_function", "declare_kind",
+        "declare_kind_family", "generic_of", "set_operator", "Lambda", "is_lambda",
         "NumberKind", "BoolKind", "Add", "Mul", "Pow", "sin", "Lt", "Eq", "pi", "E", "I",
     }
     for name in nary.__all__:

@@ -18,27 +18,20 @@ The arguments of a lambda are its variables and then its body.
     ((x,), Mul(x, x), True)
 """
 
-from ._core import Bound, Expr, FunctionKind
+from ._core import Bound, Expr, FunctionKind, KindVariable, ManyMixed
 from .domains import declare_function
 from .logic import true
 
 __all__ = ["Lambda", "is_lambda"]
 
-_lambda_functions = {}
-
-
-def _lambda_function(variable_kinds, body_kind):
-    key = (*variable_kinds, body_kind)
-    if key not in _lambda_functions:
-        variables = (Bound(kind(f"variable{i}")) for i, kind in enumerate(variable_kinds, 1))
-        _lambda_functions[key] = declare_function(
-            "Lambda",
-            *variables,
-            body_kind("expr"),
-            returns=FunctionKind(variable_kinds, body_kind),
-            domain=true,
-        )
-    return _lambda_functions[key]
+K, B = KindVariable("K"), KindVariable("B")
+_lambda = declare_function(
+    "Lambda",
+    ManyMixed(Bound(K("variables"))),
+    B("expr"),
+    returns=FunctionKind((ManyMixed(K),), B),
+    domain=true,
+)
 
 
 def Lambda(variables, body):
@@ -61,11 +54,10 @@ def Lambda(variables, body):
                 )
             names.add(variable.name)
 
-    variable_kinds = tuple(variable.kind for variable in variables)
-    return _lambda_function(variable_kinds, body.kind)(*variables, body)
+    return _lambda(*variables, body)
 
 
 def is_lambda(e):
     if not isinstance(e, Expr) or e.head is None:
         return False
-    return _lambda_functions.get(e.head.kind.inputs) is e.head
+    return e.head is _lambda

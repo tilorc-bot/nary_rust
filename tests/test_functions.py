@@ -27,7 +27,7 @@ Derivative = declare_function("Derivative", expr, Bound(variable), returns=Numbe
 def test_a_declared_function_is_an_expression_of_a_function_kind():
     assert type(nr.sin) is Expr
     assert nr.sin.kind is NumToNum
-    assert nr.Eq.kind is FunctionKind((NumberKind, NumberKind), BoolKind)
+    assert repr(nr.Eq.kind) == "FunctionKind((K, K), BoolKind)"
     assert (NumToNum.inputs, NumToNum.output) == ((NumberKind,), NumberKind)
     assert (nr.sin.name, nr.sin.head, nr.sin.args, nr.sin.is_symbol) == ("sin", None, (), False)
     assert repr(nr.sin) == "sin"
@@ -47,7 +47,7 @@ def test_function_kinds_are_compared_by_identity_and_nest():
     assert nr.declare_kind_family("Box", params=1)(NumToNum).params == (NumToNum,)
     with pytest.raises(TypeError, match="^FunctionKind: inputs must be a tuple of kinds, got NumberKind$"):
         FunctionKind(NumberKind, NumberKind)
-    with pytest.raises(TypeError, match=r"^FunctionKind: at most one input can be Many, got \(Many\(NumberKind\), Many\(BoolKind\)\)$"):
+    with pytest.raises(TypeError, match=r"^FunctionKind: at most one input can be Many or ManyMixed, got \(Many\(NumberKind\), Many\(BoolKind\)\)$"):
         FunctionKind((Many(NumberKind), Many(BoolKind)), NumberKind)
     with pytest.raises(TypeError, match="^expected a kind, got x$"):
         FunctionKind((Many(x),), NumberKind)
@@ -135,13 +135,14 @@ def test_lambda_is_an_application_of_a_function_named_lambda():
     one = Lambda(x, nr.sin(x))
     assert is_lambda(one) and one.kind is NumToNum
     assert one.args == (x, nr.sin(x)) and one.head.name == "Lambda"
-    assert repr(one.head.params) == "(Bound(variable1), expr)"
-    assert one.expr == nr.sin(x) and one.variable1 == x
+    assert repr(one.head.params) == "(ManyMixed(Bound(variables)), expr)"
+    assert one.expr == nr.sin(x) and one.variables == (x,)
     assert repr(one) == "Lambda(x, sin(x))"
     two = Lambda((x, y), x < y)
     assert two.kind is FunctionKind((NumberKind, NumberKind), BoolKind)
     assert repr(two) == "Lambda(x, y, Lt(x, y))"
-    assert Lambda(y, nr.cos(y)).head is one.head
+    assert two.variables == (x, y) and two.head is one.head is Lambda(p, p).head
+    assert Lambda((p, x), x).kind is FunctionKind((BoolKind, NumberKind), NumberKind)
     assert Lambda((x,), x) == Lambda(x, x)
     assert not is_lambda(nr.sin(x)) and not is_lambda(x) and not is_lambda(1)
     assert repr(Apply(Lambda(x, x * x), y)) == "Apply(Lambda(x, Mul(x, x)), y)"
@@ -205,7 +206,7 @@ def test_every_parameter_is_a_named_symbol():
     for not_a_symbol in (x + 1, nr.sin, 1, Many(NumberKind)):
         with pytest.raises(TypeError, match="^f: a parameter must be a symbol"):
             declare_function("f", not_a_symbol, returns=NumberKind, domain=true)
-    with pytest.raises(TypeError, match=r"^f: at most one parameter can be Many, got \(Many\(x\), Many\(y\)\)$"):
+    with pytest.raises(TypeError, match=r"^f: at most one parameter can be Many or ManyMixed, got \(Many\(x\), Many\(y\)\)$"):
         declare_function("f", Many(x), Many(y), returns=NumberKind, domain=true)
     with pytest.raises(ValueError, match="^f has two parameters named x$"):
         declare_function("f", x, Many(BoolKind("x")), returns=NumberKind, domain=true)
