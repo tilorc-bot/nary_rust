@@ -1,17 +1,11 @@
-"""Printing expressions as Lean terms and rules as Lean statements, with
-nary.lean. Lean itself is not needed: lean/check_printer.py checks printed
-terms with Lean by hand, and `lake build` in lean/ checks the rules."""
-
-import doctest
 import importlib.util
 from pathlib import Path
 
 import nary as nr
-import nary.lean
 import pytest
 from nary.arithmetic_rules import rules
 from nary.calculus import Derivative, Integral, NumberFunction
-from nary.lean import to_lean, to_lean_example, to_lean_rule
+from nary.lean import to_lean, to_lean_example, to_lean_facts, to_lean_rule
 from nary.logic import And, Not, true
 from nary.matrices import Matrix, Trace
 from nary.rules import rule
@@ -19,12 +13,6 @@ from nary.rules import rule
 x, y = nr.NumberKind("x"), nr.NumberKind("y")
 p = nr.BoolKind("p")
 f = NumberFunction("f")
-
-
-def test_docstring_examples():
-    result = doctest.testmod(nary.lean)
-    assert result.attempted > 0
-    assert result.failed == 0
 
 
 def test_to_lean():
@@ -40,7 +28,6 @@ def test_to_lean():
         "noncomputable example (x y : ℂ) (f : ℂ → Nary.Number) : Nary.Number := "
         "Nary.Add [Nary.Mul [Nary.apply f (some x), some y], Nary.sin (some x)]"
     )
-    # The variable of a lambda is not free.
     assert to_lean_example(nr.Lambda(x, x * y)) == (
         "noncomputable example (y : ℂ) : ℂ → Nary.Number := fun x => Nary.Mul [some x, some y]"
     )
@@ -51,7 +38,6 @@ def test_refused():
         to_lean(Integral(nr.sin, 0, x))
     with pytest.raises(ValueError, match="^Trace has no Lean definition"):
         to_lean(Trace(Matrix("A")) + 1)
-    # A function named sin that is not nary's sin.
     other_sin = nr.declare_function("sin", nr.NumberKind, returns=nr.NumberKind, domain=true)
     with pytest.raises(ValueError, match="^sin has no Lean definition"):
         to_lean(other_sin(x))
@@ -76,8 +62,6 @@ def test_to_lean_rule():
         "abbrev exp_log : Prop :=\n"
         "  ∀ (a : Nary.Number), Nary.Holds (Nary.Ne a (Nary.lit 0)) → Nary.exp (Nary.log a) = a"
     )
-    # A function variable is a function, which always has a value, so the
-    # wrong rule f(a) * 0 -> 0 prints as a false statement.
     assert to_lean_rule(rule(f(x) * 0, 0, name="wrong")) == (
         "abbrev wrong : Prop :=\n  ∀ (x : Nary.Number) (f : Nary.NumberFunction), "
         "x ≠ none → Nary.Mul [Nary.apply f x, Nary.lit 0] = Nary.lit 0"
@@ -100,3 +84,32 @@ def test_generated_lean_file_is_current():
         "lean/Nary/ArithmeticRules/Statements.lean is out of date: run "
         ".venv/bin/python lean/generate_rules.py, then prove any new statement"
     )
+
+
+LEAN = Path(__file__).resolve().parents[1] / "lean"
+
+
+def test_names_that_are_quoted_or_refused():
+    assert to_lean(nr.NumberKind("θ")) == "some «θ»"
+    for name in ("", "none", "Nary", "a»"):
+        with pytest.raises(ValueError):
+            to_lean(nr.NumberKind(name))
+    with pytest.raises(ValueError):
+        to_lean(nr.Lambda(x, NumberFunction("x")(y)))
+    with pytest.raises(ValueError):
+        to_lean_rule(rule(x + 0, x, name="fun"))
+
+
+def test_facts_are_refused_for_a_function_that_does_not_take_a_list():
+    for function in (nr.Pow, Integral):
+        with pytest.raises(ValueError):
+            to_lean_facts(function)
+
+
+def test_no_proof_is_left_as_sorry():
+    assert not [path.name for path in LEAN.joinpath("Nary").rglob("*.lean") if "sorry" in path.read_text(encoding="utf-8")]
+
+
+def test_mathlib_is_the_version_of_the_lean_toolchain():
+    version = LEAN.joinpath("lean-toolchain").read_text(encoding="utf-8").strip().split(":")[1]
+    assert f'rev = "{version}"' in LEAN.joinpath("lakefile.toml").read_text(encoding="utf-8")

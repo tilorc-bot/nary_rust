@@ -1,29 +1,3 @@
-"""Compare versions of the package with bench_construct.py.
-
-    python bench/compare.py --rounds 10 \\
-        base=/work/base base-again=/work/base candidate=/work/candidate
-
-Each argument is ``label=path`` or ``label=path:module``. The path is put on
-PYTHONPATH, so it has to hold the package ``nary``, or the module that is
-named: a version from before the package existed is ``label=path:nary_rs``.
-One way to make such a directory from a checkout:
-
-    uvx maturin build -r -i python3.13 -o /tmp/wheels
-    uv pip install --target /work/candidate /tmp/wheels/nary_rust-*.whl
-
-The first argument is the base and the others are compared with it. Naming
-the base twice gives the noise: the ratio that two runs of the same code
-show. A difference no larger than that is not a difference.
-
-Every measurement is made in a new process that times one operation, so that
-one operation cannot leave the allocator in a state that changes the time of
-the next. In each round each operation is timed once for every version, one
-version straight after another, and the order of the versions rotates from
-round to round. The time of an operation in a round is the smallest of the
-repeats in its process. A ratio is taken within a round, and the table gives
-the median of the rounds and their range.
-"""
-
 import argparse
 import json
 import os
@@ -39,7 +13,6 @@ from bench_construct import STATEMENTS  # noqa: E402
 
 
 def run(path, module, repeats, target, operation):
-    """The time of one operation in a new process, in ns."""
     env = dict(os.environ, PYTHONPATH=path)
     command = [
         sys.executable, str(SCRIPT), "--json", "--module", module,
@@ -54,7 +27,7 @@ def spread(values):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser = argparse.ArgumentParser(description="Compare versions of the package with bench_construct.py.")
     parser.add_argument("versions", nargs="+", metavar="label=path[:module]")
     parser.add_argument("--rounds", type=int, default=10)
     parser.add_argument("--repeats", type=int, default=5)
@@ -75,7 +48,6 @@ def main():
 
     operations = [label for label, _, _ in STATEMENTS if not args.only or label in args.only]
 
-    # times[label][operation] is a list with one time for each round.
     times = {label: {operation: [] for operation in operations} for label in labels}
     for round_number in range(args.rounds):
         shift = round_number % len(versions)

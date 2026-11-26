@@ -1,6 +1,3 @@
-"""Elementary functions, each with its domain. ``re`` is declared in
-``relational.py``."""
-
 from .domains import declare_function
 from .kinds import NumberKind
 from .logic import true

@@ -1,29 +1,3 @@
-//! Typed, inert expression trees for Python, written in Rust.
-//!
-//! `Expr` is the only class of expression, and every expression is one of
-//! four forms: a symbol, a literal (a Python value held as it is), a declared
-//! constant, or an application of a head expression to arguments. Each
-//! expression has a kind. A kind is an object declared from Python with
-//! `declare_kind(name, literals=...)`, or made by instantiating a kind family
-//! declared with `declare_kind_family(name)`: `TupleKind(NumberKind, BoolKind)`.
-//!
-//! The one kind defined here is the function kind,
-//! `FunctionKind(inputs, output, rest=None)`, because application is checked
-//! against it: calling an expression of a function kind checks the arguments
-//! against the inputs and builds an application whose kind is the output. A
-//! declared constant, made by `declare_constant(name, kind)`, is a named leaf
-//! of any kind, equal only to itself. A declared function is a declared
-//! constant of a function kind, made by `declare_function`, and a leading
-//! position of it can be declared `Symbol(kind)` to accept only a symbol. The
-//! checking and node construction happen here.
-//!
-//! No other kind and no particular function is defined in this file. The
-//! kinds (NumberKind, BoolKind), the functions (Add, Mul, Eq and the rest),
-//! the constants (pi, true and the rest) and Lambda are declared in Python, in the package `nary`, and each kind is
-//! told what an operator builds with `set_operator`. Which Python values a
-//! kind accepts as literals is also declared in Python; this file knows no
-//! particular type of value.
-
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{LazyLock, Mutex, PoisonError};
@@ -34,42 +8,19 @@ use pyo3::pyclass::CompareOp;
 use pyo3::sync::{MutexExt, PyOnceLock};
 use pyo3::types::{PyString, PyTuple, PyType};
 
-/// What is known about a kind.
-///
-/// One of these is made for each `declare_kind(name)` call, for each
-/// different list of parameters a kind family is instantiated with, and for
-/// each different function kind, and is never freed. So an expression
-/// refers to its kind with a plain reference: building a node does no
-/// reference counting on the kind, and two kinds are the same kind exactly
-/// when the references are the same.
 struct KindData {
-    /// The position of the kind in the order of declaration. Used in hashes.
     id: usize,
     name: String,
-    /// The Python object for this kind. Set when the kind is made.
     object: PyOnceLock<Py<Kind>>,
-    /// The function each operator calls for this kind, indexed by
-    /// `Operator`. Filled in from Python with `set_operator`.
     operators: [PyOnceLock<Py<PyAny>>; Operator::COUNT],
-    /// The family this kind is an instance of, or None for a kind declared
-    /// with `declare_kind(name)` and for a function kind.
     family: Option<Py<KindFamily>>,
-    /// The parameters the family was instantiated with. Empty for a kind
-    /// declared with `declare_kind(name)` and for a function kind.
     params: Box<[KindRef]>,
-    /// For a function kind, what it accepts and returns. None for any
-    /// other kind.
     signature: Option<Signature>,
-    /// The Python types whose values are literals of this kind, matched by
-    /// exact type. Declared with `declare_kind(name, literals=...)`; empty
-    /// for any other kind.
     literals: Box<[Py<PyType>]>,
 }
 
-/// The inputs, further arguments and output of a function kind.
 struct Signature {
     inputs: Box<[KindRef]>,
-    /// The kind of any number of further arguments, or None.
     rest: Option<KindRef>,
     output: KindRef,
 }
@@ -103,21 +54,16 @@ fn new_kind_data(
 }
 
 impl KindData {
-    /// Whether `value` is a literal of this kind: its exact type is one of
-    /// the kind's literal types. A subclass does not count, so a `bool` is
-    /// not accepted where `int` is.
     fn accepts(&self, value: &Bound<'_, PyAny>) -> bool {
         let value_type = value.get_type();
         self.literals.iter().any(|t| value_type.is(t.bind(value.py())))
     }
 }
 
-/// A literal of `kind` holding `value`, which the kind accepts.
 fn literal<'py>(kind: KindRef, value: &Bound<'py, PyAny>) -> PyResult<Bound<'py, Expr>> {
     Bound::new(value.py(), Expr { kind, form: Form::Literal { value: value.clone().unbind() } })
 }
 
-/// The Python object of a kind, made the first time it is asked for.
 fn kind_object(py: Python<'_>, data: KindRef) -> PyResult<Py<Kind>> {
     let object = data.object.get_or_try_init(py, || Py::new(py, Kind { data }))?;
     Ok(object.clone_ref(py))
@@ -131,14 +77,6 @@ fn kind_tuple<'py>(py: Python<'py>, kinds: &[KindRef]) -> PyResult<Bound<'py, Py
     PyTuple::new(py, objects)
 }
 
-/// A kind of expression, such as NumberKind. Declared with
-/// `declare_kind(name)`, made by instantiating a kind family,
-/// `TupleKind(NumberKind, BoolKind)`, or a function kind,
-/// `FunctionKind((NumberKind,), NumberKind)`.
-///
-/// Calling a kind with a name makes a symbol of that kind: `NumberKind("x")`.
-/// Calling it with a value of one of its literal types makes a literal:
-/// `NumberKind(3)`.
 #[pyclass(frozen, module = "nary")]
 struct Kind {
     data: KindRef,
@@ -146,11 +84,6 @@ struct Kind {
 
 #[pymethods]
 impl Kind {
-    /// `NumberKind("x")` is a symbol named x of this kind, and `NumberKind(3)`
-    /// a literal holding 3 if the kind accepts an `int`. Any other argument
-    /// is a TypeError. A node with arguments is built only by calling an
-    /// expression of a function kind, so every argument of every node has
-    /// passed a kind check.
     #[pyo3(signature = (head, *extra))]
     fn __call__<'py>(
         &self,
@@ -200,28 +133,21 @@ impl Kind {
         &self.data.name
     }
 
-    /// The family this kind is an instance of, or None.
     #[getter]
     fn family(&self, py: Python<'_>) -> Option<Py<KindFamily>> {
         self.data.family.as_ref().map(|family| family.clone_ref(py))
     }
 
-    /// The parameters of this kind: `TupleKind(NumberKind, BoolKind).params` is
-    /// `(NumberKind, BoolKind)`. Empty for a kind declared with
-    /// `declare_kind(name)`.
     #[getter]
     fn params<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
         kind_tuple(py, &self.data.params)
     }
 
-    /// The kinds of the leading arguments of a function kind, or None for
-    /// any other kind.
     #[getter]
     fn inputs<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyTuple>>> {
         self.data.signature.as_ref().map(|sig| kind_tuple(py, &sig.inputs)).transpose()
     }
 
-    /// The kind of any further arguments of a function kind, or None.
     #[getter]
     fn rest(&self, py: Python<'_>) -> PyResult<Option<Py<Kind>>> {
         match &self.data.signature {
@@ -230,15 +156,11 @@ impl Kind {
         }
     }
 
-    /// The kind of the result of a function kind, or None for any other
-    /// kind.
     #[getter]
     fn output(&self, py: Python<'_>) -> PyResult<Option<Py<Kind>>> {
         self.data.signature.as_ref().map(|sig| kind_object(py, sig.output)).transpose()
     }
 
-    /// The Python types whose values are literals of this kind, as a tuple:
-    /// `NumberKind.literals` is `(int,)`. Empty if it accepts none.
     #[getter]
     fn literals<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
         PyTuple::new(py, self.data.literals.iter().map(|t| t.clone_ref(py)))
@@ -249,9 +171,6 @@ fn literal_type_names(py: Python<'_>, types: &[Py<PyType>]) -> PyResult<Vec<Stri
     types.iter().map(|t| Ok(t.bind(py).name()?.to_string())).collect()
 }
 
-/// The literal types given to `declare_kind`: None, a type, or a tuple of
-/// types. A str cannot be one, since calling a kind with a str makes a
-/// symbol.
 fn literal_types(name: &str, literals: Option<&Bound<'_, PyAny>>) -> PyResult<Box<[Py<PyType>]>> {
     let Some(literals) = literals.filter(|literals| !literals.is_none()) else {
         return Ok(Box::new([]));
@@ -278,16 +197,6 @@ fn literal_types(name: &str, literals: Option<&Bound<'_, PyAny>>) -> PyResult<Bo
     Ok(types.into_boxed_slice())
 }
 
-/// Declare a kind: `NumberKind = declare_kind("NumberKind", literals=int)`.
-///
-/// `literals` is a type or a tuple of types, by default none: a value whose
-/// exact type is one of them is a literal of the kind. It is made by calling
-/// the kind, `NumberKind(3)`, or by passing the value where the kind is
-/// expected, `sin(3)`.
-///
-/// Every call makes a new kind, different from every other, and a kind
-/// lasts for the life of the process. Declare each kind once, when a module
-/// is imported.
 #[pyfunction]
 #[pyo3(signature = (name, literals=None))]
 fn declare_kind(
@@ -299,8 +208,6 @@ fn declare_kind(
     kind_object(py, new_kind_data(name, None, Box::new([]), None, literals))
 }
 
-/// The function kinds made so far. The key is the id of the output, the id
-/// of the rest kind (or `usize::MAX` for none), then the ids of the inputs.
 static FUNCTION_KINDS: LazyLock<Mutex<HashMap<Box<[usize]>, KindRef>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
@@ -316,8 +223,6 @@ fn function_kind_name(inputs: &[KindRef], rest: Option<KindRef>, output: KindRef
     }
 }
 
-/// The function kind with these inputs, rest and output: made the first
-/// time, and the same record every time after.
 fn function_kind(
     py: Python<'_>,
     inputs: &[KindRef],
@@ -355,12 +260,6 @@ fn function_kind(
     Ok(data)
 }
 
-/// The kind of a function: `FunctionKind((NumberKind, NumberKind), BoolKind)`
-/// takes two NumberKinds and returns a BoolKind, and
-/// `FunctionKind((), NumberKind, rest=NumberKind)` takes any number of
-/// NumberKinds.
-///
-/// The same arguments always give the same kind.
 #[pyfunction(name = "FunctionKind")]
 #[pyo3(signature = (inputs, output, rest=None))]
 fn function_kind_py(
@@ -384,21 +283,10 @@ fn function_kind_py(
     kind_object(py, function_kind(py, &kinds, rest, output)?)
 }
 
-/// A family of kinds, each given by a list of parameters that are kinds.
-/// Declared with `declare_kind_family(name, params=None)`.
-///
-/// `TupleKind(NumberKind, BoolKind)` is the kind of the family with those
-/// parameters. It is made the first time and the same kind is returned every
-/// time after, so two kinds of a family are the same kind exactly when their
-/// parameters are the same kinds in the same order.
 #[pyclass(frozen, module = "nary")]
 struct KindFamily {
     name: String,
-    /// The number of parameters every kind of the family has, or None for
-    /// any number from one up.
     params: Option<usize>,
-    /// The kinds made so far, by the ids of their parameters. Only looked at
-    /// when the family is instantiated.
     instances: Mutex<HashMap<Box<[usize]>, KindRef>>,
 }
 
@@ -459,8 +347,6 @@ impl KindFamily {
         &self.name
     }
 
-    /// The number of parameters, or None if any number from one up is
-    /// accepted.
     #[getter]
     fn params(&self) -> Option<usize> {
         self.params
@@ -471,13 +357,6 @@ impl KindFamily {
     }
 }
 
-/// Declare a kind family: `TupleKind = declare_kind_family("TupleKind")`
-/// takes any number of parameters from one up, and
-/// `MatrixKind = declare_kind_family("MatrixKind", params=1)` takes exactly
-/// one.
-///
-/// Every call makes a new family, and the kinds of a family last for the
-/// life of the process. Declare each family once, when a module is imported.
 #[pyfunction]
 #[pyo3(signature = (name, params=None))]
 fn declare_kind_family(name: String, params: Option<isize>) -> PyResult<KindFamily> {
@@ -510,10 +389,6 @@ fn expect_kind(obj: &Bound<'_, PyAny>) -> PyResult<KindRef> {
     }
 }
 
-/// In a declaration, `Symbol(NumberKind)` is a leading position of kind
-/// NumberKind that accepts only a symbol, not any expression of that kind.
-/// It is a marker, not a kind: the function kind is built from the plain
-/// kinds.
 #[pyclass(frozen, module = "nary", name = "Symbol")]
 struct SymbolMarker {
     kind: KindRef,
@@ -536,15 +411,6 @@ impl SymbolMarker {
     }
 }
 
-/// An expression, of some kind.
-///
-/// A symbol or a literal is made by calling a kind (a literal also by
-/// `apply`, from a value passed where its kind is expected), and a declared
-/// constant by `declare_constant` or, of a function kind, by
-/// `declare_function`. An application is made only by `apply`,
-/// which checks that each argument is an `Expr` of the kind the head's
-/// function kind expects.
-/// Nothing else makes an `Expr`.
 #[pyclass(frozen, module = "nary")]
 struct Expr {
     kind: KindRef,
@@ -552,29 +418,17 @@ struct Expr {
 }
 
 enum Form {
-    /// `NumberKind("x")`.
     Symbol { name: Py<PyString> },
-    /// `NumberKind(3)`: a Python value, held as it is, of a type the kind
-    /// accepts. Nothing is computed with it.
     Literal { value: Py<PyAny> },
-    /// An opaque named constant of any kind, made by `declare_constant`,
-    /// or of a function kind by `declare_function`. Equal only to itself.
     Declared {
         name: Py<PyString>,
-        /// Names for the leading arguments of its applications, for a
-        /// declared function.
         names: Option<Py<PyTuple>>,
-        /// For each leading position, whether it was declared
-        /// `Symbol(kind)` and so accepts only a symbol. None when no
-        /// position was.
         symbols: Option<Box<[bool]>>,
     },
-    /// A head of a function kind applied to arguments.
     Apply { head: Py<Expr>, args: Py<PyTuple> },
 }
 
 impl Expr {
-    /// The name of a symbol or declared constant.
     fn plain_name(&self) -> Option<&Py<PyString>> {
         match &self.form {
             Form::Symbol { name } | Form::Declared { name, .. } => Some(name),
@@ -582,7 +436,6 @@ impl Expr {
         }
     }
 
-    /// How a head is named in an error: its name, or else its repr.
     fn label(&self, py: Python<'_>) -> PyResult<String> {
         match self.plain_name() {
             Some(name) => Ok(name.bind(py).to_string()),
@@ -602,8 +455,6 @@ fn structural_eq(py: Python<'_>, a: &Expr, b: &Expr) -> PyResult<bool> {
         (Form::Symbol { name: x }, Form::Symbol { name: y }) => {
             x.bind(py).as_any().eq(y.bind(py))?
         }
-        // Equal values of different types, such as 1 and 1.0, are different
-        // literals.
         (Form::Literal { value: x }, Form::Literal { value: y }) => {
             let (x, y) = (x.bind(py), y.bind(py));
             x.get_type().is(&y.get_type()) && x.eq(y)?
@@ -611,8 +462,6 @@ fn structural_eq(py: Python<'_>, a: &Expr, b: &Expr) -> PyResult<bool> {
         (Form::Apply { head: h1, args: a1 }, Form::Apply { head: h2, args: a2 }) => {
             structural_eq(py, h1.get(), h2.get())? && a1.bind(py).as_any().eq(a2.bind(py))?
         }
-        // Declared constants are equal only when identical, checked above,
-        // and different forms are never equal.
         _ => false,
     })
 }
@@ -630,7 +479,6 @@ fn compare(slf: &Expr, other: &Bound<'_, PyAny>, op: CompareOp) -> PyResult<Py<P
     })
 }
 
-/// Combine the hashes of the parts of an expression into one hash.
 fn combine_hashes(parts: [usize; 3]) -> isize {
     const MULTIPLIER: u64 = 0x9E37_79B9_7F4A_7C15;
     let mut hash = MULTIPLIER;
@@ -641,12 +489,9 @@ fn combine_hashes(parts: [usize; 3]) -> isize {
     hash as isize
 }
 
-/// A hash that agrees with `structural_eq`. The first part tells the forms
-/// apart.
 fn expr_hash(py: Python<'_>, e: &Expr) -> PyResult<isize> {
     let parts = match &e.form {
         Form::Symbol { name } => [0, e.kind.id, name.bind(py).hash()? as usize],
-        // Equal only to itself, so hashed by address.
         Form::Declared { .. } => [1, e.kind.id, e as *const Expr as usize],
         Form::Apply { head, args } => {
             [2, expr_hash(py, head.get())? as usize, args.bind(py).hash()? as usize]
@@ -658,7 +503,6 @@ fn expr_hash(py: Python<'_>, e: &Expr) -> PyResult<isize> {
 
 fn wrong_kind(py: Python<'_>, head: &Expr, expected: KindRef, arg: &Bound<'_, PyAny>) -> PyErr {
     let text = (|| -> PyResult<String> {
-        // An expression is described by its kind, anything else by its type.
         let got = match arg.cast_exact::<Expr>() {
             Ok(expr) => expr.get().kind.name.clone(),
             Err(_) => arg.get_type().name()?.to_string(),
@@ -677,9 +521,6 @@ fn wrong_kind(py: Python<'_>, head: &Expr, expected: KindRef, arg: &Bound<'_, Py
     }
 }
 
-/// Check that each leading argument at a position declared `Symbol(kind)` is
-/// a symbol. Called after the kind check, so every argument is an `Expr` of
-/// the right kind.
 fn check_symbols(
     py: Python<'_>,
     head: &Expr,
@@ -706,9 +547,6 @@ fn check_symbols(
     Ok(())
 }
 
-/// Apply `head` to `args`: check them against the head's function kind (and,
-/// for a declared function, its `Symbol(kind)` positions) and build the
-/// application node, of the kind's output.
 fn apply<'py>(head: &Bound<'py, Expr>, args: &Bound<'py, PyTuple>) -> PyResult<Bound<'py, Expr>> {
     let py = args.py();
     let expr = head.get();
@@ -734,8 +572,6 @@ fn apply<'py>(head: &Bound<'py, Expr>, args: &Bound<'py, PyTuple>) -> PyResult<B
             given
         )));
     }
-    // The arguments with each Python value converted to a literal. Made only
-    // when there is a value to convert.
     let mut converted: Option<Vec<Bound<'py, PyAny>>> = None;
     for (position, arg) in args.iter_borrowed().enumerate() {
         let expected = match sig.inputs.get(position) {
@@ -748,8 +584,6 @@ fn apply<'py>(head: &Bound<'py, Expr>, args: &Bound<'py, PyTuple>) -> PyResult<B
                     converted.push(arg.to_owned());
                 }
             }
-            // A value that is not an expression takes the kind of its
-            // position, if that kind accepts its type.
             Err(_) if expected.accepts(&arg) => {
                 let node = literal(expected, &arg)?.into_any();
                 converted
@@ -775,8 +609,6 @@ fn apply<'py>(head: &Bound<'py, Expr>, args: &Bound<'py, PyTuple>) -> PyResult<B
     )
 }
 
-/// The operators. For each kind, each builds whatever was registered for it
-/// with `set_operator`. `Neg` is unary minus, spelled "neg".
 #[derive(Clone, Copy)]
 enum Operator {
     Add,
@@ -822,8 +654,6 @@ impl Operator {
     }
 }
 
-/// Call `function`, given to `set_operator` for `operator` on `kind`, with
-/// `operands`. The result must be an expression.
 fn operate<'py>(
     py: Python<'py>,
     function: &Py<PyAny>,
@@ -844,9 +674,6 @@ fn operate<'py>(
     Ok(result)
 }
 
-/// What `operator` builds for the kind of `left`, from `left` and `right`.
-/// If the kind has nothing for the operator, the result is NotImplemented,
-/// as for any Python object that does not support an operator.
 fn binary<'py>(
     left: &Bound<'py, Expr>,
     right: &Bound<'py, PyAny>,
@@ -860,11 +687,6 @@ fn binary<'py>(
     }
 }
 
-/// A reflected operator, for `1 + x`: Python calls it on `x` because `left`
-/// does not support the operator with `x`. If the kind of `x` accepts the
-/// type of `left`, `left` becomes a literal of that kind and the operator
-/// proceeds as if that literal had been on the left. Otherwise the result
-/// is NotImplemented.
 fn reflected<'py>(
     right: &Bound<'py, Expr>,
     left: &Bound<'py, PyAny>,
@@ -878,7 +700,6 @@ fn reflected<'py>(
     }
 }
 
-/// `pow(a, b, m)` with a modulus is not supported.
 fn check_no_modulus(modulo: &Bound<'_, PyAny>) -> PyResult<()> {
     if modulo.is_none() {
         Ok(())
@@ -889,20 +710,16 @@ fn check_no_modulus(modulo: &Bound<'_, PyAny>) -> PyResult<()> {
 
 #[pymethods]
 impl Expr {
-    /// Apply this expression, which must be of a function kind, to
-    /// arguments: `sin(x)`, `f(x)`, `g(sin)(x)`.
     #[pyo3(signature = (*args))]
     fn __call__<'py>(slf: &Bound<'py, Self>, args: &Bound<'py, PyTuple>) -> PyResult<Bound<'py, Expr>> {
         apply(slf, args)
     }
 
-    /// The kind of this expression: `e.kind is NumberKind`.
     #[getter]
     fn kind(&self, py: Python<'_>) -> Option<Py<Kind>> {
         self.kind.object.get(py).map(|kind| kind.clone_ref(py))
     }
 
-    /// The head expression of an application, or None.
     #[getter]
     fn head(&self, py: Python<'_>) -> Option<Py<Expr>> {
         match &self.form {
@@ -911,7 +728,6 @@ impl Expr {
         }
     }
 
-    /// The arguments of an application, or `()`.
     #[getter]
     fn args<'py>(&self, py: Python<'py>) -> Bound<'py, PyTuple> {
         match &self.form {
@@ -920,13 +736,11 @@ impl Expr {
         }
     }
 
-    /// The name of a symbol or declared constant, or None.
     #[getter]
     fn name(&self, py: Python<'_>) -> Option<Py<PyString>> {
         self.plain_name().map(|name| name.clone_ref(py))
     }
 
-    /// The argument names of a declared function, or `()`.
     #[getter]
     fn names<'py>(&self, py: Python<'py>) -> Bound<'py, PyTuple> {
         match &self.form {
@@ -935,9 +749,6 @@ impl Expr {
         }
     }
 
-    /// What a declared function was declared with: for each leading
-    /// position, its kind or a `Symbol(kind)` marker. None for any other
-    /// expression.
     #[getter]
     fn params<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyTuple>>> {
         let (Form::Declared { symbols, .. }, Some(sig)) = (&self.form, &self.kind.signature) else {
@@ -965,14 +776,11 @@ impl Expr {
         matches!(self.form, Form::Literal { .. })
     }
 
-    /// Whether this is a declared constant, of any kind, so also a declared
-    /// function such as `sin`.
     #[getter]
     fn is_constant(&self) -> bool {
         matches!(self.form, Form::Declared { .. })
     }
 
-    /// The Python value held by a literal, or None.
     #[getter]
     fn value(&self, py: Python<'_>) -> Option<Py<PyAny>> {
         match &self.form {
@@ -989,7 +797,6 @@ impl Expr {
                 let head = head.get();
                 let args = args.bind(py);
                 let head = match head.plain_name() {
-                    // A named head applied to nothing prints as its name.
                     Some(name) if args.is_empty() => return Ok(name.bind(py).to_string()),
                     Some(name) => name.bind(py).to_string(),
                     None => head.__repr__(py)?,
@@ -1053,7 +860,6 @@ impl Expr {
         reflected(slf, other, Operator::Pow)
     }
 
-    /// Unary minus, `-x`: what the "neg" operator builds for the kind.
     fn __neg__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
         let kind = slf.get().kind;
@@ -1078,8 +884,6 @@ impl Expr {
             CompareOp::Ge => Operator::Ge,
             CompareOp::Eq | CompareOp::Ne => return compare(slf.get(), other, op),
         };
-        // `1 < x` reaches here as `x > 1`: Python swaps the operands of a
-        // comparison itself, so there is no reflected comparison.
         Ok(binary(slf, other, operator)?.unbind())
     }
 
@@ -1087,8 +891,6 @@ impl Expr {
         expr_hash(py, self)
     }
 
-    /// Named arguments such as `eq.lhs`, declared with `names=(...)` on the
-    /// head of an application.
     fn __getattr__(&self, py: Python<'_>, name: &Bound<'_, PyString>) -> PyResult<Py<PyAny>> {
         if let Form::Apply { head, args } = &self.form {
             if let Form::Declared { names: Some(names), .. } = &head.get().form {
@@ -1105,17 +907,6 @@ impl Expr {
     }
 }
 
-/// Declare a function: a new named constant of the function kind
-/// `FunctionKind(arg_kinds, returns, rest=rest)`.
-///
-/// `arg_kinds` are the leading positions. Each is a kind, or `Symbol(kind)`
-/// for a position of that kind that accepts only a symbol; the function
-/// kind is built from the plain kinds, and `f.params` shows the markers. If
-/// `rest` (a kind) is given, any number of further arguments of that kind
-/// are accepted. The result is always of the kind `returns`. `names` gives
-/// attribute names for the leading arguments, so that `names=("lhs", "rhs")`
-/// makes `.lhs` and `.rhs` available on an application. Every call makes a
-/// different function.
 #[pyfunction]
 #[pyo3(signature = (name, *arg_kinds, rest=None, returns, names=None))]
 fn declare_function<'py>(
@@ -1149,8 +940,6 @@ fn declare_function<'py>(
             }
         }
     }
-    // A function with no Symbol(kind) position stores no flags, so applying
-    // it costs one test more than before.
     let symbols = symbols.contains(&true).then(|| symbols.into_boxed_slice());
     let rest = rest.map(expect_kind).transpose()?;
     let names = match names {
@@ -1167,13 +956,6 @@ fn declare_function<'py>(
     Bound::new(py, Expr { kind, form: Form::Declared { name, names, symbols } })
 }
 
-/// Declare a constant: `pi = declare_constant("pi", NumberKind)`, a new named
-/// leaf of `kind`, which can be any kind.
-///
-/// It stands for one specific thing: it is equal only to itself, and unlike
-/// a symbol it is not accepted in a `Symbol(kind)` position. Every call makes
-/// a different constant, even with a name already used. Of a function kind
-/// it is a declared function with no argument names.
 #[pyfunction]
 fn declare_constant<'py>(
     py: Python<'py>,
@@ -1184,13 +966,6 @@ fn declare_constant<'py>(
     Bound::new(py, Expr { kind, form: Form::Declared { name, names: None, symbols: None } })
 }
 
-/// Say what an operator builds for a kind:
-/// `set_operator(NumberKind, "+", Add)`. The operators are "+", "-", "*",
-/// "/", "**", "neg" (unary minus), "<", ">", "<=" and ">=".
-///
-/// The operator calls `function` with the operands, and the result must be
-/// an expression. Each operator can be set once for each kind. A kind with
-/// nothing set for an operator does not support it.
 #[pyfunction]
 fn set_operator(
     py: Python<'_>,

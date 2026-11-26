@@ -1,5 +1,3 @@
-"""The elementary functions and the declarations in nary.logic."""
-
 import nary as nr
 import pytest
 from nary import BoolKind, NumberKind
