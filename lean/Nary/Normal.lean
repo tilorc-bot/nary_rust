@@ -1,4 +1,4 @@
-import Nary.Literals
+import Nary.ArithmeticRules
 import Nary.Normal.Statements
 
 namespace Nary.Normal
@@ -156,5 +156,35 @@ theorem zero_base : Statement.zero_base := by
     | none => simp [Pow, withDomain₂, Mul]
     | some w =>
       simp [Pow, withDomain₂, powDomain, powTotal, Mul, lit, hu.1, mul_pos_iff_of_pos_left hu.2]
+
+theorem pow_positive_factor : Statement.pow_positive_factor := by
+  intro c x a h
+  obtain ⟨r, hr, rfl⟩ := ArithmeticRules.holds_pos h
+  exact ArithmeticRules.pow_mul_pos hr x a
+
+theorem combine_radicals : Statement.combine_radicals := by
+  intro a c b h
+  simp only [holds_and, List.mem_cons, List.not_mem_nil, forall_eq_or_imp] at h
+  obtain ⟨ha, hb, -⟩ := h
+  obtain ⟨r, hr, rfl⟩ := ArithmeticRules.holds_pos ha
+  obtain ⟨q, -, rfl⟩ := ArithmeticRules.holds_pos hb
+  exact (ArithmeticRules.pow_mul_pos hr _ c).symm
+
+theorem collect_parallel_powers : Statement.collect_parallel_powers := by
+  intro x a c h
+  obtain ⟨r, hr, rfl⟩ := ArithmeticRules.holds_pos h
+  cases x with
+  | none => cases a <;> simp [Pow, withDomain₂, Mul, Add]
+  | some z =>
+  cases a with
+  | none => simp [Pow, withDomain₂, Mul, Add]
+  | some w =>
+  by_cases hz : z = 0
+  · subst hz
+    have h1 : 0 < r * w.re ↔ 0 < w.re := mul_pos_iff_of_pos_left hr
+    have h2 : 0 < (1 + r) * w.re ↔ 0 < w.re := mul_pos_iff_of_pos_left (by linarith)
+    by_cases hw : 0 < w.re <;> simp [Pow, withDomain₂, powDomain, powTotal, Mul, Add, lit, h1, h2, hw]
+  · simp [Pow, withDomain₂, powDomain, powTotal, Mul, Add, lit, hz, ← Complex.exp_add]
+    ring_nf
 
 end Nary.Normal

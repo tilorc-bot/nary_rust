@@ -127,4 +127,90 @@ theorem or_absorption : Statement.or_absorption := by
   by_cases hA : ∃ q, some q ∈ ps ∧ ¬q <;>
     rcases p with _ | q <;> (try by_cases hq : q) <;> simp [And, Or, -eq_iff_iff, *]
 
+private theorem and_congr_mem {l m : List Boolean}
+    (hF : (∃ p, some p ∈ l ∧ ¬p) ↔ (∃ p, some p ∈ m ∧ ¬p)) (hN : none ∈ l ↔ none ∈ m) :
+    And l = And m := by
+  unfold And; split_ifs <;> simp_all
+
+private theorem or_congr_mem {l m : List Boolean}
+    (hF : (∃ p, some p ∈ l ∧ p) ↔ (∃ p, some p ∈ m ∧ p)) (hN : none ∈ l ↔ none ∈ m) :
+    Or l = Or m := by
+  unfold Or; split_ifs <;> simp_all
+
+theorem and_flat : Statement.and_flat := by
+  intro xs ys zs
+  by_cases hF : ∃ p, some p ∈ ys ∧ ¬p
+  · have hA : And ys = some False := by simp only [And, hF, ↓reduceIte]
+    rw [hA]
+    obtain ⟨p, hp, hn⟩ := hF
+    have h1 : ∃ p, some p ∈ xs ++ some False :: zs ∧ ¬p := ⟨False, by simp, id⟩
+    have h2 : ∃ p, some p ∈ xs ++ ys ++ zs ∧ ¬p := ⟨p, by simp [hp], hn⟩
+    simp only [And, h1, h2, ↓reduceIte]
+  · by_cases hN : none ∈ ys
+    · have hA : And ys = none := by simp only [And, hF, hN, ↓reduceIte]
+      rw [hA]
+      apply and_congr_mem
+      · simp only [List.mem_append, List.mem_cons, reduceCtorEq, false_or]
+        constructor
+        · rintro ⟨p, hp | hp, hn⟩
+          · exact ⟨p, Or.inl (Or.inl hp), hn⟩
+          · exact ⟨p, Or.inr hp, hn⟩
+        · rintro ⟨p, (hp | hp) | hp, hn⟩
+          · exact ⟨p, Or.inl hp, hn⟩
+          · exact absurd ⟨p, hp, hn⟩ hF
+          · exact ⟨p, Or.inr hp, hn⟩
+      · simp [hN]
+    · have hA : And ys = some True := by simp only [And, hF, hN, ↓reduceIte]
+      rw [hA]
+      apply and_congr_mem
+      · simp only [List.mem_append, List.mem_cons, Option.some.injEq]
+        constructor
+        · rintro ⟨p, hp | hp | hp, hn⟩
+          · exact ⟨p, Or.inl (Or.inl hp), hn⟩
+          · exact absurd (hp ▸ trivial) hn
+          · exact ⟨p, Or.inr hp, hn⟩
+        · rintro ⟨p, (hp | hp) | hp, hn⟩
+          · exact ⟨p, Or.inl hp, hn⟩
+          · exact absurd ⟨p, hp, hn⟩ hF
+          · exact ⟨p, Or.inr (Or.inr hp), hn⟩
+      · simp [hN]
+
+theorem or_flat : Statement.or_flat := by
+  intro xs ys zs
+  by_cases hF : ∃ p, some p ∈ ys ∧ p
+  · have hA : Or ys = some True := by simp only [Or, hF, ↓reduceIte]
+    rw [hA]
+    obtain ⟨p, hp, hn⟩ := hF
+    have h1 : ∃ p, some p ∈ xs ++ some True :: zs ∧ p := ⟨True, by simp, trivial⟩
+    have h2 : ∃ p, some p ∈ xs ++ ys ++ zs ∧ p := ⟨p, by simp [hp], hn⟩
+    simp only [Or, h1, h2, ↓reduceIte]
+  · by_cases hN : none ∈ ys
+    · have hA : Or ys = none := by simp only [Or, hF, hN, ↓reduceIte]
+      rw [hA]
+      apply or_congr_mem
+      · simp only [List.mem_append, List.mem_cons, reduceCtorEq, false_or]
+        constructor
+        · rintro ⟨p, hp | hp, hn⟩
+          · exact ⟨p, Or.inl (Or.inl hp), hn⟩
+          · exact ⟨p, Or.inr hp, hn⟩
+        · rintro ⟨p, (hp | hp) | hp, hn⟩
+          · exact ⟨p, Or.inl hp, hn⟩
+          · exact absurd ⟨p, hp, hn⟩ hF
+          · exact ⟨p, Or.inr hp, hn⟩
+      · simp [hN]
+    · have hA : Or ys = some False := by simp only [Or, hF, hN, ↓reduceIte]
+      rw [hA]
+      apply or_congr_mem
+      · simp only [List.mem_append, List.mem_cons, Option.some.injEq]
+        constructor
+        · rintro ⟨p, hp | hp | hp, hn⟩
+          · exact ⟨p, Or.inl (Or.inl hp), hn⟩
+          · exact (hp ▸ hn).elim
+          · exact ⟨p, Or.inr hp, hn⟩
+        · rintro ⟨p, (hp | hp) | hp, hn⟩
+          · exact ⟨p, Or.inl hp, hn⟩
+          · exact absurd ⟨p, hp, hn⟩ hF
+          · exact ⟨p, Or.inr (Or.inr hp), hn⟩
+      · simp [hN]
+
 end Nary.LogicRules

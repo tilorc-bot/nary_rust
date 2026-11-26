@@ -44,7 +44,7 @@ abbrev pow_complex : Prop :=
   ∀ (a b : Nary.Number), Nary.Holds (Nary.And [Nary.Ne a (Nary.lit 0), Nary.Ne (Nary.re b) b]) → Nary.Pow a b = Nary.exp (Nary.Mul [b, Nary.log a])
 
 abbrev pow_positive_factor : Prop :=
-  ∀ (a b : Nary.Number) (rest : List Nary.Number), Nary.Holds (Nary.Gt a (Nary.lit 0)) → Nary.Pow (Nary.Mul ([a] ++ rest)) b = Nary.Mul [Nary.Pow a b, Nary.Pow (Nary.Mul rest) b]
+  ∀ (a c b : Nary.Number) (rest : List Nary.Number), Nary.Holds (Nary.Gt a (Nary.lit 0)) → Nary.Pow (Nary.Mul ([a, c] ++ rest)) b = Nary.Mul [Nary.Pow a b, Nary.Pow (Nary.Mul ([c] ++ rest)) b]
 
 abbrev exp_log : Prop :=
   ∀ (a : Nary.Number), Nary.Holds (Nary.Ne a (Nary.lit 0)) → Nary.exp (Nary.log a) = a

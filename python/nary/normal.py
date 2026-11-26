@@ -118,7 +118,7 @@ def _collect(head, args, known):
         for coefficient in _merge(head, key, coefficients, known):
             joined.append(_join(head, key, coefficient, known))
     radicals = [e for e in map(_radical_exponent, joined) if e is not None]
-    if len(set(radicals)) < len(radicals) or any(
+    if not adding and len(set(radicals)) < len(radicals) or any(
             _coefficient(head, j) is not None or j.head == head for j in joined):
         return _collect(head, [to_expr(number), *joined], known)
     joined.sort(key=order_key)
@@ -164,6 +164,10 @@ def _is_real(e):
 def _is_integer(e):
     v = value(e)
     return v is not None and v.is_integer
+
+
+def _sum(terms):
+    return terms[0] if len(terms) == 1 else Add(*terms)
 
 
 def _product(factors):
@@ -233,9 +237,9 @@ def _pow(base, exponent, known):
         rest, c = _split_term(exponent)
         return Pow(base, rest) if value(c).re > 0 else Pow(base, exponent)
     if vb is not None and exponent.head == Add and _is_integer(exponent.args[0]):
-        rest = exponent.args[1:]
-        return _collect(Mul, [_pow(base, exponent.args[0], known),
-                              _pow(base, rest[0] if len(rest) == 1 else Add(*rest), known)], known)
+        whole, rest = power(vb, value(exponent.args[0])), exponent.args[1:]
+        if whole is not None and _coefficient(Mul, whole) is not None:
+            return _collect(Mul, [whole, _pow(base, _sum(rest), known)], known)
     if vx is None:
         return Pow(base, exponent)
     if vx == 1:

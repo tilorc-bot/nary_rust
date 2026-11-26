@@ -12,6 +12,13 @@ SOURCES = {
     "ElementaryRules": ("nary.elementary_rules", "rules", ()),
     "LogicRules": ("nary.logic_rules", "rules", (And, Or)),
     "Normal": ("nary.normal", "laws", ()),
+    "Expand": ("nary.strategies", "expand", ()),
+    "ExpandLog": ("nary.strategies", "expand_log", ()),
+    "Logcombine": ("nary.strategies", "logcombine", ()),
+    "ExpandTrig": ("nary.strategies", "expand_trig", ()),
+    "Trigsimp": ("nary.strategies", "trigsimp", ()),
+    "Together": ("nary.strategies", "together", ()),
+    "Powsimp": ("nary.strategies", "powsimp", ()),
 }
 
 HEADER = """\

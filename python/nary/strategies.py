@@ -17,7 +17,7 @@ from .arithmetic import Add, Mul
 from .elementary import cos, exp, log, sin, tan
 from .kinds import Many, NumberKind
 from .logic import And
-from .relational import Gt, Ne
+from .relational import Gt
 from .rules import rule
 from .rewriting import rewrite
 from .simplify import _normal, rules
@@ -25,12 +25,11 @@ from .simplify import _normal, rules
 __all__ = ["STRATEGIES", "apply"]
 
 a, b, c, d = (NumberKind(s) for s in "abcd")
-rest, cs = Many(NumberKind)("rest"), Many(NumberKind)("cs")
+cs = Many(NumberKind)("cs")
 
 expand = [
-    rule(Add(a, rest) * Add(b, cs), a * b + a * Add(cs) + Add(rest) * b + Add(rest) * Add(cs),
-         when=And(Ne(Add(rest), 0), Ne(Add(cs), 0)), name="expand_product"),
-    rule((a + b) ** 2, a**2 + 2 * a * b + b**2, when=Ne(b, 0), name="expand_square"),
+    rule(a * Add(b, c, cs), a * b + a * Add(c, cs), name="expand_distribute"),
+    rule((a + b) ** 2, a**2 + 2 * a * b + b**2, name="expand_square"),
 ]
 expand_log = [
     rule(log(a * b), log(a) + log(b), when=And(Gt(a, 0), Gt(b, 0)), name="expand_log_product"),

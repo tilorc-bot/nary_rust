@@ -1,4 +1,4 @@
-from nary import Eq, Lambda, Ne, NumberKind, Pow, cos, exp, log, re, sin
+from nary import Eq, Gt, I, Lambda, Ne, NumberKind, Pow, cos, exp, log, re, sin, tan
 from nary.logic import And, BoolKind, Not, Or, false, true
 from nary.simplify import simplify
 
@@ -49,3 +49,13 @@ def test_a_long_sum():
     terms = [NumberKind(f"x{i}") for i in range(10)]
     e = sum(terms[1:], terms[0])
     assert simplify(e + e) == simplify(2 * e)
+
+
+def test_these_terminate():
+    for e, known in [
+        (NumberKind(1) ** (x ** -1), []), (NumberKind(2) ** log(y), []),
+        (x ** tan(y), [Gt(x, 0)]), ((1 + I) ** (y + 2), []),
+        ((1 + I) ** 2 * (1 + I) ** y, []),
+        (NumberKind(2) ** Pow(2, -1) + NumberKind(3) ** Pow(2, -1) + x, []),
+    ]:
+        simplify(e, known)

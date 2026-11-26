@@ -83,6 +83,10 @@ CASES = [
     (exp(x) ** 2, exp(Mul(2, x))),
     (exp(x + 1) ** -1, exp(Add(-1, Mul(-1, x)))),
     (exp(x) ** half, Pow(exp(x), half)),
+    (Pow(1 + I, y + 2), Pow(Add(1, I), Add(2, y))),
+    (Pow(1 + I, 2) * Pow(1 + I, y), Pow(Add(1, I), Add(2, y))),
+    (Pow(1 + I, y + 1), Pow(Add(1, I), Add(1, y))),
+    (Pow(2, half) + Pow(3, half) + x, Add(Pow(2, half), Pow(3, half), x)),
 ]
 
 

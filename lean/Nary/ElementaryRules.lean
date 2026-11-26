@@ -126,4 +126,133 @@ theorem tan_pi_4 : Statement.tan_pi_4 := by
     rw [h, ← Complex.ofReal_tan, Real.tan_pi_div_four]; simp
   simp [tan, withDomain, tanDomain, Mul, pi, hc, ht, lit]
 
+private theorem root (n : ℤ) (hn : 0 < n) :
+    Pow (lit n) (Pow (lit 2) (lit (-1))) = some ((Real.sqrt n : ℝ) : ℂ) := by
+  rw [inverse 2 (by norm_num)]
+  have hn' : (n : ℂ) ≠ 0 := by exact_mod_cast hn.ne'
+  have hr : (0 : ℝ) < n := by exact_mod_cast hn
+  have hs : Real.sqrt n = Real.exp (2⁻¹ * Real.log n) := by
+    rw [← Real.sqrt_sq (Real.exp_pos _).le, sq, ← Real.exp_add,
+      show 2⁻¹ * Real.log n + 2⁻¹ * Real.log n = Real.log n by ring, Real.exp_log hr]
+  have : Complex.exp (2⁻¹ * Complex.log (n : ℂ)) = ((Real.sqrt n : ℝ) : ℂ) := by
+    rw [hs, show ((n : ℂ)) = ((n : ℝ) : ℂ) by push_cast; rfl, ← Complex.ofReal_log hr.le,
+      Complex.ofReal_exp]
+    push_cast; rfl
+  simp [lit, Pow, withDomain₂, powDomain, powTotal, hn', this]
+
+theorem sin_pi_4 : Statement.sin_pi_4 := by
+  simp only [Statement.sin_pi_4]
+  rw [inverse 4 (by norm_num), root 2 (by norm_num), inverse 2 (by norm_num)]
+  have : Complex.sin (Real.pi * 4⁻¹) = 2⁻¹ * ((Real.sqrt 2 : ℝ) : ℂ) := by
+    rw [show (Real.pi : ℂ) * 4⁻¹ = ((Real.pi / 4 : ℝ) : ℂ) by push_cast; ring,
+      ← Complex.ofReal_sin, Real.sin_pi_div_four]
+    push_cast; ring
+  simp [sin, Mul, pi, this]
+
+theorem cos_pi_4 : Statement.cos_pi_4 := by
+  simp only [Statement.cos_pi_4]
+  rw [inverse 4 (by norm_num), root 2 (by norm_num), inverse 2 (by norm_num)]
+  have : Complex.cos (Real.pi * 4⁻¹) = 2⁻¹ * ((Real.sqrt 2 : ℝ) : ℂ) := by
+    rw [show (Real.pi : ℂ) * 4⁻¹ = ((Real.pi / 4 : ℝ) : ℂ) by push_cast; ring,
+      ← Complex.ofReal_cos, Real.cos_pi_div_four]
+    push_cast; ring
+  simp [cos, Mul, pi, this]
+
+theorem cos_pi_6 : Statement.cos_pi_6 := by
+  simp only [Statement.cos_pi_6]
+  rw [inverse 6 (by norm_num), root 3 (by norm_num), inverse 2 (by norm_num)]
+  have : Complex.cos (Real.pi * 6⁻¹) = 2⁻¹ * ((Real.sqrt 3 : ℝ) : ℂ) := by
+    rw [show (Real.pi : ℂ) * 6⁻¹ = ((Real.pi / 6 : ℝ) : ℂ) by push_cast; ring,
+      ← Complex.ofReal_cos, Real.cos_pi_div_six]
+    push_cast; ring
+  simp [cos, Mul, pi, this]
+
+theorem sin_pi_3 : Statement.sin_pi_3 := by
+  simp only [Statement.sin_pi_3]
+  rw [inverse 3 (by norm_num), root 3 (by norm_num), inverse 2 (by norm_num)]
+  have : Complex.sin (Real.pi * 3⁻¹) = 2⁻¹ * ((Real.sqrt 3 : ℝ) : ℂ) := by
+    rw [show (Real.pi : ℂ) * 3⁻¹ = ((Real.pi / 3 : ℝ) : ℂ) by push_cast; ring,
+      ← Complex.ofReal_sin, Real.sin_pi_div_three]
+    push_cast; ring
+  simp [sin, Mul, pi, this]
+
+theorem sin_shift_down : Statement.sin_shift_down := by
+  intro cs rest h
+  rw [inverse 2 (by norm_num)] at h ⊢
+  cases hc : cs.mapM id with
+  | none => simp [Ge, Le, Mul, hc, Holds] at h
+  | some l =>
+  cases hr : rest.mapM id with
+  | none => simp [sin, cos, Add, Mul, pi, lit, List.mapM_cons, hc, hr]
+  | some r =>
+  simp [sin, cos, Add, Mul, pi, lit, List.mapM_cons, hc, hr]
+  rw [← Complex.sin_add_pi_div_two]; congr 1; ring
+
+theorem sin_shift_up : Statement.sin_shift_up := by
+  intro cs rest h
+  rw [inverse 2 (by norm_num)]
+  cases hc : cs.mapM id with
+  | none => simp [Lt, Mul, hc, Holds] at h
+  | some l =>
+  cases hr : rest.mapM id with
+  | none => simp [sin, cos, Add, Mul, pi, lit, List.mapM_cons, hc, hr]
+  | some r =>
+  simp [sin, cos, Add, Mul, pi, lit, List.mapM_cons, hc, hr]
+  rw [show (l.prod + 2⁻¹) * (Real.pi : ℂ) + r.sum = (Real.pi * l.prod + r.sum) + Real.pi / 2 by ring,
+    Complex.cos_add_pi_div_two]
+  ring
+
+theorem cos_shift_down : Statement.cos_shift_down := by
+  intro cs rest h
+  rw [inverse 2 (by norm_num)] at h ⊢
+  cases hc : cs.mapM id with
+  | none => simp [Ge, Le, Mul, hc, Holds] at h
+  | some l =>
+  cases hr : rest.mapM id with
+  | none => simp [sin, cos, Add, Mul, pi, lit, List.mapM_cons, hc, hr]
+  | some r =>
+  simp [sin, cos, Add, Mul, pi, lit, List.mapM_cons, hc, hr]
+  rw [show (l.prod + -2⁻¹) * (Real.pi : ℂ) + r.sum = (Real.pi * l.prod + r.sum) - Real.pi / 2 by ring,
+    Complex.sin_sub_pi_div_two]
+  ring
+
+theorem cos_shift_up : Statement.cos_shift_up := by
+  intro cs rest h
+  rw [inverse 2 (by norm_num)]
+  cases hc : cs.mapM id with
+  | none => simp [Lt, Mul, hc, Holds] at h
+  | some l =>
+  cases hr : rest.mapM id with
+  | none => simp [sin, cos, Add, Mul, pi, List.mapM_cons, hc, hr]
+  | some r =>
+  simp [sin, cos, Add, Mul, pi, List.mapM_cons, hc, hr]
+  rw [show (l.prod + 2⁻¹) * (Real.pi : ℂ) + r.sum = (Real.pi * l.prod + r.sum) + Real.pi / 2 by ring,
+    Complex.sin_add_pi_div_two]
+
+theorem tan_period_down : Statement.tan_period_down := by
+  intro cs rest h
+  cases hc : cs.mapM id with
+  | none => simp [Ge, Le, Mul, hc, Holds] at h
+  | some l =>
+  cases hr : rest.mapM id with
+  | none => simp [tan, withDomain, Add, Mul, pi, lit, List.mapM_cons, hc, hr]
+  | some r =>
+  simp [tan, withDomain, tanDomain, Add, Mul, pi, lit, List.mapM_cons, hc, hr]
+  simp only [show (l.prod + -1) * (Real.pi : ℂ) + r.sum = (Real.pi * l.prod + r.sum) - Real.pi by ring,
+    Complex.cos_sub_pi, Complex.tan_sub_pi, neg_eq_zero]
+  congr
+
+theorem tan_period_up : Statement.tan_period_up := by
+  intro cs rest h
+  cases hc : cs.mapM id with
+  | none => simp [Lt, Mul, hc, Holds] at h
+  | some l =>
+  cases hr : rest.mapM id with
+  | none => simp [tan, withDomain, Add, Mul, pi, lit, List.mapM_cons, hc, hr]
+  | some r =>
+  simp [tan, withDomain, tanDomain, Add, Mul, pi, lit, List.mapM_cons, hc, hr]
+  simp only [show (l.prod + 1) * (Real.pi : ℂ) + r.sum = (Real.pi * l.prod + r.sum) + Real.pi by ring,
+    Complex.cos_add_pi, Complex.tan_add_pi, neg_eq_zero]
+  congr
+
 end Nary.ElementaryRules

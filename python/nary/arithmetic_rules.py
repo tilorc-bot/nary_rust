@@ -50,7 +50,7 @@ power = declare_identities(Pow, [
     Equal(E ** a, exp(a), name="pow_e"),
     Equal((a ** b) ** c, a ** (b * c), when=And(Gt(a, 0), Eq(re(b), b)), name="pow_pow"),
     Equal(a ** b, exp(b * log(a)), when=And(Ne(a, 0), Ne(re(b), b)), name="pow_complex"),
-    Equal(Mul(a, rest) ** b, a ** b * Mul(rest) ** b, when=Gt(a, 0), name="pow_positive_factor"),
+    Equal(Mul(a, c, rest) ** b, a ** b * Mul(c, rest) ** b, when=Gt(a, 0), name="pow_positive_factor"),
 ])
 exponential = declare_identities(exp, [
     Equal(exp(log(a)), a, when=Ne(a, 0), name="exp_log"),
