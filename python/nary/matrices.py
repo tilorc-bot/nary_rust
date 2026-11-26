@@ -20,7 +20,7 @@ A number is not accepted where a matrix is expected.
     TypeError: Determinant expects MatrixKind(NumberKind), got NumberKind: x
 """
 
-from ._core import Many, declare_kind_family, set_operator
+from ._core import ManyAlike, declare_kind_family, set_operator
 from .domains import declare_function
 from .kinds import NumberKind
 
@@ -35,8 +35,8 @@ Matrix = MatrixKind(NumberKind)
 
 terms, factors, arg = Matrix("terms"), Matrix("factors"), Matrix("arg")
 
-MatAdd = declare_function("MatAdd", Many(terms), returns=Matrix, domain=None)
-MatMul = declare_function("MatMul", Many(factors), returns=Matrix, domain=None)
+MatAdd = declare_function("MatAdd", ManyAlike(terms), returns=Matrix, domain=None)
+MatMul = declare_function("MatMul", ManyAlike(factors), returns=Matrix, domain=None)
 Transpose = declare_function("Transpose", arg, returns=Matrix, domain=None)
 Inverse = declare_function("Inverse", arg, returns=Matrix, domain=None)
 Determinant = declare_function("Determinant", arg, returns=NumberKind, domain=None)

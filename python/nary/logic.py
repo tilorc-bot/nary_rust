@@ -14,7 +14,7 @@ A Python bool is not accepted where a BoolKind is required.
     TypeError: Or expects BoolKind, got bool: True
 """
 
-from ._core import Many, declare_constant
+from ._core import ManyAlike, declare_constant
 from .domains import declare_function
 from .kinds import BoolKind
 
@@ -25,6 +25,6 @@ false = declare_constant("false", BoolKind)
 
 operands, arg = BoolKind("operands"), BoolKind("arg")
 
-And = declare_function("And", Many(operands), returns=BoolKind, domain=true)
-Or = declare_function("Or", Many(operands), returns=BoolKind, domain=true)
+And = declare_function("And", ManyAlike(operands), returns=BoolKind, domain=true)
+Or = declare_function("Or", ManyAlike(operands), returns=BoolKind, domain=true)
 Not = declare_function("Not", arg, returns=BoolKind, domain=true)

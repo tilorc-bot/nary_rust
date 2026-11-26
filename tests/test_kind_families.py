@@ -3,7 +3,7 @@ import threading
 import nary as nr
 import pytest
 from nary import (
-    BoolKind, Expr, Kind, KindFamily, Many, NumberKind, declare_function, declare_kind,
+    BoolKind, Expr, Kind, KindFamily, ManyAlike, NumberKind, declare_function, declare_kind,
     declare_kind_family, set_operator,
 )
 from nary.logic import true
@@ -103,7 +103,7 @@ def test_an_instantiated_kind_in_signatures():
     assert repr(p) == "Piece(x, Lt(x, y))"
     assert (p.expr, p.condition) == (x, x < y)
     Matrix = MatrixKind(NumberKind)
-    MatAdd = declare_function("MatAdd", Many(Matrix("terms")), returns=Matrix, domain=true)
+    MatAdd = declare_function("MatAdd", ManyAlike(Matrix("terms")), returns=Matrix, domain=true)
     Trace = declare_function("Trace", Matrix("arg"), returns=NumberKind, domain=true)
     First = declare_function("First", Pair("arg"), returns=NumberKind, domain=true)
     A, B = Matrix("A"), Matrix("B")
@@ -117,14 +117,14 @@ def test_an_instantiated_kind_in_signatures():
 def test_a_function_shows_what_was_declared():
     Matrix = MatrixKind(NumberKind)
     first, rest = Matrix("first"), Matrix("rest")
-    MatAdd = declare_function("MatAdd", first, Many(rest), returns=Matrix, domain=true)
+    MatAdd = declare_function("MatAdd", first, ManyAlike(rest), returns=Matrix, domain=true)
     assert MatAdd.name == "MatAdd"
-    assert MatAdd.kind.inputs == (Matrix, Many(Matrix)) and MatAdd.kind.inputs[0] is Matrix
+    assert MatAdd.kind.inputs == (Matrix, ManyAlike(Matrix)) and MatAdd.kind.inputs[0] is Matrix
     assert MatAdd.kind.output is Matrix
-    assert MatAdd.params == (first, Many(rest))
+    assert MatAdd.params == (first, ManyAlike(rest))
     assert Piece.kind.inputs == (NumberKind, BoolKind)
     assert Piece.kind.output is Pair and Piece.params == (NumberKind("expr"), BoolKind("condition"))
-    assert nr.Add.kind.inputs == (Many(NumberKind),)
+    assert nr.Add.kind.inputs == (ManyAlike(NumberKind),)
     with pytest.raises(AttributeError):
         Piece.params = ()
 
@@ -143,13 +143,13 @@ def test_an_instantiated_kind_is_checked():
 
 
 def test_the_result_kind_is_the_declared_one():
-    Wrap = declare_function("Wrap", Many(MatrixKind(NumberKind)("parts")), returns=Pair, domain=true)
+    Wrap = declare_function("Wrap", ManyAlike(MatrixKind(NumberKind)("parts")), returns=Pair, domain=true)
     assert Wrap(MatrixKind(NumberKind)("A")).kind is Pair
 
 
 def test_an_instantiated_kind_has_its_own_operators():
     Matrix = MatrixKind(declare_kind("Scalar"))
-    MatMul = declare_function("MatMul", Many(Matrix("factors")), returns=Matrix, domain=true)
+    MatMul = declare_function("MatMul", ManyAlike(Matrix("factors")), returns=Matrix, domain=true)
     set_operator(Matrix, "*", MatMul)
     A, B = Matrix("A"), MatrixKind(Matrix.params[0])("B")
     assert repr(A * B) == "MatMul(A, B)"

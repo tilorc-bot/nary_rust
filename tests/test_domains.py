@@ -1,6 +1,6 @@
 import nary.domains
 import pytest
-from nary import BoolKind, Bound, Eq, Lambda, Many, Ne, NumberKind, Pow, declare_function, log, sin, tan
+from nary import BoolKind, Bound, Eq, Lambda, ManyAlike, Ne, NumberKind, Pow, declare_function, log, sin, tan
 from nary.calculus import Derivative, Integral
 from nary.domains import domain, domain_of
 from nary.logic import true
@@ -38,7 +38,7 @@ def test_what_a_declaration_refuses():
     with pytest.raises(ValueError, match="mentions x, which is not one of its parameters"):
         declare_function("f", BoolKind("x"), returns=NumberKind, domain=Eq(x, 0))
     with pytest.raises(ValueError, match="mentions x, which is not one of its parameters"):
-        declare_function("f", Many(x), returns=NumberKind, domain=Ne(x, 0))
+        declare_function("f", ManyAlike(x), returns=NumberKind, domain=Ne(x, 0))
     with pytest.raises(ValueError, match="mentions x, which is not one of its parameters"):
         declare_function("f", Bound(x), returns=NumberKind, domain=Ne(x, 0))
     with pytest.raises(ValueError, match="f has two parameters named x"):

@@ -5,7 +5,7 @@ from ._core import (
     FunctionKind,
     Kind,
     KindFamily,
-    Many,
+    ManyAlike,
     declare_constant,
     declare_kind,
     declare_kind_family,
@@ -20,7 +20,7 @@ from .kinds import *  # noqa: F403
 from .relational import *  # noqa: F403
 
 __all__ = [
-    "Bound", "Expr", "FunctionKind", "Kind", "KindFamily", "Many",
+    "Bound", "Expr", "FunctionKind", "Kind", "KindFamily", "ManyAlike",
     "declare_constant", "declare_function", "declare_kind", "declare_kind_family",
     "set_operator",
     *kinds.__all__,
