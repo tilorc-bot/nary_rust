@@ -19,6 +19,12 @@ Like terms are not collected, so a sum needs a canonical form to get smaller.
     >>> from nary.satsimp.methods import sympy_round_trip
     >>> handler(e, Engine({}, prover(), sympy_round_trip))
     1
+
+Under strict, a candidate may not have a value where the expression has none.
+
+    >>> e = nr.Mul(nr.Pow(nr.cos(x), -1), nr.Pow(nr.cos(x), 2), nr.sin(x))
+    >>> handler(e, Engine({}, prover())) is None, handler(e, Engine({}, prover(), strict=False))
+    (True, Mul(Pow(2, -1), sin(Mul(2, x))))
 """
 
 import itertools
@@ -134,7 +140,7 @@ def substitution_handler(rows, measure, heads):
                 if expr.head != Add and candidate.head == Add:
                     continue
                 m = measure(candidate)
-                if m < best_m:
+                if m < best_m and (not engine.strict or engine.defined_where(expr, candidate)):
                     best, best_m = candidate, m
         return best
 
