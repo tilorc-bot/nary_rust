@@ -34,7 +34,7 @@ from nary import arithmetic_rules  # noqa: F401
 from nary.functions import is_lambda
 from nary.rewriting import _flatten, _has_a_value, _match_top, _substitute
 
-from .prove import definedness, implies
+from .prove import conjuncts, definedness, implies
 
 __all__ = ["Engine", "identity_handler", "rule_handler", "size"]
 
@@ -109,7 +109,7 @@ class Engine:
         before, after = definedness(old), definedness(new)
         if before is None or after is None:
             return False
-        return before == after or self.known(implies(after, before))
+        return conjuncts(before) <= conjuncts(after) or self.known(implies(after, before))
 
     def apply(self, row, e):
         rule = row.rule
