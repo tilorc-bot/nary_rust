@@ -1,9 +1,9 @@
 """Comparisons of numbers, each returning a BoolKind, and ``re``, the real
 part of a number, which the domains of the comparisons need."""
 
-from ._core import declare_kind, set_operator
+from ._core import set_operator
 from .domains import declare_function
-from .generic import concretize
+from .generic import concretize, placeholder
 from .kinds import BoolKind, NumberKind
 from .logic import And, true
 
@@ -17,7 +17,7 @@ lhs, rhs = NumberKind("lhs"), NumberKind("rhs")
 re = declare_function("re", x, returns=NumberKind, domain=true)
 # == and != compare structure and return a Python bool, so Eq and Ne have no
 # operator.
-K = declare_kind("K")
+K = placeholder("K")
 AnyEq = declare_function("Eq", K("lhs"), K("rhs"), returns=BoolKind, domain=true)
 AnyNe = declare_function("Ne", K("lhs"), K("rhs"), returns=BoolKind, domain=true)
 Eq, Ne = concretize(AnyEq, {K: NumberKind}), concretize(AnyNe, {K: NumberKind})

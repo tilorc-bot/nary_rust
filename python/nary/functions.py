@@ -25,31 +25,23 @@ is inert: ``square(y)`` is an application whose head is ``square``. Nothing
 is substituted.
 """
 
-from ._core import Expr, FunctionKind, Symbol, declare_kind
+from functools import cache
+
+from ._core import Expr, FunctionKind, Symbol
 from .domains import declare_function
-from .generic import concretize, generic_of
+from .generic import apply_generic, generic_of, placeholder
 from .logic import true
 
 __all__ = ["Lambda", "is_lambda"]
 
-_body_kind = declare_kind("B")
-_variable_kinds = []
-_lambdas = {}
 
-
-def _lambda(arity):
-    while len(_variable_kinds) < arity:
-        _variable_kinds.append(declare_kind(f"K{len(_variable_kinds) + 1}"))
-    if arity not in _lambdas:
-        kinds = tuple(_variable_kinds[:arity])
-        _lambdas[arity] = declare_function(
-            "Lambda",
-            *(Symbol(kind) for kind in kinds),
-            _body_kind,
-            returns=FunctionKind(kinds, _body_kind),
-            domain=true,
-        )
-    return _lambdas[arity]
+@cache
+def lambda_generic(arity):
+    kinds = tuple(placeholder(f"K{i}") for i in range(1, arity + 1))
+    body = placeholder("B")
+    variables = (Symbol(kind) for kind in kinds)
+    returns = FunctionKind(kinds, body)
+    return declare_function("Lambda", *variables, body, returns=returns, domain=true)
 
 
 def Lambda(variables, body):
@@ -80,10 +72,7 @@ def Lambda(variables, body):
                 )
             names.add(variable.name)
 
-    generic = _lambda(len(variables))
-    filling = dict(zip(_variable_kinds, (variable.kind for variable in variables)))
-    filling[_body_kind] = body.kind
-    return concretize(generic, filling)(*variables, body)
+    return apply_generic(lambda_generic(len(variables)), *variables, body)
 
 
 def is_lambda(e):
@@ -92,4 +81,6 @@ def is_lambda(e):
     if not isinstance(e, Expr) or e.head is None:
         return False
     generic = generic_of(e.head)
-    return generic is not None and _lambdas.get(len(e.args) - 1) is generic
+    if generic is None or generic.name != "Lambda":
+        return False
+    return generic is lambda_generic(len(e.args) - 1)
