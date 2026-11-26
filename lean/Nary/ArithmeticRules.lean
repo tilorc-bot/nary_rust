@@ -34,6 +34,20 @@ theorem mul_inverse : Statement.mul_inverse := by
     rw [Complex.exp_neg, Complex.exp_log hz, mul_inv_cancel₀ hz]
   simp [Mul, Pow, withDomain₂, powDomain, powTotal, lit, hz, this]
 
+theorem pow_right_identity : Statement.pow_right_identity := by
+  intro a
+  cases a with
+  | none => simp [Pow, withDomain₂]
+  | some z =>
+    by_cases hz : z = 0
+    · simp [Pow, withDomain₂, powDomain, powTotal, lit, hz]
+    · simp [Pow, withDomain₂, powDomain, powTotal, lit, hz, Complex.exp_log hz]
+
+theorem pow_left_absorbing : Statement.pow_left_absorbing := by
+  intro a h
+  obtain ⟨z, rfl⟩ := Option.ne_none_iff_exists'.mp h
+  simp [Pow, withDomain₂, powDomain, powTotal, lit]
+
 private abbrev values (xs : List Number) : Option (Multiset ℂ) :=
   (xs.mapM id).map (fun l : List ℂ => (l : Multiset ℂ))
 
@@ -77,6 +91,8 @@ theorem proved : Proved where
   mul_absorbing := mul_absorbing
   add_inverse := add_inverse
   mul_inverse := mul_inverse
+  pow_right_identity := pow_right_identity
+  pow_left_absorbing := pow_left_absorbing
   add_unordered := add_unordered
   add_flat := add_flat
   mul_unordered := mul_unordered

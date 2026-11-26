@@ -17,6 +17,8 @@ def test_the_rules_are_those_listed_before_the_blocks():
         rule(a * 0, 0, name="mul_absorbing"),
         rule(a - a, 0, name="add_inverse"),
         rule(a / a, 1, when=Ne(a, 0), name="mul_inverse"),
+        rule(a ** 1, a, name="pow_right_identity"),
+        rule(1 ** a, 1, name="pow_left_absorbing"),
     ]
     by_name = {r.name: r for r in rules}
     assert len(by_name) == len(rules) == len(before)

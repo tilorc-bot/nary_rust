@@ -19,6 +19,12 @@ abbrev mul_absorbing : Prop :=
 abbrev mul_inverse : Prop :=
   ∀ (a : Nary.Number), Nary.Holds (Nary.Ne a (Nary.lit 0)) → a ≠ none → Nary.Mul [a, Nary.Pow a (Nary.lit (-1))] = Nary.lit 1
 
+abbrev pow_right_identity : Prop :=
+  ∀ (a : Nary.Number), Nary.Pow a (Nary.lit 1) = a
+
+abbrev pow_left_absorbing : Prop :=
+  ∀ (a : Nary.Number), a ≠ none → Nary.Pow (Nary.lit 1) a = Nary.lit 1
+
 abbrev add_unordered : Prop :=
   Nary.Unordered Nary.Add
 
@@ -41,6 +47,8 @@ structure Proved : Prop where
   mul_identity : Statement.mul_identity
   mul_absorbing : Statement.mul_absorbing
   mul_inverse : Statement.mul_inverse
+  pow_right_identity : Statement.pow_right_identity
+  pow_left_absorbing : Statement.pow_left_absorbing
   add_unordered : Statement.add_unordered
   add_flat : Statement.add_flat
   mul_unordered : Statement.mul_unordered

@@ -13,7 +13,8 @@ from .rules import flat, rule, unordered
 
 __all__ = [
     "Equal", "absorbing", "associative", "commutative", "declare_identities", "heads",
-    "idempotent", "identities", "identity", "inverse", "involution",
+    "idempotent", "identities", "identity", "inverse", "involution", "left_absorbing",
+    "right_identity",
 ]
 
 
@@ -58,6 +59,7 @@ class Law:
 
 PatternKind = declare_kind("PatternKind")
 f = FunctionKind((Many(PatternKind),), PatternKind)("f")
+g = FunctionKind((PatternKind, PatternKind), PatternKind)("g")
 h = FunctionKind((PatternKind,), PatternKind)("h")
 a, b, e, i, z, s, t, u = (PatternKind(name) for name in "abeizstu")
 
@@ -68,6 +70,8 @@ absorbing = Law("absorbing", Equal(f(s, z, t), z), (z,))
 inverse = Law("inverse", Equal(f(a, i), e), (i,))
 idempotent = Law("idempotent", Equal(f(s, a, t, a, u), f(s, a, t, u)))
 involution = Law("involution", Equal(h(h(a)), a))
+right_identity = Law("right_identity", Equal(g(a, e), a), (e,))
+left_absorbing = Law("left_absorbing", Equal(g(z, a), z), (z,))
 
 _blocks = {}
 
@@ -101,6 +105,10 @@ def declare_identities(F, items):
             rules.append(rule(F(x, item.args[0]), x, when=item.when, name=item.name))
         elif item.title == "absorbing":
             rules.append(rule(F(x, item.args[0]), item.args[0], when=item.when, name=item.name))
+        elif item.title == "right_identity":
+            rules.append(rule(F(x, item.args[0]), x, when=item.when, name=item.name))
+        elif item.title == "left_absorbing":
+            rules.append(rule(F(item.args[0], x), item.args[0], when=item.when, name=item.name))
         elif item.title == "inverse":
             if not units:
                 raise ValueError(f"inverse needs an identity in the block of {F!r}")

@@ -1,7 +1,7 @@
 import pytest
 
 import nary as nr
-from nary import Many, Ne, NumberKind, declare_function, exp, log, sin, tan
+from nary import Many, Ne, NumberKind, Pow, declare_function, exp, log, sin, tan
 from nary._identities import associative, commutative, declare_identities, idempotent
 from nary.logic import And, Not, Or, false, true
 from nary.normalising import normalise
@@ -33,6 +33,11 @@ def same(e, expected, known=None):
     (Or(p, Or(q, p)), Or(p, q)),
     (Not(Not(Not(p))), Not(p)),
     (Max(x, y, x, Max(y, 3)), Max(3, x, y)),
+    (Pow(x, 1), x),
+    (Pow(x * 1, 0 + nr.Mul(1)), x),
+    (Pow(1, x + y), 1),
+    (Pow(x, 2), Pow(x, 2)),
+    (Pow(2, 1), 2),
 ])
 def test_the_declared_laws(e, expected):
     assert same(e, expected)
@@ -44,6 +49,7 @@ def test_the_declared_laws(e, expected):
     (log(x) * 0, nr.Mul(0, log(x))),
     (tan(x) * y * 0, nr.Mul(0, y, tan(x))),
     (x / x, nr.Mul(x, x ** -1)),
+    (Pow(1, log(x)), Pow(1, log(x))),
 ])
 def test_nothing_without_a_value_is_erased(e, expected):
     assert same(e, expected)
@@ -52,6 +58,7 @@ def test_nothing_without_a_value_is_erased(e, expected):
 def test_known_conditions_allow_more():
     assert same(log(x) * 0, 0, known=lambda c: c == Ne(x, 0))
     assert same(log(x) * 0, nr.Mul(0, log(x)), known=lambda c: 1)
+    assert same(Pow(1, log(x)), 1, known=lambda c: c == Ne(x, 0))
 
 
 def test_a_normal_form_is_its_own_normal_form():

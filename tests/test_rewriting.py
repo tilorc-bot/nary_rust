@@ -46,7 +46,7 @@ def test_lambda_untouched():
 
 
 def test_several_rules_in_sequence():
-    e = (x * 1 + 0) - (y + 0) * 0
+    e = (x * 1 + 0) ** 1 - (y + 0) * 0
     assert rewrite(e, rules) == x
 
 

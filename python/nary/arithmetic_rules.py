@@ -16,7 +16,8 @@ The rule a * 0 -> 0 erases a.
 
 from .arithmetic import Add, Mul, Pow
 from ._identities import (
-    absorbing, associative, commutative, declare_identities, identity, inverse,
+    absorbing, associative, commutative, declare_identities, identity, inverse, left_absorbing,
+    right_identity,
 )
 from .kinds import NumberKind
 from .relational import Ne
@@ -36,4 +37,6 @@ mul = declare_identities(Mul, [
     absorbing(0),
     inverse(Pow(a, -1), when=Ne(a, 0)),
 ])
-rules = add + mul
+power = declare_identities(Pow, [right_identity(1), left_absorbing(1)])
+
+rules = add + mul + power
