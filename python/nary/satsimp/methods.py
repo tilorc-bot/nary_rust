@@ -27,17 +27,19 @@ The native canonical form, autosimp, takes the assumptions as known conditions.
     (1, Pow(x, 0), 1)
 """
 
+import sympy
+
 from nary import Add, Mul
 from nary.autosimp import autosimp
 from nary.logic import And, true
 
-from .engine import Engine, identity_handler, rule_handler, size
+from .engine import Engine, identity_handler, rule_handler
 from .prove import prover
 from .rows import refine_tables, trigsimp_tables
 from .substitute import substitution_handler
 from .translate import from_sympy, to_sympy
 
-__all__ = ["PROVIDERS", "Simplifier", "autosimp", "none", "sympy_round_trip"]
+__all__ = ["PROVIDERS", "Simplifier", "autosimp", "none", "sympy_round_trip", "trig_measure"]
 
 
 def none(e, known=()):
@@ -70,6 +72,17 @@ def _count(e, heads):
     if e.head is None:
         return 0
     return (e.head in heads) + sum(_count(arg, heads) for arg in e.args)
+
+
+def trig_measure(heads):
+    def measure(e, signless=False):
+        with sympy.evaluate(False):
+            s = to_sympy(e)
+        if signless and s.could_extract_minus_sign():
+            s = -s
+        return _count(e, heads), sympy.count_ops(s), sum(1 for _ in sympy.preorder_traversal(s))
+
+    return measure
 
 
 def _smallest(rows, measure):
@@ -111,9 +124,7 @@ class Simplifier:
         if not _count(e, heads):
             return e
 
-        def measure(e):
-            return _count(e, heads), size(e)
-
+        measure = trig_measure(heads)
         known, conjuncts = prover(assumptions, self.proved), _conjuncts(assumptions)
 
         def run(handlers, e):

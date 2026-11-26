@@ -27,7 +27,16 @@ to_sympy evaluates, so a round trip is SymPy's automatic simplification.
     (y**2 + y, 1)
     >>> to_sympy(nr.logic.And(nr.Gt(y, 0), nr.Eq(nr.re(y), y)))
     Q.positive(y) & Q.real(y)
+
+Unevaluated, the numbers of a product still become one Rational, as SymPy writes them.
+
+    >>> with sympy.evaluate(False):
+    ...     sympy.srepr(to_sympy(nr.Mul(3, nr.Pow(2, -1), y, nr.Pow(y, 0))))
+    "Mul(Rational(3, 2), Pow(Symbol('y'), Integer(0)), Symbol('y'))"
 """
+
+from fractions import Fraction
+from math import prod
 
 import sympy
 from sympy import Q
@@ -165,13 +174,30 @@ def _relation(head, a, b):
     return sympy.And(_RELATIONS[head](a, b), *(Q.real(s) for s in (a, b) if s.free_symbols))
 
 
+def _number(e):
+    if e.is_literal and e.kind is nr.NumberKind:
+        return Fraction(e.value)
+    if e.head == nr.Pow and e.args[1] == nr.NumberKind(-1) and e.args[0].is_literal:
+        return 1 / Fraction(e.args[0].value) if e.args[0].value else None
+    return None
+
+
+def _rational(q):
+    return sympy.Rational(q.numerator, q.denominator)
+
+
 def to_sympy(e):
+    if _number(e) is not None:
+        return _rational(_number(e))
+    if e.head == nr.Mul:
+        numbers = [a for a in e.args if _number(a) is not None]
+        rest = [to_sympy(a) for a in e.args if _number(a) is None]
+        q = prod(map(_number, numbers), start=Fraction(1))
+        return sympy.Mul(*([_rational(q)] if q != 1 or not rest else []), *rest)
     if e.is_symbol:
         if e.kind is not nr.NumberKind:
             raise Untranslatable(f"symbol of {e.kind!r}")
         return sympy.Symbol(e.name)
-    if e.is_literal:
-        return sympy.Integer(e.value)
     if e.is_constant and e in _INVERSE_CONSTANTS:
         return _INVERSE_CONSTANTS[e]
     if e.head in _FLIPPED:

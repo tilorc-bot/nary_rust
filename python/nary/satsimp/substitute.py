@@ -5,7 +5,7 @@
     >>> from nary.satsimp.prove import prover
     >>> from nary.satsimp.rows import trigsimp_tables
     >>> rows = trigsimp_tables().rows["substitutions"]
-    >>> measure = lambda e: (size(e),)
+    >>> measure = lambda e, signless=False: (size(e),)
     >>> handler = substitution_handler(rows, measure, (nr.sin, nr.cos, nr.tan))
     >>> x, y = nr.NumberKind("x"), nr.NumberKind("y")
     >>> handler(y * nr.sin(x) * nr.cos(x) ** -1, Engine({}, prover()))
@@ -122,7 +122,7 @@ def substitution_handler(rows, measure, heads):
     def handler(expr, engine):
         terms = _terms(expr)
         powers = [_monomial(t) for t in terms]
-        best, best_m = None, measure(expr)
+        best, best_m = None, measure(expr, signless=True)
         for row, pattern in table:
             sites = []
             for i, pw in enumerate(powers):
@@ -139,7 +139,7 @@ def substitution_handler(rows, measure, heads):
                 candidate = engine.normal(_candidate(terms, chosen, row))
                 if expr.head != Add and candidate.head == Add:
                     continue
-                m = measure(candidate)
+                m = measure(candidate, signless=True)
                 if m < best_m and (not engine.strict or engine.defined_where(expr, candidate)):
                     best, best_m = candidate, m
         return best
