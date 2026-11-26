@@ -75,7 +75,7 @@ def _holds(condition, known):
 
 
 def _has_a_value(e, known):
-    """A symbol, a literal and a constant have a value.
+    """Whether e is known to have a value, given the conditions that known says hold.
 
     >>> from nary import Lambda, Ne, NumberKind, log, pi, sin
     >>> from nary.calculus import Integral
