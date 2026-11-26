@@ -12,7 +12,7 @@ SOURCES = {
     "ElementaryRules": ("nary.elementary_rules", "rules", ()),
     "LogicRules": ("nary.logic_rules", "rules", (And, Or)),
     "SimplifyLogic": ("nary.logic_rules", "simplify_logic", ()),
-    "Normal": ("nary.normal", "laws", ()),
+    "LogPower": ("nary.elementary_rules", "log_power", ()),
     "Expand": ("nary.strategies", "expand", ()),
     "ExpandLog": ("nary.strategies", "expand_log", ()),
     "Logcombine": ("nary.strategies", "logcombine", ()),

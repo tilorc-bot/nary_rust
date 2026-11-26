@@ -8,7 +8,7 @@ import Nary.ArithmeticRules.Statements
 import Nary.ElementaryRules.Statements
 import Nary.LogicRules.Statements
 import Nary.SimplifyLogic.Statements
-import Nary.Normal.Statements
+import Nary.LogPower.Statements
 import Nary.Expand.Statements
 import Nary.ExpandLog.Statements
 import Nary.Logcombine.Statements
@@ -17,7 +17,6 @@ import Nary.Trigsimp.Statements
 import Nary.Together.Statements
 import Nary.Powsimp.Statements
 import Nary.Autosimp.Statements
-import Nary.Normal
 import Nary.LogicRules
 import Nary.ElementaryRules
 import Nary.Strategies

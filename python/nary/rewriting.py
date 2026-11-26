@@ -1,6 +1,6 @@
 """rewrite applies the rules until none applies.
 
-    >>> from nary import Add, Gt, Many, Ne, NumberKind, log, pi, sin
+    >>> from nary import Add, Gt, Many, Ne, NumberKind, Pow, log, pi, sin
     >>> from nary.arithmetic_rules import rules
     >>> from nary.rewriting import beta, has_a_value, holds, rewrite
     >>> from nary.rules import rule
@@ -30,6 +30,13 @@ A run variable matches the arguments that are left, at any depth.
     >>> rewrite(sin(Add(y, 2 * pi, x)) + 1, [period])
     Add(sin(Add(y, x)), 1)
 
+A rational number is matched as a whole, not as a power.
+
+    >>> b, c = NumberKind("b"), NumberKind("c")
+    >>> powers = [rule(Pow(x, b) * Pow(x, c), Pow(x, b + c))]
+    >>> rewrite(Pow(2, -1) * Pow(2, y), powers), rewrite(Pow(2, x) * Pow(2, y), powers)
+    (Mul(Pow(2, -1), Pow(2, y)), Pow(2, Add(x, y)))
+
 A normal form is applied at each node before the rules.
 
     >>> rewrite(sin(x + 0), rules, normal=lambda e, known: x if e == x + 0 else e)
@@ -49,15 +56,16 @@ beta puts the argument of a lambda in place of its variable.
 
 from functools import lru_cache
 
+from . import intervals
 from ._core import Expr
 from ._identities import Law, identities
 from .arithmetic import Add, Mul
-from .decide import decide
 from .domains import domain_of
 from .elementary import cos, exp, log, sin
 from .functions import is_lambda
 from .kinds import BoolKind, Many, NumberKind
 from .logic import And, Or, true
+from .properties import rational
 from .relational import Eq, Ge, Gt, Le, Lt, Ne, re
 from .rules import _is_declared_function, is_flat, is_run, is_unordered
 
@@ -122,6 +130,9 @@ implications = [
 ]
 
 
+SIGNS = {Eq: (), Ne: (), Lt: (-1,), Le: (-1,), Gt: (1,), Ge: (1,)}
+
+
 def rewrite(e, rules, known=None, normal=None):
     if not isinstance(e, Expr):
         raise TypeError(f"rewrite expects an expression, got {e!r}")
@@ -148,7 +159,15 @@ def _holds(c, known, depth):
 
 @lru_cache(maxsize=1 << 14)
 def _decide(c):
-    return decide(c)
+    if c.head not in SIGNS or len(c.args) != 2:
+        return None
+    x, y = c.args
+    if c.head == Eq and x == re(y) and intervals.real(y):
+        return True
+    if c.head in (Eq, Ne):
+        return c.head == Ne if intervals.nonzero(x - y) else None
+    sign = intervals.sign(x - y) if intervals.real(x) and intervals.real(y) else None
+    return None if sign is None else sign in SIGNS[c.head]
 
 
 def has_a_value(e, known=None):
@@ -282,7 +301,7 @@ def _match(pattern, e, bindings):
         if len(fixed) == 1:
             for new in _match(fixed[0], e, bindings):
                 yield from _bind_runs([p for p in pattern.args if is_run(p)], new)
-    elif e.head is not None:
+    elif e.head is not None and rational(e) is None:
         for with_head in _match(pattern.head, e.head, bindings):
             yield from _match_args(pattern, e.args, with_head)
 

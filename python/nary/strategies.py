@@ -14,11 +14,12 @@
 """
 
 from .arithmetic import Add, Mul, Pow
+from .constants import I, pi
 from .elementary import cos, exp, log, sin, tan
+from .elementary_rules import log_power, pythagorean
 from .kinds import Many, NumberKind
 from .logic import And
 from .logic_rules import simplify_logic, to_nnf
-from .normal import n_is_an_integer
 from .relational import Eq, Gt, Le, Lt, Ne, re
 from .rules import rule
 from .rewriting import rewrite
@@ -28,6 +29,7 @@ __all__ = ["STRATEGIES", "apply"]
 
 a, b, c, d, n = (NumberKind(s) for s in "abcdn")
 cs, ds = Many(NumberKind)("cs"), Many(NumberKind)("ds")
+n_is_an_integer = Eq(exp(2 * pi * I * n), 1)
 
 log_rules = [
     rule(log(Mul(a, b, cs)), log(a) + log(Mul(b, cs)),
@@ -76,7 +78,7 @@ expand_trig = [
     rule(sin(3 * a), 3 * sin(a) - 4 * sin(a) ** 3, name="expand_trig_sin_triple"),
     rule(cos(3 * a), 4 * cos(a) ** 3 - 3 * cos(a), name="expand_trig_cos_triple"),
 ]
-trigsimp = [
+trigsimp = pythagorean + [
     rule(sin(a) * cos(a), sin(2 * a) / 2, name="trigsimp_sin_double"),
     rule(cos(a) ** 2 - sin(a) ** 2, cos(2 * a), name="trigsimp_cos_double"),
     rule(Add(Mul(2, cos(a) ** 2), -1), cos(2 * a), name="trigsimp_cos_double_cos"),
@@ -102,17 +104,14 @@ powsimp = [
 STRATEGIES = {
     "expand": expand, "expand_log": expand_log, "logcombine": logcombine,
     "expand_trig": expand_trig, "trigsimp": trigsimp, "together": together, "powsimp": powsimp,
-    "simplify_logic": simplify_logic, "to_nnf": to_nnf, "simplify": powsimp + simplify_logic,
+    "simplify_logic": simplify_logic, "to_nnf": to_nnf, "simplify": powsimp + simplify_logic + pythagorean + log_power,
     "expand_power_exp": expand_power_exp, "expand_power_base": expand_power_base,
 }
 
 
-REPLACED = {"logcombine": {"log_pow"}}
-
-
 def apply(name, e, known=None):
+    facts = frozenset() if known is None or callable(known) else frozenset(known)
     if known is not None and not callable(known):
-        known = frozenset(known).__contains__
-    kept = [r for r in rules if r.name not in REPLACED.get(name, ())]
-    return rewrite(e, kept + STRATEGIES[name], known, _normal)
+        known = facts.__contains__
+    return rewrite(e, rules + STRATEGIES[name], known, lambda e, ask: _normal(e, ask, facts))
 

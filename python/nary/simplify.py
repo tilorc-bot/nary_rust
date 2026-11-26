@@ -1,4 +1,4 @@
-"""simplify rewrites with every rule list and the normal form.
+"""simplify rewrites with the rules on top of autosimp at every node.
 
     >>> from nary import Eq, Ne, NumberKind, exp, log, re, sin
     >>> from nary.logic import And, Not, BoolKind, true
@@ -11,24 +11,24 @@
     >>> simplify(sin(0)), simplify(And(p, true)), simplify(Not(Not(p))), simplify(Eq(x, x))
     (0, p, p, true)
 
-Known facts are given as a list of conditions or as a function.
+Known facts are given as a list of conditions.
 
     >>> simplify(log(exp(x))), simplify(log(exp(x)), [Eq(re(x), x)])
     (log(exp(x)), x)
-    >>> simplify(x / x), simplify(x / x, [Ne(x, 0)]), simplify(x / x, lambda c: c == Ne(x, 0))
-    (Mul(Pow(x, -1), x), 1, 1)
+    >>> simplify(x / x), simplify(x / x, [Ne(x, 0)])
+    (Pow(x, 0), 1)
 """
 
-from . import arithmetic_rules, elementary_rules, logic_rules
+from . import elementary_rules, logic_rules
 from .calculus import Derivative
 from .differentiation import derivative
 from .functions import Lambda
-from .normal import normal
+from .autosimp import node
 from .rewriting import beta, holds, rewrite
 
 __all__ = ["rules", "simplify"]
 
-rules = arithmetic_rules.rules + elementary_rules.rules + logic_rules.rules
+rules = elementary_rules.rules + logic_rules.rules
 
 
 def simplify(e, known=None):
@@ -36,11 +36,11 @@ def simplify(e, known=None):
     return apply("simplify", e, known)
 
 
-def _normal(e, known):
+def _normal(e, known, facts=frozenset()):
     reduced = beta(e)
     if reduced == e and e.head is not None and e.head.head == Derivative:
         reduced = _differentiate(e, known)
-    return reduced if reduced != e else normal(e, known)
+    return reduced if reduced != e else node(e.head, list(e.args), facts)
 
 
 def _differentiate(e, known):

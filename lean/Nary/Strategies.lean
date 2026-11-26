@@ -1,4 +1,5 @@
-import Nary.Normal
+import Nary.ArithmeticRules
+import Nary.Literals
 import Nary.Expand.Statements
 import Nary.ExpandLog.Statements
 import Nary.Logcombine.Statements
@@ -39,8 +40,9 @@ theorem powsimp_exp : Powsimp.Statement.powsimp_exp := by
 theorem powsimp_positive_base : Powsimp.Statement.powsimp_positive_base := by
   intro a c d h
   obtain ⟨r, hr, rfl⟩ := ArithmeticRules.holds_pos h
-  apply Normal.collect_powers
-  simpa [Ne, Holds, lit] using hr.ne'
+  have hz : (r : ℂ) ≠ 0 := by exact_mod_cast hr.ne'
+  cases c <;> cases d <;>
+    simp [Pow, Mul, Add, withDomain₂, powDomain, powTotal, hz, add_mul, Complex.exp_add]
 
 theorem trigsimp_tan_squared : Trigsimp.Statement.trigsimp_tan_squared := by
   intro a

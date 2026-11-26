@@ -64,7 +64,7 @@ def test_simplify_logic(e, known, expected):
 
 
 STRATEGY_CASES = [
-    ("to_nnf", Not(And(p, q, Lt(x, 1))), Or(Not(p), Not(q), Ge(x, 1))),
+    ("to_nnf", Not(And(p, q, Lt(x, 1))), Or(Ge(x, 1), Not(p), Not(q))),
     ("to_nnf", And(p, Not(p)), false),
     ("simplify_logic", Or(p, And(p, q)), p),
     ("simplify_logic", Not(Or(p, q)), And(Not(p), Not(q))),

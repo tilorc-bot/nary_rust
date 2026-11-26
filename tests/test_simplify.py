@@ -38,7 +38,7 @@ def test_logic():
 def test_cancelling_needs_a_nonzero_value():
     assert simplify(x / x) != NumberKind(1)
     assert simplify(x / x, [Ne(x, 0)]) == NumberKind(1)
-    assert simplify(x / x, lambda c: c == Ne(x, 0)) == NumberKind(1)
+    assert simplify(x / x, [Ne(x, 0)]) == NumberKind(1)
 
 
 def test_beta_reduction():

@@ -6,7 +6,7 @@ import random
 import pytest
 from nary import (
     E, Add, BoolKind, Eq, Ge, Gt, I, Le, Lt, Mul, Ne, NumberKind, Pow, arithmetic_rules, cos,
-    elementary_rules, exp, log, logic_rules, normal, pi, re, sin, tan
+    elementary_rules, exp, log, logic_rules, pi, re, sin, tan
 )
 from nary.calculus import Derivative
 from nary.functions import is_lambda
@@ -202,7 +202,7 @@ def check(r):
 
 
 RULES = [
-    *arithmetic_rules.rules, *elementary_rules.rules, *logic_rules.rules, *normal.laws,
+    *arithmetic_rules.rules, *elementary_rules.rules, *logic_rules.rules,
 ]
 
 

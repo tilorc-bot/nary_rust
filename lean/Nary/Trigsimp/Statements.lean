@@ -4,6 +4,21 @@ import Nary.Logic
 
 namespace Nary.Trigsimp.Statement
 
+abbrev pythagoras : Prop :=
+  ∀ (a : Nary.Number), a ≠ none → Nary.Add [Nary.Pow (Nary.sin a) (Nary.lit 2), Nary.Pow (Nary.cos a) (Nary.lit 2)] = Nary.lit 1
+
+abbrev pythagoras_scaled : Prop :=
+  ∀ (b a : Nary.Number), a ≠ none → Nary.Add [Nary.Mul [b, Nary.Pow (Nary.sin a) (Nary.lit 2)], Nary.Mul [b, Nary.Pow (Nary.cos a) (Nary.lit 2)]] = b
+
+abbrev one_minus_sin_squared : Prop :=
+  ∀ (a : Nary.Number), Nary.Add [Nary.lit 1, Nary.Mul [Nary.lit (-1), Nary.Pow (Nary.sin a) (Nary.lit 2)]] = Nary.Pow (Nary.cos a) (Nary.lit 2)
+
+abbrev one_minus_cos_squared : Prop :=
+  ∀ (a : Nary.Number), Nary.Add [Nary.lit 1, Nary.Mul [Nary.lit (-1), Nary.Pow (Nary.cos a) (Nary.lit 2)]] = Nary.Pow (Nary.sin a) (Nary.lit 2)
+
+abbrev sin_over_cos : Prop :=
+  ∀ (a : Nary.Number), Nary.Mul [Nary.sin a, Nary.Pow (Nary.cos a) (Nary.lit (-1))] = Nary.tan a
+
 abbrev trigsimp_sin_double : Prop :=
   ∀ (a : Nary.Number), Nary.Mul [Nary.sin a, Nary.cos a] = Nary.Mul [Nary.sin (Nary.Mul [Nary.lit 2, a]), Nary.Pow (Nary.lit 2) (Nary.lit (-1))]
 

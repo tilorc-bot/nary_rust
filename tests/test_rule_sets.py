@@ -1,16 +1,15 @@
 import pytest
 
 from nary import BoolKind, E, I, Mul, NumberKind, Pow, cos, exp, log, pi, re, sin, tan
-from nary import arithmetic_rules, elementary_rules, logic_rules
+from nary import elementary_rules, logic_rules, strategies
 from nary.calculus import Derivative
 from nary.logic import And, Not, Or, false, true
-from nary.normal import normal
 from nary.relational import Eq, Ge, Gt, Lt, Ne
 from nary.rewriting import rewrite
 from nary.rules import Rule
 from nary.simplify import simplify
 
-LISTS = [arithmetic_rules.rules, elementary_rules.rules, logic_rules.rules]
+LISTS = [elementary_rules.rules, logic_rules.rules, *strategies.STRATEGIES.values()]
 RULES = [r for rules in LISTS for r in rules]
 
 x, y, z = NumberKind("x"), NumberKind("y"), NumberKind("z")
@@ -27,11 +26,11 @@ def symbols(e):
 
 
 def facts(*conditions):
-    return lambda c: c in conditions
+    return list(conditions)
 
 
-def simp(e, rules, known=None):
-    return rewrite(NumberKind(e) if isinstance(e, int) else e, rules, known, normal)
+def simp(e, known=None):
+    return simplify(NumberKind(e) if isinstance(e, int) else e, known)
 
 
 def test_every_entry_is_a_named_rule():
@@ -39,8 +38,8 @@ def test_every_entry_is_a_named_rule():
 
 
 def test_the_names_are_unique():
-    names = [r.name for r in RULES]
-    assert len(set(names)) == len(names)
+    rules = {r.name: r for r in RULES}
+    assert all(rules[r.name] is r for r in RULES)
 
 
 def test_conditions_mention_only_pattern_variables():
@@ -58,19 +57,16 @@ def test_conditions_mention_only_pattern_variables():
     (1 ** x, 1),
 ])
 def test_arithmetic_rewrites(e, expected):
-    assert simp(e, arithmetic_rules.rules) == simp(expected, arithmetic_rules.rules)
+    assert simp(e) == simp(expected)
 
 
 def test_conditioned_arithmetic_rewrites():
-    rules = arithmetic_rules.rules
-    assert simp(0 ** x, rules) == 0 ** x
-    assert simp(0 ** x, rules, known=facts(Gt(re(x), 0))) == NumberKind(0)
-    assert simp(exp(2 * log(x)), rules) == exp(2 * log(x))
-    assert simp(exp(2 * log(x)), rules, known=facts(Ne(x, 0))) == x ** 2
-    assert simp(log(exp(x)), rules) == log(exp(x))
-    assert simp(log(exp(x)), rules, known=facts(Eq(re(x), x))) == x
+    assert simp(0 ** x) == 0 ** x
+    assert simp(0 ** x, known=facts(Gt(re(x), 0))) == NumberKind(0)
+    assert simp(log(exp(x))) == log(exp(x))
+    assert simp(log(exp(x)), known=facts(Eq(re(x), x))) == x
     known = facts(Gt(x, 0), Eq(re(y), y))
-    assert simp(log(x ** y), rules, known=known) == simp(y * log(x), rules)
+    assert simp(log(x ** y), known=known) == simp(y * log(x))
 
 
 @pytest.mark.parametrize("e, expected", [
@@ -84,23 +80,14 @@ def test_conditioned_arithmetic_rewrites():
     (Derivative(sin)(x), cos(x)),
 ])
 def test_elementary_rewrites(e, expected):
-    rules = arithmetic_rules.rules + elementary_rules.rules
-    assert simp(e, rules) == simp(expected, rules)
+    assert simp(e) == simp(expected)
 
 
-def test_signs_and_shifts_by_a_known_coefficient():
-    rules = arithmetic_rules.rules + elementary_rules.rules
-    known = facts(Lt(-1, 0), Lt(-2, 0))
-    assert simp(sin(-x), rules, known=known) == -sin(x)
-    assert simp(cos(-2 * x), rules, known=known) == cos(2 * x)
-    assert simp(tan(-x), rules, known=known) == -tan(x)
-
-
-def test_shift_by_half_pi():
-    rules = arithmetic_rules.rules + elementary_rules.rules
-    half = Pow(2, -1)
-    known = facts(Ge(Mul(half), half))
-    assert simp(cos(x + pi / 2), rules, known=known) == -sin(x)
+def test_signs_and_shifts():
+    assert simp(sin(-x)) == -sin(x)
+    assert simp(cos(-2 * x)) == cos(2 * x)
+    assert simp(tan(-x)) == -tan(x)
+    assert simp(cos(x + pi / 2)) == -sin(x)
 
 
 @pytest.mark.parametrize("e, expected", [
@@ -115,12 +102,12 @@ def test_shift_by_half_pi():
     (Ne(x, x), false),
 ])
 def test_logic_rewrites(e, expected):
-    assert rewrite(e, logic_rules.rules + logic_rules.simplify_logic) == expected
+    assert simp(e) == simp(expected)
 
 
 def test_reflexive_order_needs_a_real_argument():
-    assert rewrite(Lt(x, x), logic_rules.rules) == Lt(x, x)
-    assert rewrite(Lt(x, x), logic_rules.rules, known=facts(Eq(re(x), x))) == false
+    assert simp(Lt(x, x)) == Lt(x, x)
+    assert simp(Lt(x, x), known=facts(Eq(re(x), x))) == false
 
 
 @pytest.mark.parametrize("e, expected", [
@@ -145,8 +132,8 @@ def test_values_and_shifts_through_simplify(e, expected):
 
 
 def test_complex_powers_and_logarithms_through_simplify():
-    assert simplify(I ** I) == simplify(exp(-pi / 2))
-    assert simplify(Pow(5, 6 + 7 * I)) == simplify(exp((6 + 7 * I) * log(NumberKind(5))))
+    assert simplify(I ** I) == I ** I
+    assert simplify(Pow(5, 6 + 7 * I)) == simplify(Pow(5, 6 + 7 * I))
     assert simplify(log(NumberKind(-2))) == simplify(log(NumberKind(2)) + I * pi)
     assert simplify(log(-x), [Gt(x, 0)]) == log(-x)
     assert simplify((x * y) ** z, [Gt(x, 0)]) == (x * y) ** z

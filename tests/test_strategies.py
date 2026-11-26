@@ -53,4 +53,4 @@ def test_sympy_forms():
     assert apply("logcombine", 2 * log(x) - log(y), KNOWN) == log(x**2 / y)
     assert apply("expand_trig", cos(2 * x)) == apply("expand_trig", 2 * cos(x) ** 2 - 1)
     assert apply("trigsimp", sin(x) * cos(y) + sin(y) * cos(x)) == sin(x + y)
-    assert apply("together", 1 / x + 1 / y) == Mul(Pow(x, -1), Pow(y, -1), x + y)
+    assert apply("together", 1 / x + 1 / y) == Mul(x + y, Pow(x, -1), Pow(y, -1))
