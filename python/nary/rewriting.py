@@ -217,7 +217,10 @@ def _match(pattern, e, bindings):
         if pattern == e:
             yield bindings
     elif e.head != pattern.head and _unit(pattern.head) is not None:
-        yield from _match_args(pattern, (e,), bindings)
+        fixed = [p for p in pattern.args if not is_run(p)]
+        if len(fixed) == 1:
+            for new in _match(fixed[0], e, bindings):
+                yield from _bind_runs([p for p in pattern.args if is_run(p)], new)
     elif e.head is not None:
         for with_head in _match(pattern.head, e.head, bindings):
             yield from _match_args(pattern, e.args, with_head)
@@ -235,9 +238,6 @@ def _unit(head):
 def _match_args(pattern, args, bindings):
     runs = [p for p in pattern.args if is_run(p)]
     fixed = [p for p in pattern.args if not is_run(p)]
-    unit = _unit(pattern.head)
-    if unit is not None and len(args) < len(fixed):
-        args = args + (unit,) * (len(fixed) - len(args))
     if _is_declared(pattern.head) and is_unordered(pattern.head):
         for new, used in _match_unordered(fixed, args, bindings, ()):
             yield from _bind_run(runs, tuple(a for i, a in enumerate(args) if i not in used), new)
@@ -246,6 +246,11 @@ def _match_args(pattern, args, bindings):
         end = start + len(args) - len(fixed)
         for new in _match_in_order(fixed, args[:start] + args[end:], bindings):
             yield from _bind_run(runs, args[start:end], new)
+
+
+def _bind_runs(runs, bindings):
+    if all(bindings.get(run, ()) == () for run in runs):
+        yield {**bindings, **{run: () for run in runs}}
 
 
 def _bind_run(runs, rest, bindings):

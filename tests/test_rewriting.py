@@ -192,6 +192,12 @@ def test_a_flat_pattern_matches_through_the_identity():
     assert rewrite(sin(x), [rule(sin(Add(a, b, z)), cos(a))]) == cos(x)
 
 
+def test_through_the_identity_a_run_variable_gets_no_original_argument():
+    assert rewrite(sin(x), [rule(sin(Add(b, rest)), cos(Mul(b, Add(rest, 2))))]) == cos(Mul(x, 2))
+    assert rewrite(sin(x), [rule(sin(Add(rest)), cos(Add(rest)))]) == sin(x)
+    assert rewrite(sin(Add(x, y)), [rule(sin(Add(rest)), cos(Add(rest)))]) == cos(Add(x, y))
+
+
 def test_a_replacement_is_flattened():
     assert rewrite(sin(x), [rule(sin(a), Add(a, Add(a, Add(a, 1))))]) == Add(x, x, x, 1)
     p, q, r = BoolKind("p"), BoolKind("q"), BoolKind("r")
