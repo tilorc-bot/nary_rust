@@ -37,7 +37,7 @@ def normalise(e: Expr, known: Callable[[Expr], object] | None = None) -> Expr:
     done = {}
 
     def normal(e: Expr) -> Expr:
-        if e.head is None or is_lambda(e):
+        if e.is_atom or is_lambda(e):
             return e
         if e not in done:
             done[e] = _node(normal(e.head), [normal(arg) for arg in e.args], has_a_value)
