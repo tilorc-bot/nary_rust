@@ -563,10 +563,11 @@ def _turns(b, y, known):
 
 def _branch(b, y, x, known):
     """
-    >>> node(Pow, [exp(5 * I), HALF])
-    Mul(-1, exp(Mul(5, Pow(2, -1), I)))
-    >>> node(Pow, [Pow(1 - Pow(2, HALF), -1), HALF])
-    Mul(I, Pow(Add(-1, Pow(2, Pow(2, -1))), Mul(-1, Pow(2, -1))))
+    >>> x = NumberKind("x")
+    >>> node(Pow, [Pow(x, 2), HALF], frozenset({Lt(x, 0)}))
+    Mul(-1, x)
+    >>> node(Pow, [Pow(x, -1), HALF], frozenset({Lt(x, 0)}))
+    Mul(I, Pow(Mul(-1, x), Mul(-1, Pow(2, -1))))
     """
     r, s = rational(y), rational(x)
     half = s is not None and s.denominator == 2
