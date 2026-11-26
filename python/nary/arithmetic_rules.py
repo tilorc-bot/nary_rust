@@ -15,9 +15,8 @@ The rule a * 0 -> 0 erases a.
 """
 
 from .arithmetic import Add, Mul, Pow
-from .elementary import exp, log
 from ._identities import (
-    Equal, absorbing, associative, commutative, declare_identities, identity, inverse, repeats,
+    absorbing, associative, commutative, declare_identities, identity, inverse, repeats,
 )
 from .kinds import NumberKind
 from .relational import Ne
@@ -39,12 +38,4 @@ mul = declare_identities(Mul, [
     repeats(Pow(a, n), n),
     inverse(Pow(a, -1), when=Ne(a, 0)),
 ])
-power = declare_identities(Pow, [
-    Equal(a ** 1, a, name="pow_one"),
-    Equal(a ** 0, 1, when=Ne(a, 0), name="pow_zero"),
-])
-exponential = declare_identities(exp, [
-    Equal(exp(log(a)), a, when=Ne(a, 0), name="exp_log"),
-])
-
-rules = add + mul + power + exponential
+rules = add + mul

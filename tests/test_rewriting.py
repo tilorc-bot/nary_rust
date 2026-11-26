@@ -45,7 +45,7 @@ def test_lambda_untouched():
 
 
 def test_several_rules_in_sequence():
-    e = (x * 1 + 0) ** 1 - (y + 0) * 0
+    e = (x * 1 + 0) - (y + 0) * 0
     assert rewrite(e, rules) == x
 
 
@@ -67,8 +67,9 @@ def test_known_must_return_true_itself():
 
 
 def test_zero_to_the_zero_has_no_value():
-    assert rewrite(x ** 0, rules) == x ** 0
-    assert rewrite(x ** 0, rules, known=lambda condition: condition == Ne(x, 0)) == NumberKind(1)
+    pow_zero = [rule(a ** 0, 1, when=Ne(a, 0))]
+    assert rewrite(x ** 0, pow_zero) == x ** 0
+    assert rewrite(x ** 0, pow_zero, known=lambda condition: condition == Ne(x, 0)) == NumberKind(1)
 
 
 def test_erased_function_without_a_domain():

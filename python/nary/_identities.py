@@ -80,26 +80,22 @@ def declare_identities(F, items):
     >>> from nary._core import declare_function
     >>> a = NumberKind("a")
     >>> G = declare_function("G", NumberKind, NumberKind, returns=NumberKind)
-    >>> declare_identities(G, [identity(0), inverse(a), Equal(G(a, a), a, name="g_self")])
-    [Rule(G(a, 0), a, name='g_identity'), Rule(G(a, a), 0, name='g_inverse'), Rule(G(a, a), a, name='g_self')]
+    >>> declare_identities(G, [identity(0), inverse(a), idempotent])
+    [Rule(G(a, 0), a, name='g_identity'), Rule(G(a, a), 0, name='g_inverse'), Rule(G(a, a), a, name='g_idempotent')]
     """
     if F in _blocks:
         raise ValueError(f"the identities of {F!r} are already declared")
-    laws = [item for item in items if isinstance(item, Law)]
-    units = [law.args[0] for law in laws if law.title == "identity"]
+    for item in items:
+        if not isinstance(item, Law) or item.args is None and item.params:
+            raise TypeError(f"{item!r} cannot be listed: a block lists only laws")
+    units = [item.args[0] for item in items if item.of is identity]
     x = F.kind.output("a")
     rules, facts = [], []
     for item in items:
-        if not isinstance(item, (Law, Equal)):
-            raise TypeError(f"{item!r} cannot be listed")
-        if isinstance(item, Law) and item.name is None:
+        if item.name is None:
             name = f"{F.name.lower()}_{item.title}"
             item = Law(item.title, item.statement, item.params, item.args, item.when, name, item.of)
-        if isinstance(item, Equal) and item.name is None:
-            raise ValueError(f"{item!r} in the block of {F!r} needs a name=")
-        if isinstance(item, Equal):
-            rules.append(rule(item.lhs, item.rhs, when=item.when, name=item.name))
-        elif item.title == "associative":
+        if item.title == "associative":
             facts.append(flat)
         elif item.title == "commutative":
             facts.append(unordered)

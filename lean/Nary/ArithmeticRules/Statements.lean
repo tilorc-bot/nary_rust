@@ -25,15 +25,6 @@ abbrev mul_repeats : Prop :=
 abbrev mul_inverse : Prop :=
   ∀ (a : Nary.Number), Nary.Holds (Nary.Ne a (Nary.lit 0)) → a ≠ none → Nary.Mul [a, Nary.Pow a (Nary.lit (-1))] = Nary.lit 1
 
-abbrev pow_one : Prop :=
-  ∀ (a : Nary.Number), Nary.Pow a (Nary.lit 1) = a
-
-abbrev pow_zero : Prop :=
-  ∀ (a : Nary.Number), Nary.Holds (Nary.Ne a (Nary.lit 0)) → a ≠ none → Nary.Pow a (Nary.lit 0) = Nary.lit 1
-
-abbrev exp_log : Prop :=
-  ∀ (a : Nary.Number), Nary.Holds (Nary.Ne a (Nary.lit 0)) → Nary.exp (Nary.log a) = a
-
 abbrev add_flat : Prop :=
   Nary.Flat Nary.Add
 
@@ -106,9 +97,6 @@ structure Proved : Prop where
   mul_absorbing : Statement.mul_absorbing
   mul_repeats : Statement.mul_repeats
   mul_inverse : Statement.mul_inverse
-  pow_one : Statement.pow_one
-  pow_zero : Statement.pow_zero
-  exp_log : Statement.exp_log
   add_flat : Statement.add_flat
   add_unordered : Statement.add_unordered
   add_identity_law : Statement.add_identity_law
