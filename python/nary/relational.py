@@ -1,9 +1,9 @@
 """Comparisons of numbers, each returning a BoolKind, and ``re``, the real
 part of a number, which the domains of the comparisons need."""
 
-from ._core import set_operator
+from ._core import declare_kind, set_operator
 from .domains import declare_function
-from .generic import Generic, kind_variable
+from .generic import concretize
 from .kinds import BoolKind, NumberKind
 from .logic import And, true
 
@@ -17,10 +17,10 @@ lhs, rhs = NumberKind("lhs"), NumberKind("rhs")
 re = declare_function("re", x, returns=NumberKind, domain=true)
 # == and != compare structure and return a Python bool, so Eq and Ne have no
 # operator.
-K = kind_variable("K")
-AnyEq = Generic("Eq", K("lhs"), K("rhs"), returns=BoolKind, domain=true)
-AnyNe = Generic("Ne", K("lhs"), K("rhs"), returns=BoolKind, domain=true)
-Eq, Ne = AnyEq[NumberKind], AnyNe[NumberKind]
+K = declare_kind("K")
+AnyEq = declare_function("Eq", K("lhs"), K("rhs"), returns=BoolKind, domain=true)
+AnyNe = declare_function("Ne", K("lhs"), K("rhs"), returns=BoolKind, domain=true)
+Eq, Ne = concretize(AnyEq, {K: NumberKind}), concretize(AnyNe, {K: NumberKind})
 # A comparison has a value only when both sides are real, as in
 # lean/Nary/Logic.lean. Issue #2 proposes this; the owner has not confirmed it.
 both_real = And(Eq(re(lhs), lhs), Eq(re(rhs), rhs))

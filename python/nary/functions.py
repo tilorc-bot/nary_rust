@@ -25,23 +25,24 @@ is inert: ``square(y)`` is an application whose head is ``square``. Nothing
 is substituted.
 """
 
-from ._core import Expr, FunctionKind, Symbol
-from .generic import Generic, kind_variable
+from ._core import Expr, FunctionKind, Symbol, declare_kind
+from .domains import declare_function
+from .generic import concretize, generic_of
 from .logic import true
 
 __all__ = ["Lambda", "is_lambda"]
 
-_body_kind = kind_variable("B")
+_body_kind = declare_kind("B")
 _variable_kinds = []
 _lambdas = {}
 
 
 def _lambda(arity):
     while len(_variable_kinds) < arity:
-        _variable_kinds.append(kind_variable(f"K{len(_variable_kinds) + 1}"))
+        _variable_kinds.append(declare_kind(f"K{len(_variable_kinds) + 1}"))
     if arity not in _lambdas:
         kinds = tuple(_variable_kinds[:arity])
-        _lambdas[arity] = Generic(
+        _lambdas[arity] = declare_function(
             "Lambda",
             *(Symbol(kind) for kind in kinds),
             _body_kind,
@@ -79,7 +80,10 @@ def Lambda(variables, body):
                 )
             names.add(variable.name)
 
-    return _lambda(len(variables))(*variables, body)
+    generic = _lambda(len(variables))
+    filling = dict(zip(_variable_kinds, (variable.kind for variable in variables)))
+    filling[_body_kind] = body.kind
+    return concretize(generic, filling)(*variables, body)
 
 
 def is_lambda(e):
@@ -87,4 +91,5 @@ def is_lambda(e):
     named "Lambda" declared here."""
     if not isinstance(e, Expr) or e.head is None:
         return False
-    return any(e.head in generic for generic in _lambdas.values())
+    generic = generic_of(e.head)
+    return generic is not None and _lambdas.get(len(e.args) - 1) is generic

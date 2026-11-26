@@ -1,119 +1,62 @@
 """
-    >>> from nary import BoolKind, NumberKind
-    >>> from nary.generic import Generic, kind_variable
+    >>> from nary import BoolKind, NumberKind, declare_kind
+    >>> from nary.domains import declare_function
+    >>> from nary.generic import concretize, generic_of
     >>> from nary.logic import true
-    >>> K = kind_variable("K")
-    >>> Same = Generic("Same", K("lhs"), K("rhs"), returns=BoolKind, domain=true)
-    >>> x, p = NumberKind("x"), BoolKind("p")
-    >>> Same(x, 0), Same(p, p).head.kind, Same(p, p).lhs
-    (Same(x, 0), FunctionKind((BoolKind, BoolKind), BoolKind), p)
-    >>> Same(x, 0).head in Same, Same(x, x).head is Same(x, 0).head, x.head in Same
-    (True, True, False)
-    >>> Same(x, p)
-    Traceback (most recent call last):
-        ...
-    TypeError: Same: K is NumberKind and BoolKind
+    >>> K = declare_kind("K")
+    >>> Same = declare_function("Same", K("lhs"), K("rhs"), returns=BoolKind, domain=true)
+    >>> Same, Same.kind
+    (Same, FunctionKind((K, K), BoolKind))
+    >>> SameNumber = concretize(Same, {K: NumberKind})
+    >>> SameNumber.kind, SameNumber(NumberKind("x"), 0).lhs
+    (FunctionKind((NumberKind, NumberKind), BoolKind), x)
+    >>> SameNumber is concretize(Same, {K: NumberKind}), generic_of(SameNumber) is Same
+    (True, True)
 """
 
-from ._core import Expr, FunctionKind, Kind, Symbol, declare_kind
-from .domains import declare_function
+from ._core import FunctionKind, Symbol
+from .domains import declare_function, domain
 
-__all__ = ["Generic", "kind_variable"]
+__all__ = ["concretize", "generic_of"]
 
-_variables = set()
-
-
-def kind_variable(name):
-    kind = declare_kind(name)
-    _variables.add(kind)
-    return kind
+_concrete = {}
+_generic = {}
 
 
-def _kind_of(parameter):
-    return parameter if isinstance(parameter, Kind) else parameter.kind
-
-
-def _match(parameter, kind, binding, name):
-    if parameter in _variables:
-        bound = binding.setdefault(parameter, kind)
-        if bound != kind:
-            raise TypeError(f"{name}: {parameter!r} is {bound!r} and {kind!r}")
-    elif parameter.inputs is not None and kind.inputs is not None:
-        for p, k in zip((*parameter.inputs, parameter.output), (*kind.inputs, kind.output)):
-            _match(p, k, binding, name)
-
-
-def _fill(kind, binding):
-    if kind in _variables:
-        return binding[kind]
+def _fill(kind, filling):
+    if kind in filling:
+        return filling[kind]
     if kind.inputs is None:
         return kind
-    return FunctionKind(tuple(_fill(k, binding) for k in kind.inputs), _fill(kind.output, binding))
+    rest = None if kind.rest is None else _fill(kind.rest, filling)
+    return FunctionKind(
+        tuple(_fill(k, filling) for k in kind.inputs), _fill(kind.output, filling), rest=rest
+    )
 
 
-def _variables_in(kind, found):
-    if kind in _variables:
-        if kind not in found:
-            found.append(kind)
-    elif kind.inputs is not None:
-        for k in (*kind.inputs, kind.output):
-            _variables_in(k, found)
-    return found
-
-
-def _fill_parameter(parameter, binding):
+def _fill_parameter(parameter, name, filling):
     if isinstance(parameter, Symbol):
-        return Symbol(_fill(parameter.kind, binding))
-    if isinstance(parameter, Expr):
-        return _fill(parameter.kind, binding)(parameter.name)
-    return _fill(parameter, binding)
+        return Symbol(_fill(parameter.kind, filling))
+    kind = _fill(parameter, filling)
+    return kind(name) if name else kind
 
 
-class Generic:
-    """
-    >>> from nary import BoolKind, NumberKind
-    >>> from nary.logic import true
-    >>> K, L = kind_variable("K"), kind_variable("L")
-    >>> Pick = Generic("Pick", K, L, returns=K, domain=true)
-    >>> Pick.variables, Pick[NumberKind, BoolKind].kind
-    ([K, L], FunctionKind((NumberKind, BoolKind), NumberKind))
-    >>> Pick(NumberKind("x"), BoolKind("p")).head is Pick[NumberKind, BoolKind]
-    True
-    """
+def concretize(f, filling):
+    key = (f, frozenset(filling.items()))
+    if key not in _concrete:
+        names = f.names or (None,) * len(f.params)
+        rest = f.kind.rest
+        concrete = declare_function(
+            f.name,
+            *(_fill_parameter(p, n, filling) for p, n in zip(f.params, names)),
+            rest=None if rest is None else _fill(rest, filling),
+            returns=_fill(f.kind.output, filling),
+            domain=domain(f),
+        )
+        _concrete[key] = concrete
+        _generic[concrete] = f
+    return _concrete[key]
 
-    def __init__(self, name, *parameters, returns, domain):
-        self.name, self.parameters, self.returns, self.domain = name, parameters, returns, domain
-        self.variables = []
-        for kind in (*map(_kind_of, parameters), returns):
-            _variables_in(kind, self.variables)
-        self.specific = {}
 
-    def __getitem__(self, kinds):
-        kinds = kinds if isinstance(kinds, tuple) else (kinds,)
-        if len(kinds) != len(self.variables):
-            raise TypeError(f"{self.name} has {len(self.variables)} kind variables, got {len(kinds)}")
-        if kinds not in self.specific:
-            binding = dict(zip(self.variables, kinds))
-            self.specific[kinds] = declare_function(
-                self.name,
-                *(_fill_parameter(p, binding) for p in self.parameters),
-                returns=_fill(self.returns, binding),
-                domain=self.domain,
-            )
-        return self.specific[kinds]
-
-    def __call__(self, *args):
-        binding = {}
-        for parameter, arg in zip(self.parameters, args):
-            if isinstance(arg, Expr):
-                _match(_kind_of(parameter), arg.kind, binding, self.name)
-        unknown = [v for v in self.variables if v not in binding]
-        if unknown:
-            raise TypeError(f"{self.name}: the arguments do not give {unknown}")
-        return self[tuple(binding[v] for v in self.variables)](*args)
-
-    def __contains__(self, function):
-        return any(function is f for f in self.specific.values())
-
-    def __repr__(self):
-        return f"Generic({self.name!r})"
+def generic_of(f):
+    return _generic.get(f)
