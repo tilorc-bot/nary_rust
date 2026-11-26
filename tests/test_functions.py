@@ -7,6 +7,7 @@ from nary import (
     Expr,
     FunctionKind,
     Lambda,
+    Many,
     NumberKind,
     Symbol,
     declare_function,
@@ -26,17 +27,17 @@ def test_a_declared_function_is_an_expression_of_a_function_kind():
     assert type(nr.sin) is Expr
     assert nr.sin.kind is NumToNum
     assert nr.Eq.kind is FunctionKind((NumberKind, NumberKind), BoolKind)
-    assert (NumToNum.inputs, NumToNum.rest, NumToNum.output) == ((NumberKind,), None, NumberKind)
+    assert (NumToNum.inputs, NumToNum.output) == ((NumberKind,), NumberKind)
     assert (nr.sin.name, nr.sin.head, nr.sin.args, nr.sin.is_symbol) == ("sin", None, (), False)
     assert repr(nr.sin) == "sin"
-    assert repr(FunctionKind((), NumberKind, rest=NumberKind)) == "FunctionKind((), NumberKind, rest=NumberKind)"
+    assert repr(FunctionKind((Many(NumberKind),), NumberKind)) == "FunctionKind((Many(NumberKind),), NumberKind)"
     assert NumberKind.inputs is None and NumberKind.output is None
 
 
 def test_function_kinds_are_compared_by_identity_and_nest():
     assert FunctionKind((NumberKind,), NumberKind) is NumToNum
     assert FunctionKind((NumberKind,), BoolKind) is not NumToNum
-    assert FunctionKind((), NumberKind, rest=NumberKind) is not FunctionKind((), NumberKind)
+    assert FunctionKind((Many(NumberKind),), NumberKind) is not FunctionKind((), NumberKind)
     higher = FunctionKind((NumToNum,), NumToNum)
     assert higher.inputs[0] is NumToNum and higher.output is NumToNum
     assert nr.declare_kind_family("Box", params=1)(NumToNum).params == (NumToNum,)
@@ -68,14 +69,47 @@ def test_wrong_kind_wrong_count_and_calling_a_non_function():
         (x + y)(y)
 
 
-def test_rest_functions():
-    Max = declare_function("Max", NumberKind, rest=NumberKind, returns=NumberKind, domain=true)
-    assert Max.kind is FunctionKind((NumberKind,), NumberKind, rest=NumberKind)
+def test_a_run_of_arguments():
+    Max = declare_function("Max", NumberKind, Many(NumberKind), returns=NumberKind, domain=true)
+    assert Max.kind is FunctionKind((NumberKind, Many(NumberKind)), NumberKind)
+    assert Max.params == (NumberKind, Many(NumberKind))
     assert repr(Max(x, y, x)) == "Max(x, y, x)"
     with pytest.raises(TypeError, match=r"^Max takes at least 1 arguments, got 0$"):
         Max()
     with pytest.raises(TypeError, match=r"^Max expects NumberKind, got BoolKind: p$"):
         Max(x, p)
+
+
+def test_a_run_variable_is_a_symbol_of_a_run_kind():
+    terms = Many(NumberKind)("terms")
+    assert terms.is_symbol and terms.kind is Many(NumberKind)
+    assert Many(NumberKind).family is Many and Many(NumberKind).params == (NumberKind,)
+    assert nr.Add.kind is FunctionKind((Many(NumberKind),), NumberKind)
+    assert nr.Add.names == ("terms",)
+    assert nr.Add(x, y, 1).terms == (x, y, NumberKind(1)) and nr.Add().terms == ()
+    Shift = declare_function("Shift", NumberKind("by"), Many(NumberKind)("values"), returns=NumberKind, domain=true)
+    assert (Shift(x, y, 1).by, Shift(x, y, 1).values) == (x, (y, NumberKind(1)))
+
+
+def test_a_run_variable_is_not_an_argument():
+    terms = Many(NumberKind)("terms")
+    with pytest.raises(TypeError, match=r"^Add expects NumberKind, got Many\(NumberKind\): terms$"):
+        nr.Add(x, terms)
+    with pytest.raises(TypeError, match=r"^Ne expects NumberKind, got Many\(NumberKind\): terms$"):
+        nr.Ne(terms, 0)
+
+
+def test_where_a_run_kind_is_refused():
+    with pytest.raises(TypeError, match=r"^a run can only be the last input, got Many\(NumberKind\) at position 0$"):
+        FunctionKind((Many(NumberKind), NumberKind), NumberKind)
+    with pytest.raises(TypeError, match=r"^a function cannot return a run, got Many\(NumberKind\)$"):
+        declare_function("f", x, returns=Many(NumberKind), domain=true)
+    with pytest.raises(TypeError, match=r"^Many\(Many\(NumberKind\)\) is a run of runs, which is not supported$"):
+        FunctionKind((Many(Many(NumberKind)),), NumberKind)
+    with pytest.raises(TypeError, match=r"^f: a run cannot be marked Symbol\(Many\(NumberKind\)\)$"):
+        declare_function("f", Symbol(Many(NumberKind)), returns=NumberKind, domain=true)
+    with pytest.raises(TypeError, match=r"^Many\(NumberKind\) takes a name \(a str\), got int: 1; it accepts no literals$"):
+        Many(NumberKind)(1)
 
 
 def test_two_declarations_with_the_same_name_are_different():
@@ -185,7 +219,7 @@ def test_the_same_function_kind_from_many_threads():
 
     def make():
         barrier.wait()
-        made.append([FunctionKind((Fresh, NumberKind), Fresh, rest=Fresh) for _ in range(200)])
+        made.append([FunctionKind((Fresh, NumberKind, Many(Fresh)), Fresh) for _ in range(200)])
 
     threads = [threading.Thread(target=make) for _ in range(8)]
     for thread in threads:

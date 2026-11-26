@@ -21,8 +21,24 @@ struct KindData {
 
 struct Signature {
     inputs: Box<[KindRef]>,
-    rest: Option<KindRef>,
+    run_element: Option<KindRef>,
     output: KindRef,
+}
+
+impl Signature {
+    fn fixed(&self) -> usize {
+        self.inputs.len() - usize::from(self.run_element.is_some())
+    }
+}
+
+static MANY: PyOnceLock<Py<KindFamily>> = PyOnceLock::new();
+
+fn run_element(py: Python<'_>, kind: KindRef) -> Option<KindRef> {
+    let many = MANY.get(py)?;
+    match &kind.family {
+        Some(family) if family.is(many) => Some(kind.params[0]),
+        _ => None,
+    }
 }
 
 type KindRef = &'static KindData;
@@ -149,14 +165,6 @@ impl Kind {
     }
 
     #[getter]
-    fn rest(&self, py: Python<'_>) -> PyResult<Option<Py<Kind>>> {
-        match &self.data.signature {
-            Some(Signature { rest: Some(rest), .. }) => Ok(Some(kind_object(py, rest)?)),
-            _ => Ok(None),
-        }
-    }
-
-    #[getter]
     fn output(&self, py: Python<'_>) -> PyResult<Option<Py<Kind>>> {
         self.data.signature.as_ref().map(|sig| kind_object(py, sig.output)).transpose()
     }
@@ -211,27 +219,41 @@ fn declare_kind(
 static FUNCTION_KINDS: LazyLock<Mutex<HashMap<Box<[usize]>, KindRef>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-fn function_kind_name(inputs: &[KindRef], rest: Option<KindRef>, output: KindRef) -> String {
+fn function_kind_name(inputs: &[KindRef], output: KindRef) -> String {
     let names: Vec<&str> = inputs.iter().map(|kind| kind.name.as_str()).collect();
     let inputs = match names.len() {
         1 => format!("({},)", names[0]),
         _ => format!("({})", names.join(", ")),
     };
-    match rest {
-        Some(rest) => format!("FunctionKind({inputs}, {}, rest={})", output.name, rest.name),
-        None => format!("FunctionKind({inputs}, {})", output.name),
-    }
+    format!("FunctionKind({inputs}, {})", output.name)
 }
 
-fn function_kind(
-    py: Python<'_>,
-    inputs: &[KindRef],
-    rest: Option<KindRef>,
-    output: KindRef,
-) -> PyResult<KindRef> {
-    let mut key = Vec::with_capacity(inputs.len() + 2);
+fn function_kind(py: Python<'_>, inputs: &[KindRef], output: KindRef) -> PyResult<KindRef> {
+    if run_element(py, output).is_some() {
+        return Err(PyTypeError::new_err(format!(
+            "a function cannot return a run, got {}",
+            output.name
+        )));
+    }
+    let mut run = None;
+    for (position, &input) in inputs.iter().enumerate() {
+        let Some(element) = run_element(py, input) else { continue };
+        if position + 1 != inputs.len() {
+            return Err(PyTypeError::new_err(format!(
+                "a run can only be the last input, got {} at position {}",
+                input.name, position
+            )));
+        }
+        if run_element(py, element).is_some() {
+            return Err(PyTypeError::new_err(format!(
+                "{} is a run of runs, which is not supported",
+                input.name
+            )));
+        }
+        run = Some(element);
+    }
+    let mut key = Vec::with_capacity(inputs.len() + 1);
     key.push(output.id);
-    key.push(rest.map_or(usize::MAX, |kind| kind.id));
     key.extend(inputs.iter().map(|kind| kind.id));
     let data = {
         // No Python code runs while the table is locked, so the lock cannot
@@ -243,10 +265,10 @@ fn function_kind(
             Some(&data) => data,
             None => {
                 let data = new_kind_data(
-                    function_kind_name(inputs, rest, output),
+                    function_kind_name(inputs, output),
                     None,
                     Box::new([]),
-                    Some(Signature { inputs: inputs.into(), rest, output }),
+                    Some(Signature { inputs: inputs.into(), run_element: run, output }),
                     Box::new([]),
                 );
                 table.insert(key.into_boxed_slice(), data);
@@ -261,12 +283,10 @@ fn function_kind(
 }
 
 #[pyfunction(name = "FunctionKind")]
-#[pyo3(signature = (inputs, output, rest=None))]
 fn function_kind_py(
     py: Python<'_>,
     inputs: &Bound<'_, PyAny>,
     output: &Bound<'_, PyAny>,
-    rest: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<Py<Kind>> {
     let Ok(inputs) = inputs.cast_exact::<PyTuple>() else {
         return Err(PyTypeError::new_err(format!(
@@ -279,8 +299,7 @@ fn function_kind_py(
         kinds.push(expect_kind(&input)?);
     }
     let output = expect_kind(output)?;
-    let rest = rest.map(expect_kind).transpose()?;
-    kind_object(py, function_kind(py, &kinds, rest, output)?)
+    kind_object(py, function_kind(py, &kinds, output)?)
 }
 
 #[pyclass(frozen, module = "nary")]
@@ -557,10 +576,10 @@ fn apply<'py>(head: &Bound<'py, Expr>, args: &Bound<'py, PyTuple>) -> PyResult<B
             expr.kind.name
         )));
     };
-    let fixed = sig.inputs.len();
+    let fixed = sig.fixed();
     let given = args.len();
-    if given < fixed || (sig.rest.is_none() && given > fixed) {
-        let expected = if sig.rest.is_some() {
+    if given < fixed || (sig.run_element.is_none() && given > fixed) {
+        let expected = if sig.run_element.is_some() {
             format!("at least {}", fixed)
         } else {
             fixed.to_string()
@@ -574,9 +593,9 @@ fn apply<'py>(head: &Bound<'py, Expr>, args: &Bound<'py, PyTuple>) -> PyResult<B
     }
     let mut converted: Option<Vec<Bound<'py, PyAny>>> = None;
     for (position, arg) in args.iter_borrowed().enumerate() {
-        let expected = match sig.inputs.get(position) {
-            Some(&kind) => kind,
-            None => sig.rest.unwrap(),
+        let expected = match sig.run_element {
+            Some(element) if position >= fixed => element,
+            _ => sig.inputs[position],
         };
         match arg.cast_exact::<Expr>() {
             Ok(expr_arg) if same_kind(expr_arg.get().kind, expected) => {
@@ -893,11 +912,19 @@ impl Expr {
 
     fn __getattr__(&self, py: Python<'_>, name: &Bound<'_, PyString>) -> PyResult<Py<PyAny>> {
         if let Form::Apply { head, args } = &self.form {
-            if let Form::Declared { names: Some(names), .. } = &head.get().form {
+            let head = head.get();
+            if let (Form::Declared { names: Some(names), .. }, Some(sig)) =
+                (&head.form, &head.kind.signature)
+            {
+                let args = args.bind(py);
                 for (index, declared) in names.bind(py).iter().enumerate() {
-                    if declared.eq(name)? {
-                        return Ok(args.bind(py).get_item(index)?.unbind());
+                    if !declared.eq(name)? {
+                        continue;
                     }
+                    if sig.run_element.is_some() && index == sig.fixed() {
+                        return Ok(args.get_slice(index, args.len()).into_any().unbind());
+                    }
+                    return Ok(args.get_item(index)?.unbind());
                 }
             }
         }
@@ -908,12 +935,11 @@ impl Expr {
 }
 
 #[pyfunction]
-#[pyo3(signature = (name, *arg_kinds, rest=None, returns, names=None))]
+#[pyo3(signature = (name, *arg_kinds, returns, names=None))]
 fn declare_function<'py>(
     py: Python<'py>,
     name: Py<PyString>,
     arg_kinds: &Bound<'py, PyTuple>,
-    rest: Option<&Bound<'py, PyAny>>,
     returns: &Bound<'py, PyAny>,
     names: Option<Py<PyTuple>>,
 ) -> PyResult<Bound<'py, Expr>> {
@@ -931,7 +957,15 @@ fn declare_function<'py>(
     for param in arg_kinds.iter() {
         match param.cast_exact::<SymbolMarker>() {
             Ok(marker) => {
-                kinds.push(marker.get().kind);
+                let kind = marker.get().kind;
+                if run_element(py, kind).is_some() {
+                    return Err(PyTypeError::new_err(format!(
+                        "{}: a run cannot be marked {}",
+                        name.bind(py),
+                        describe(marker.as_any())
+                    )));
+                }
+                kinds.push(kind);
                 symbols.push(true);
             }
             Err(_) => {
@@ -941,7 +975,6 @@ fn declare_function<'py>(
         }
     }
     let symbols = symbols.contains(&true).then(|| symbols.into_boxed_slice());
-    let rest = rest.map(expect_kind).transpose()?;
     let names = match names {
         Some(names) if names.bind(py).len() > kinds.len() => {
             return Err(PyValueError::new_err(format!(
@@ -952,7 +985,7 @@ fn declare_function<'py>(
         Some(names) if names.bind(py).is_empty() => None,
         other => other,
     };
-    let kind = function_kind(py, &kinds, rest, returns)?;
+    let kind = function_kind(py, &kinds, returns)?;
     Bound::new(py, Expr { kind, form: Form::Declared { name, names, symbols } })
 }
 
@@ -1003,6 +1036,13 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Kind>()?;
     m.add_class::<KindFamily>()?;
     m.add_class::<SymbolMarker>()?;
+    let many = MANY.get_or_try_init(m.py(), || {
+        Py::new(
+            m.py(),
+            KindFamily { name: "Many".into(), params: Some(1), instances: Mutex::new(HashMap::new()) },
+        )
+    })?;
+    m.add("Many", many.clone_ref(m.py()))?;
     m.add_function(wrap_pyfunction!(declare_kind, m)?)?;
     m.add_function(wrap_pyfunction!(declare_kind_family, m)?)?;
     m.add_function(wrap_pyfunction!(function_kind_py, m)?)?;
