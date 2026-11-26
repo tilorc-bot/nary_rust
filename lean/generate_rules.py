@@ -11,6 +11,7 @@ SOURCES = {
     "ArithmeticRules": ("nary.arithmetic_rules", "rules", (Add, Mul)),
     "ElementaryRules": ("nary.elementary_rules", "rules", ()),
     "LogicRules": ("nary.logic_rules", "rules", (And, Or)),
+    "SimplifyLogic": ("nary.logic_rules", "simplify_logic", ()),
     "Normal": ("nary.normal", "laws", ()),
     "Expand": ("nary.strategies", "expand", ()),
     "ExpandLog": ("nary.strategies", "expand_log", ()),

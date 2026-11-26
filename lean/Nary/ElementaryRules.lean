@@ -67,10 +67,6 @@ theorem re_i : Statement.re_i := by simp [Statement.re_i, re, I, lit]
 theorem re_re : Statement.re_re := by
   intro a; cases a <;> simp [re]
 
-theorem re_add : Statement.re_add := by
-  intro a rest
-  cases a <;> cases h : rest.mapM id <;> simp [re, Add, List.mapM_cons, h]
-
 theorem derivative_sin : Statement.derivative_sin := by
   funext z
   simp [Derivative, sin, cos, Complex.differentiableAt_sin, Complex.deriv_sin]
@@ -78,20 +74,6 @@ theorem derivative_sin : Statement.derivative_sin := by
 theorem derivative_exp : Statement.derivative_exp := by
   funext z
   simp [Derivative, exp, Complex.differentiableAt_exp, Complex.deriv_exp]
-
-theorem sin_odd : Statement.sin_odd := by
-  intro c rest _
-  cases c <;> cases h : rest.mapM id <;> simp [sin, Mul, List.mapM_cons, h, lit, Complex.sin_neg]
-
-theorem cos_even : Statement.cos_even := by
-  intro c rest _
-  cases c <;> cases h : rest.mapM id <;> simp [cos, Mul, List.mapM_cons, h, lit, Complex.cos_neg]
-
-theorem tan_odd : Statement.tan_odd := by
-  intro c rest _
-  cases c <;> cases h : rest.mapM id <;>
-    simp [tan, withDomain, tanDomain, Mul, List.mapM_cons, h, lit, Complex.cos_neg, Complex.tan_neg]
-  split_ifs <;> simp_all
 
 private theorem inverse (n : ℤ) (h : n ≠ 0) : Pow (lit n) (lit (-1)) = some ((n : ℂ)⁻¹) := by
   rw [lit, Literals.pow_integer _ _ (Or.inl (by exact_mod_cast h))]
@@ -175,84 +157,5 @@ theorem sin_pi_3 : Statement.sin_pi_3 := by
       ← Complex.ofReal_sin, Real.sin_pi_div_three]
     push_cast; ring
   simp [sin, Mul, pi, this]
-
-theorem sin_shift_down : Statement.sin_shift_down := by
-  intro cs rest h
-  rw [inverse 2 (by norm_num)] at h ⊢
-  cases hc : cs.mapM id with
-  | none => simp [Ge, Le, Mul, hc, Holds] at h
-  | some l =>
-  cases hr : rest.mapM id with
-  | none => simp [sin, cos, Add, Mul, pi, lit, List.mapM_cons, hc, hr]
-  | some r =>
-  simp [sin, cos, Add, Mul, pi, lit, List.mapM_cons, hc, hr]
-  rw [← Complex.sin_add_pi_div_two]; congr 1; ring
-
-theorem sin_shift_up : Statement.sin_shift_up := by
-  intro cs rest h
-  rw [inverse 2 (by norm_num)]
-  cases hc : cs.mapM id with
-  | none => simp [Lt, Mul, hc, Holds] at h
-  | some l =>
-  cases hr : rest.mapM id with
-  | none => simp [sin, cos, Add, Mul, pi, lit, List.mapM_cons, hc, hr]
-  | some r =>
-  simp [sin, cos, Add, Mul, pi, lit, List.mapM_cons, hc, hr]
-  rw [show (l.prod + 2⁻¹) * (Real.pi : ℂ) + r.sum = (Real.pi * l.prod + r.sum) + Real.pi / 2 by ring,
-    Complex.cos_add_pi_div_two]
-  ring
-
-theorem cos_shift_down : Statement.cos_shift_down := by
-  intro cs rest h
-  rw [inverse 2 (by norm_num)] at h ⊢
-  cases hc : cs.mapM id with
-  | none => simp [Ge, Le, Mul, hc, Holds] at h
-  | some l =>
-  cases hr : rest.mapM id with
-  | none => simp [sin, cos, Add, Mul, pi, lit, List.mapM_cons, hc, hr]
-  | some r =>
-  simp [sin, cos, Add, Mul, pi, lit, List.mapM_cons, hc, hr]
-  rw [show (l.prod + -2⁻¹) * (Real.pi : ℂ) + r.sum = (Real.pi * l.prod + r.sum) - Real.pi / 2 by ring,
-    Complex.sin_sub_pi_div_two]
-  ring
-
-theorem cos_shift_up : Statement.cos_shift_up := by
-  intro cs rest h
-  rw [inverse 2 (by norm_num)]
-  cases hc : cs.mapM id with
-  | none => simp [Lt, Mul, hc, Holds] at h
-  | some l =>
-  cases hr : rest.mapM id with
-  | none => simp [sin, cos, Add, Mul, pi, List.mapM_cons, hc, hr]
-  | some r =>
-  simp [sin, cos, Add, Mul, pi, List.mapM_cons, hc, hr]
-  rw [show (l.prod + 2⁻¹) * (Real.pi : ℂ) + r.sum = (Real.pi * l.prod + r.sum) + Real.pi / 2 by ring,
-    Complex.sin_add_pi_div_two]
-
-theorem tan_period_down : Statement.tan_period_down := by
-  intro cs rest h
-  cases hc : cs.mapM id with
-  | none => simp [Ge, Le, Mul, hc, Holds] at h
-  | some l =>
-  cases hr : rest.mapM id with
-  | none => simp [tan, withDomain, Add, Mul, pi, lit, List.mapM_cons, hc, hr]
-  | some r =>
-  simp [tan, withDomain, tanDomain, Add, Mul, pi, lit, List.mapM_cons, hc, hr]
-  simp only [show (l.prod + -1) * (Real.pi : ℂ) + r.sum = (Real.pi * l.prod + r.sum) - Real.pi by ring,
-    Complex.cos_sub_pi, Complex.tan_sub_pi, neg_eq_zero]
-  congr
-
-theorem tan_period_up : Statement.tan_period_up := by
-  intro cs rest h
-  cases hc : cs.mapM id with
-  | none => simp [Lt, Mul, hc, Holds] at h
-  | some l =>
-  cases hr : rest.mapM id with
-  | none => simp [tan, withDomain, Add, Mul, pi, lit, List.mapM_cons, hc, hr]
-  | some r =>
-  simp [tan, withDomain, tanDomain, Add, Mul, pi, lit, List.mapM_cons, hc, hr]
-  simp only [show (l.prod + 1) * (Real.pi : ℂ) + r.sum = (Real.pi * l.prod + r.sum) + Real.pi by ring,
-    Complex.cos_add_pi, Complex.tan_add_pi, neg_eq_zero]
-  congr
 
 end Nary.ElementaryRules

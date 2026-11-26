@@ -7,6 +7,7 @@ import Nary.ArithmeticRules
 import Nary.ArithmeticRules.Statements
 import Nary.ElementaryRules.Statements
 import Nary.LogicRules.Statements
+import Nary.SimplifyLogic.Statements
 import Nary.Normal.Statements
 import Nary.Expand.Statements
 import Nary.ExpandLog.Statements

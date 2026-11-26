@@ -74,8 +74,20 @@ CASES = [
     (Pow(2, third) * Pow(4, third), NumberKind(2)),
     (Pow(12, half) * Pow(3, half), NumberKind(6)),
     (Pow(2, half) * Pow(3, half) * Pow(6, third), Pow(6, Mul(5, Pow(6, -1)))),
-    (Pow(2, -1 - x), Mul(half, Pow(2, Mul(-1, x)))),
-    (Pow(2, x) * Pow(2, y), Pow(2, Add(x, y))),
+    (Pow(2, -1 - x), Pow(2, Add(-1, Mul(-1, x)))),
+    (Pow(2, x) * Pow(2, y), Mul(Pow(2, x), Pow(2, y))),
+    (Pow(2, x) * Pow(3, x), Pow(6, x)),
+    (Pow(half, x), Pow(half, x)),
+    (Pow(3 * half, y), Pow(Mul(3, half), y)),
+    (x * x**x, Mul(x, Pow(x, x))),
+    (x * x**-2, Pow(x, -1)),
+    (exp(x) * exp(2), Mul(exp(2), exp(x))),
+    (exp(x) * exp(x), exp(Mul(2, x))),
+    (exp(x) * exp(-x), NumberKind(1)),
+    ((x**3) ** -1, Pow(x, -3)),
+    ((x**half) ** y, Pow(x, Mul(half, y))),
+    ((x**-1) ** -1, Pow(Pow(x, -1), -1)),
+    (Pow(-1, 7 + 2 * x), Pow(-1, Add(7, Mul(2, x)))),
     (2 * Pow(2, x), Mul(2, Pow(2, x))),
     (Pow(0, 2 * x), Pow(0, x)),
     (Pow(0, x / 2) * Pow(0, x), Pow(0, x)),
@@ -84,7 +96,7 @@ CASES = [
     (exp(x + 1) ** -1, exp(Add(-1, Mul(-1, x)))),
     (exp(x) ** half, Pow(exp(x), half)),
     (Pow(1 + I, y + 2), Pow(Add(1, I), Add(2, y))),
-    (Pow(1 + I, 2) * Pow(1 + I, y), Pow(Add(1, I), Add(2, y))),
+    (Pow(1 + I, 2) * Pow(1 + I, y), Mul(Pow(Add(1, I), 2), Pow(Add(1, I), y))),
     (Pow(1 + I, y + 1), Pow(Add(1, I), Add(1, y))),
     (Pow(2, half) + Pow(3, half) + x, Add(Pow(2, half), Pow(3, half), x)),
 ]
@@ -123,8 +135,8 @@ def test_nonzero_base():
     assert bottom_up(x**-1 * x**2, nonzero(x)) == x
     assert bottom_up(Pow(x, 0)) == Pow(x, 0)
     assert bottom_up(Pow(x, 0), nonzero(x)) == NumberKind(1)
-    assert bottom_up((x**2) ** -1) == Pow(Pow(x, 2), -1)
-    assert bottom_up((x**2) ** -1, nonzero(x)) == Pow(x, -2)
+    assert bottom_up((x**-2) ** -1) == Pow(Pow(x, -2), -1)
+    assert bottom_up((x**-2) ** -1, nonzero(x)) == Pow(x, 2)
     assert bottom_up(x * x * x**-1) == Mul(Pow(x, -1), Pow(x, 2))
 
 

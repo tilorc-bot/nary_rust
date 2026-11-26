@@ -104,8 +104,9 @@ def test_a_nested_pattern_is_not_flattened():
     assert rewrite(x * y / y, [cancel], known=lambda condition: True) == x * y / y
 
 
-def test_a_condition_is_not_evaluated():
-    assert rewrite(Pow(2, -1) * 0, rules) == Pow(2, -1) * 0
+def test_a_numeric_condition_is_decided():
+    assert rewrite(log(x) * 0, rules) == log(x) * 0
+    assert rewrite(Pow(2, -1) * 0, rules) == NumberKind(0)
 
 
 def test_the_next_way_of_matching_is_tried():
@@ -200,7 +201,7 @@ def test_through_the_identity_a_run_variable_gets_no_original_argument():
 def test_a_replacement_is_flattened():
     assert rewrite(sin(x), [rule(sin(a), Add(a, Add(a, Add(a, 1))))]) == Add(x, x, x, 1)
     p, q, r = BoolKind("p"), BoolKind("q"), BoolKind("r")
-    assert rewrite(Not(And(p, q, r)), nary.logic_rules.rules) == Or(Not(p), Not(q), Not(r))
+    assert rewrite(Not(And(p, q, r)), nary.logic_rules.to_nnf) == Or(Not(p), Not(q), Not(r))
 
 
 def test_a_cycle_stops():

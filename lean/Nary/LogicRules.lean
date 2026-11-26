@@ -19,9 +19,6 @@ theorem and_empty : Statement.and_empty := by
 theorem and_single : Statement.and_single := by
   intro a; rcases a with _ | q <;> simp only [And] <;> boolean
 
-theorem and_contradiction : Statement.and_contradiction := by
-  intro a h; rcases a with _ | q <;> simp only [And, Not, false, Option.map] <;> boolean
-
 theorem or_identity : Statement.or_identity := by
   intro a; rcases a with _ | q <;> simp only [Or, false] <;> boolean
 
@@ -36,9 +33,6 @@ theorem or_empty : Statement.or_empty := by
 
 theorem or_single : Statement.or_single := by
   intro a; rcases a with _ | q <;> simp only [Or] <;> boolean
-
-theorem or_excluded_middle : Statement.or_excluded_middle := by
-  intro a h; rcases a with _ | q <;> simp only [Or, Not, true, Option.map] <;> boolean
 
 theorem not_not : Statement.not_not := by
   intro a; cases a <;> simp [Not]
@@ -106,26 +100,6 @@ theorem or_unordered : Statement.or_unordered := by
   intro xs ys h
   have e : ∀ a, a ∈ xs ↔ a ∈ ys := fun _ => h.mem_iff
   unfold Or; split_ifs <;> simp_all
-
-theorem not_and : Statement.not_and := by
-  intro p ps
-  by_cases hA : ∃ q, some q ∈ ps ∧ ¬q <;> by_cases hN : none ∈ ps <;>
-    rcases p with _ | q <;> (try by_cases hq : q) <;> simp [And, Or, Not, -eq_iff_iff, *]
-
-theorem not_or : Statement.not_or := by
-  intro p ps
-  by_cases hA : ∃ q, some q ∈ ps ∧ q <;> by_cases hN : none ∈ ps <;>
-    rcases p with _ | q <;> (try by_cases hq : q) <;> simp [And, Or, Not, -eq_iff_iff, *]
-
-theorem and_absorption : Statement.and_absorption := by
-  intro p ps h
-  by_cases hA : ∃ q, some q ∈ ps ∧ q <;>
-    rcases p with _ | q <;> (try by_cases hq : q) <;> simp [And, Or, -eq_iff_iff, *]
-
-theorem or_absorption : Statement.or_absorption := by
-  intro p ps h
-  by_cases hA : ∃ q, some q ∈ ps ∧ ¬q <;>
-    rcases p with _ | q <;> (try by_cases hq : q) <;> simp [And, Or, -eq_iff_iff, *]
 
 private theorem and_congr_mem {l m : List Boolean}
     (hF : (∃ p, some p ∈ l ∧ ¬p) ↔ (∃ p, some p ∈ m ∧ ¬p)) (hN : none ∈ l ↔ none ∈ m) :

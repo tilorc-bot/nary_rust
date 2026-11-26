@@ -37,14 +37,8 @@ abbrev zero_pow : Prop :=
 abbrev pow_e : Prop :=
   ∀ (a : Nary.Number), Nary.Pow Nary.E a = Nary.exp a
 
-abbrev pow_pow : Prop :=
-  ∀ (a b c : Nary.Number), Nary.Holds (Nary.And [Nary.Gt a (Nary.lit 0), Nary.Eq (Nary.re b) b]) → Nary.Pow (Nary.Pow a b) c = Nary.Pow a (Nary.Mul [b, c])
-
 abbrev pow_complex : Prop :=
   ∀ (a b : Nary.Number), Nary.Holds (Nary.And [Nary.Ne a (Nary.lit 0), Nary.Ne (Nary.re b) b]) → Nary.Pow a b = Nary.exp (Nary.Mul [b, Nary.log a])
-
-abbrev pow_positive_factor : Prop :=
-  ∀ (a c b : Nary.Number) (rest : List Nary.Number), Nary.Holds (Nary.Gt a (Nary.lit 0)) → Nary.Pow (Nary.Mul ([a, c] ++ rest)) b = Nary.Mul [Nary.Pow a b, Nary.Pow (Nary.Mul ([c] ++ rest)) b]
 
 abbrev exp_log : Prop :=
   ∀ (a : Nary.Number), Nary.Holds (Nary.Ne a (Nary.lit 0)) → Nary.exp (Nary.log a) = a
@@ -57,9 +51,6 @@ abbrev exp_zero : Prop :=
 
 abbrev exp_one : Prop :=
   Nary.exp (Nary.lit 1) = Nary.E
-
-abbrev exp_product : Prop :=
-  ∀ (a b : Nary.Number), Nary.Mul [Nary.exp a, Nary.exp b] = Nary.exp (Nary.Add [a, b])
 
 abbrev exp_pow : Prop :=
   ∀ (a b : Nary.Number), Nary.Holds (Nary.Eq (Nary.re a) a) → Nary.Pow (Nary.exp a) b = Nary.exp (Nary.Mul [a, b])
@@ -88,14 +79,14 @@ abbrev log_e : Prop :=
 abbrev log_exp : Prop :=
   ∀ (a : Nary.Number), Nary.Holds (Nary.Eq (Nary.re a) a) → Nary.log (Nary.exp a) = a
 
-abbrev log_negative : Prop :=
-  ∀ (a : Nary.Number), Nary.Holds (Nary.Lt a (Nary.lit 0)) → Nary.log a = Nary.Add [Nary.log (Nary.Mul [Nary.lit (-1), a]), Nary.Mul [Nary.I, Nary.pi]]
-
-abbrev log_negative_product : Prop :=
-  ∀ (a : Nary.Number), Nary.Holds (Nary.Gt a (Nary.lit 0)) → Nary.log (Nary.Mul [Nary.lit (-1), a]) = Nary.Add [Nary.log a, Nary.Mul [Nary.I, Nary.pi]]
+abbrev log_negative_number : Prop :=
+  ∀ (a : Nary.Number), Nary.Holds (Nary.And [Nary.Lt a (Nary.lit 0), Nary.Lt (Nary.exp a) (Nary.lit 1)]) → Nary.log a = Nary.Add [Nary.log (Nary.Mul [Nary.lit (-1), a]), Nary.Mul [Nary.I, Nary.pi]]
 
 abbrev log_i : Prop :=
   Nary.log Nary.I = Nary.Mul [Nary.Pow (Nary.lit 2) (Nary.lit (-1)), Nary.I, Nary.pi]
+
+abbrev log_minus_i : Prop :=
+  Nary.log (Nary.Mul [Nary.lit (-1), Nary.I]) = Nary.Mul [Nary.lit (-1), Nary.Pow (Nary.lit 2) (Nary.lit (-1)), Nary.I, Nary.pi]
 
 abbrev log_pow : Prop :=
   ∀ (a b : Nary.Number), Nary.Holds (Nary.And [Nary.Gt a (Nary.lit 0), Nary.Eq (Nary.re b) b]) → Nary.log (Nary.Pow a b) = Nary.Mul [b, Nary.log a]

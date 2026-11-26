@@ -19,12 +19,6 @@ abbrev and_empty : Prop :=
 abbrev and_single : Prop :=
   ∀ (p : Nary.Boolean), Nary.And [p] = p
 
-abbrev and_contradiction : Prop :=
-  ∀ (p : Nary.Boolean), p ≠ none → Nary.And [p, Nary.Not p] = Nary.false
-
-abbrev and_absorption : Prop :=
-  ∀ (p : Nary.Boolean) (ps : List Nary.Boolean), (∀ x ∈ ps, x ≠ none) → Nary.And [p, Nary.Or ([p] ++ ps)] = p
-
 abbrev or_identity : Prop :=
   ∀ (a : Nary.Boolean), Nary.Or [a, Nary.false] = a
 
@@ -39,12 +33,6 @@ abbrev or_empty : Prop :=
 
 abbrev or_single : Prop :=
   ∀ (p : Nary.Boolean), Nary.Or [p] = p
-
-abbrev or_excluded_middle : Prop :=
-  ∀ (p : Nary.Boolean), p ≠ none → Nary.Or [p, Nary.Not p] = Nary.true
-
-abbrev or_absorption : Prop :=
-  ∀ (p : Nary.Boolean) (ps : List Nary.Boolean), (∀ x ∈ ps, x ≠ none) → Nary.Or [p, Nary.And ([p] ++ ps)] = p
 
 abbrev not_not : Prop :=
   ∀ (p : Nary.Boolean), Nary.Not (Nary.Not p) = p
@@ -73,29 +61,59 @@ abbrev not_gt : Prop :=
 abbrev not_ge : Prop :=
   ∀ (a b : Nary.Number), Nary.Not (Nary.Ge a b) = Nary.Lt a b
 
-abbrev not_and : Prop :=
-  ∀ (p : Nary.Boolean) (ps : List Nary.Boolean), Nary.Not (Nary.And ([p] ++ ps)) = Nary.Or [Nary.Not p, Nary.Not (Nary.And ps)]
-
-abbrev not_or : Prop :=
-  ∀ (p : Nary.Boolean) (ps : List Nary.Boolean), Nary.Not (Nary.Or ([p] ++ ps)) = Nary.And [Nary.Not p, Nary.Not (Nary.Or ps)]
-
 abbrev eq_self : Prop :=
   ∀ (a : Nary.Number), a ≠ none → Nary.Eq a a = Nary.true
+
+abbrev eq_holds : Prop :=
+  ∀ (a b : Nary.Number), Nary.Holds (Nary.Eq a b) → a ≠ none → b ≠ none → Nary.Eq a b = Nary.true
+
+abbrev eq_fails : Prop :=
+  ∀ (a b : Nary.Number), Nary.Holds (Nary.Ne a b) → a ≠ none → b ≠ none → Nary.Eq a b = Nary.false
 
 abbrev ne_self : Prop :=
   ∀ (a : Nary.Number), a ≠ none → Nary.Ne a a = Nary.false
 
+abbrev ne_holds : Prop :=
+  ∀ (a b : Nary.Number), Nary.Holds (Nary.Ne a b) → a ≠ none → b ≠ none → Nary.Ne a b = Nary.true
+
+abbrev ne_fails : Prop :=
+  ∀ (a b : Nary.Number), Nary.Holds (Nary.Eq a b) → a ≠ none → b ≠ none → Nary.Ne a b = Nary.false
+
 abbrev lt_self : Prop :=
   ∀ (a : Nary.Number), Nary.Holds (Nary.Eq (Nary.re a) a) → a ≠ none → Nary.Lt a a = Nary.false
+
+abbrev lt_holds : Prop :=
+  ∀ (a b : Nary.Number), Nary.Holds (Nary.Lt a b) → a ≠ none → b ≠ none → Nary.Lt a b = Nary.true
+
+abbrev lt_fails : Prop :=
+  ∀ (a b : Nary.Number), Nary.Holds (Nary.Ge a b) → a ≠ none → b ≠ none → Nary.Lt a b = Nary.false
 
 abbrev le_self : Prop :=
   ∀ (a : Nary.Number), Nary.Holds (Nary.Eq (Nary.re a) a) → a ≠ none → Nary.Le a a = Nary.true
 
+abbrev le_holds : Prop :=
+  ∀ (a b : Nary.Number), Nary.Holds (Nary.Le a b) → a ≠ none → b ≠ none → Nary.Le a b = Nary.true
+
+abbrev le_fails : Prop :=
+  ∀ (a b : Nary.Number), Nary.Holds (Nary.Gt a b) → a ≠ none → b ≠ none → Nary.Le a b = Nary.false
+
 abbrev gt_self : Prop :=
   ∀ (a : Nary.Number), Nary.Holds (Nary.Eq (Nary.re a) a) → a ≠ none → Nary.Gt a a = Nary.false
 
+abbrev gt_holds : Prop :=
+  ∀ (a b : Nary.Number), Nary.Holds (Nary.Gt a b) → a ≠ none → b ≠ none → Nary.Gt a b = Nary.true
+
+abbrev gt_fails : Prop :=
+  ∀ (a b : Nary.Number), Nary.Holds (Nary.Le a b) → a ≠ none → b ≠ none → Nary.Gt a b = Nary.false
+
 abbrev ge_self : Prop :=
   ∀ (a : Nary.Number), Nary.Holds (Nary.Eq (Nary.re a) a) → a ≠ none → Nary.Ge a a = Nary.true
+
+abbrev ge_holds : Prop :=
+  ∀ (a b : Nary.Number), Nary.Holds (Nary.Ge a b) → a ≠ none → b ≠ none → Nary.Ge a b = Nary.true
+
+abbrev ge_fails : Prop :=
+  ∀ (a b : Nary.Number), Nary.Holds (Nary.Lt a b) → a ≠ none → b ≠ none → Nary.Ge a b = Nary.false
 
 abbrev and_unordered : Prop :=
   Nary.Unordered Nary.And

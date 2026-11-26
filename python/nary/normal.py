@@ -20,7 +20,7 @@ Comparisons and real parts of numbers are evaluated.
 """
 
 from .arithmetic import Add, Mul, Pow
-from .constants import I, pi
+from .constants import E, I, pi
 from .elementary import exp
 from .kinds import NumberKind
 from .logic import And
@@ -45,6 +45,8 @@ laws = [
     rule(x**a * x**b, x ** (a + b), when=And(Gt(re(a), 0), Gt(re(b), 0)),
          name="collect_positive_powers"),
     rule(x**a * x ** (c * a), x ** ((1 + c) * a), when=Gt(c, 0), name="collect_parallel_powers"),
+    rule(x**a * x**b, x ** (a + b), when=Lt(re(a + b), 0), name="collect_negative_powers"),
+    rule(exp(a) * exp(b), exp(a + b), name="exp_product"),
     rule(a**c * b**c, (a * b) ** c, when=And(Gt(a, 0), Gt(b, 0)), name="combine_radicals"),
     rule(b ** (n + x), b**n * b**x, when=Ne(b, 0), name="split_exponent"),
     rule(Pow(0, c * x), Pow(0, x), when=Gt(c, 0), name="zero_base"),
@@ -55,8 +57,17 @@ laws = [
          name="pow_pow_positive_integer"),
     rule((x**a) ** n, x ** (a * n), when=And(n_is_an_integer, Ne(x, 0)),
          name="pow_pow_integer"),
+    rule((x**a) ** n, x ** (a * n), when=And(n_is_an_integer, Gt(re(a), 0)),
+         name="pow_pow_integer_positive_exponent"),
+    rule((x**a) ** b, x ** (a * b), when=And(Gt(a, 0), Lt(a, 1)), name="pow_pow_fraction"),
+    rule((x**a) ** b, x ** (a * b), when=And(Gt(a, -1), Lt(a, 0), Gt(re(b), 0)),
+         name="pow_pow_negative_fraction"),
+    rule((x**a) ** b, x ** (a * b), when=And(Gt(a, -1), Lt(a, 1), Ne(x, 0)),
+         name="pow_pow_fraction_nonzero"),
+    rule((x**a) ** b, x ** (a * b), when=And(Gt(x, 0), Eq(re(a), a)), name="pow_pow_positive_base"),
     rule(exp(a) ** n, exp(n * a), when=n_is_an_integer, name="exp_pow_integer"),
     rule((c * x) ** a, c**a * x**a, when=Gt(c, 0), name="pow_positive_factor"),
+    rule((x**-1) ** c, (-1) ** c * (-x) ** -c, when=Lt(x, 0), name="pow_reciprocal_negative"),
 ]
 
 
@@ -118,7 +129,7 @@ def _collect(head, args, known):
     for key, coefficients in groups.items():
         for coefficient in _merge(head, key, coefficients, known):
             joined.append(_collect(Mul, [coefficient, key], known) if adding
-                          else _pow(key, coefficient, known))
+                          else _exp(coefficient) if key == E else _pow(key, coefficient, known))
     radicals = [e for e in map(_radical_exponent, joined) if e is not None]
     if not adding and len(set(radicals)) < len(radicals) or any(
             _coefficient(head, j) is not None or j.head == head for j in joined):
@@ -162,24 +173,39 @@ def _is_real(e):
     return v is not None and v.im == 0
 
 
-def _is_integer(e):
-    v = value(e)
-    return v is not None and v.is_integer
-
-
-def _sum(terms):
-    return terms[0] if len(terms) == 1 else Add(*terms)
-
-
 def _split_factor(f):
+    if f.head == exp:
+        return E, f.args[0]
     return (f.args[0], f.args[1]) if f.head == Pow else (f, NumberKind(1))
+
+
+def _exp(e):
+    v = value(e)
+    return E if v == 1 else NumberKind(1) if v == 0 else exp(e)
+
+
+def _exponent_term(e):
+    return NumberKind(1) if value(e) is not None else _split_term(e)[0]
 
 
 def _merge(head, key, coefficients, known):
     if len(coefficients) == 1:
         return coefficients
-    if head == Add or _nonzero(key, known):
+    if head == Add:
         return [_collect(Add, coefficients, known)]
+    terms = {}
+    for e in coefficients:
+        terms.setdefault(_exponent_term(e), []).append(e)
+    return [merged for group in terms.values() for merged in _merge_term(key, group, known)]
+
+
+def _merge_term(key, coefficients, known):
+    total = _collect(Add, coefficients, known)
+    if len(coefficients) == 1 or key == E or _nonzero(key, known):
+        return [total]
+    v = value(total)
+    if v is not None and v.im == 0 and v.re < 0:
+        return [total]
     directions = {}
     for e in coefficients:
         directions.setdefault(_direction(e), []).append(e)
@@ -195,9 +221,10 @@ def _direction(e):
 
 
 def _radical_exponent(f):
-    if f.head == Pow and _is_real(f.args[0]) and value(f.args[0]).re > 0 and _is_real(f.args[1]):
-        return value(f.args[1])
-    return None
+    if f.head != Pow or not _is_real(f.args[0]) or value(f.args[0]).re <= 0:
+        return None
+    v = value(f.args[1])
+    return f.args[1] if v is None else v if v.im == 0 and not v.is_integer else None
 
 
 def _combine_radicals(factors, known):
@@ -227,12 +254,15 @@ def _pow(base, exponent, known):
     if vb == 0:
         rest, c = _split_term(exponent)
         return Pow(base, rest) if value(c).re > 0 else Pow(base, exponent)
-    if vb is not None and exponent.head == Add and _is_integer(exponent.args[0]):
-        whole, rest = power(vb, value(exponent.args[0])), exponent.args[1:]
-        if whole is not None and _coefficient(Mul, whole) is not None:
-            return _collect(Mul, [whole, _pow(base, _sum(rest), known)], known)
+    if base.head == Pow and value(base) is None and _collapses(*base.args, exponent, known):
+        return _pow(base.args[0], _collect(Mul, [base.args[1], exponent], known), known)
     if vx is None:
         return Pow(base, exponent)
+    if base.head == Pow and value(base.args[1]) == -1 and vx.im == 0 and vx.re.denominator == 2 and holds(
+            Lt(base.args[0], 0), known):
+        negated = _collect(Mul, [NumberKind(-1), base.args[0]], known)
+        return _collect(Mul, [_pow(NumberKind(-1), exponent, known),
+                              _pow(negated, to_expr(-vx), known)], known)
     if vx == 1:
         return base
     if vx == 0:
@@ -241,14 +271,49 @@ def _pow(base, exponent, known):
         return exp(_collect(Mul, [exponent, base.args[0]], known))
     if vx.is_integer and base.head == Mul:
         return _collect(Mul, [_pow(f, exponent, known) for f in base.args], known)
-    if vx.is_integer and base.head == Pow and (vx.re > 0 or _nonzero(base.args[0], known)):
-        return _pow(base.args[0], _collect(Mul, [base.args[1], exponent], known), known)
     if vx.im == 0 and base.head == Mul:
-        numbers = [f for f in base.args if value(f) is not None]
-        rest = [f for f in base.args if value(f) is None]
-        c = value(_mul(numbers)) if numbers else None
-        if c is not None and c.im == 0 and c.re > 0:
-            return _collect(Mul, [_pow(_mul(numbers), exponent, known),
-                                  _pow(_mul(rest), exponent, known)], known)
+        positive, other = _split_positive(base.args, known)
+        if len(positive) == 1 and not other and positive[0].head == Mul:
+            return Pow(positive[0], exponent)
+        if positive:
+            powers = [Pow(f, exponent) if f.head == Mul else _pow(f, exponent, known) for f in positive]
+            return _collect(Mul, [*powers, *([_pow(_mul(other), exponent, known)] if other else [])],
+                            known)
     return Pow(base, exponent)
 
+
+def _split_positive(factors, known):
+    numbers = [f for f in factors if value(f) is not None]
+    c = value(_mul(numbers)) if numbers else Number(1)
+    rest = [f for f in factors if value(f) is None]
+    args = rest if c == 1 else [to_expr(c), *rest]
+    positive = [f for f in args if _sign(f, known) == 1]
+    negative = [f for f in args if _sign(f, known) == -1]
+    other = [f for f in args if _sign(f, known) is None]
+    if len(negative) > 1:
+        o = value(negative.pop(0)) if not other and value(negative[0]) is not None else Number(1)
+        o = -o if len(negative) % 2 else o
+        positive += [_collect(Mul, [NumberKind(-1), f], known) for f in negative]
+        other += [] if o == 1 else [to_expr(o)]
+    elif negative and other and value(negative[0]) not in (None, -1):
+        other.append(NumberKind(-1))
+        positive.append(to_expr(-value(negative[0])))
+    else:
+        other += negative
+    return positive, other
+
+
+def _sign(f, known):
+    v = value(f)
+    if v is not None:
+        return None if v.im != 0 else 1 if v.re > 0 else -1 if v.re < 0 else None
+    return 1 if holds(Gt(f, 0), known) else -1 if holds(Lt(f, 0), known) else None
+
+
+def _collapses(x, a, b, known):
+    va, vb = value(a), value(b)
+    if vb is not None and vb.is_integer:
+        return vb.re > 0 or (va is not None and va.re > 0) or _nonzero(x, known)
+    if va is not None and va.im == 0 and -1 < va.re < 1:
+        return va.re > 0 or _nonzero(x, known) or (vb is not None and vb.re > 0)
+    return holds(And(Gt(x, 0), Eq(re(a), a)), known)

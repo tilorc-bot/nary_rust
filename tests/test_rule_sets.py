@@ -53,7 +53,6 @@ def test_conditions_mention_only_pattern_variables():
     (E ** x, exp(x)),
     (exp(1), E),
     (exp(0), 1),
-    (exp(x) * exp(y) * 2, 2 * exp(x + y)),
     (exp(x + I * pi), -exp(x)),
     (log(E) + log(1), 1),
     (1 ** x, 1),
@@ -116,7 +115,7 @@ def test_shift_by_half_pi():
     (Ne(x, x), false),
 ])
 def test_logic_rewrites(e, expected):
-    assert rewrite(e, logic_rules.rules) == expected
+    assert rewrite(e, logic_rules.rules + logic_rules.simplify_logic) == expected
 
 
 def test_reflexive_order_needs_a_real_argument():
@@ -149,6 +148,7 @@ def test_complex_powers_and_logarithms_through_simplify():
     assert simplify(I ** I) == simplify(exp(-pi / 2))
     assert simplify(Pow(5, 6 + 7 * I)) == simplify(exp((6 + 7 * I) * log(NumberKind(5))))
     assert simplify(log(NumberKind(-2))) == simplify(log(NumberKind(2)) + I * pi)
-    assert simplify(log(-x), [Gt(x, 0)]) == simplify(log(x) + I * pi)
-    assert simplify((x * y) ** z, [Gt(x, 0)]) == simplify(x ** z * y ** z)
+    assert simplify(log(-x), [Gt(x, 0)]) == log(-x)
+    assert simplify((x * y) ** z, [Gt(x, 0)]) == (x * y) ** z
+    assert simplify((x * y) ** Pow(2, -1), [Gt(x, 0)]) == simplify(x ** Pow(2, -1) * y ** Pow(2, -1))
     assert simplify(x ** z, [Gt(x, 0)]) == x ** z

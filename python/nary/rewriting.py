@@ -47,18 +47,25 @@ beta puts the argument of a lambda in place of its variable.
     Add(x, 1)
 """
 
+from functools import lru_cache
+
 from ._core import Expr
+from ._identities import Law, identities
+from .arithmetic import Add, Mul
+from .decide import decide
 from .domains import domain_of
+from .elementary import cos, exp, log, sin
 from .functions import is_lambda
-from .kinds import NumberKind
+from .kinds import BoolKind, Many, NumberKind
 from .logic import And, Or, true
 from .relational import Eq, Ge, Gt, Le, Lt, Ne, re
-from ._identities import Law, identities
 from .rules import _is_declared_function, is_flat, is_run, is_unordered
 
 __all__ = ["beta", "has_a_value", "holds", "implications", "rewrite"]
 
 a, b = NumberKind("a"), NumberKind("b")
+bs = Many(NumberKind)("bs")
+real = Eq(re(a), a)
 
 implications = [
     (Gt(a, b), Ne(a, b)),
@@ -74,6 +81,44 @@ implications = [
     (Le(a, 0), Eq(re(a), a)),
     (Gt(re(a), 0), Ne(a, 0)),
     (Lt(re(a), 0), Ne(a, 0)),
+    (Ne(a - b, 0), Ne(a, b)),
+    (And(Lt(a - b, 0), real), Lt(a, b)),
+    (And(Le(a - b, 0), real), Le(a, b)),
+    (And(Gt(a - b, 0), real), Gt(a, b)),
+    (And(Ge(a - b, 0), real), Ge(a, b)),
+    (Lt(a, b), Le(a, b)),
+    (Gt(a, b), Ge(a, b)),
+    (Lt(b, a), Gt(a, b)),
+    (Gt(b, a), Lt(a, b)),
+    (Le(b, a), Ge(a, b)),
+    (Ge(b, a), Le(a, b)),
+    (And(Gt(a, 0), Ge(0, b)), Gt(a, b)),
+    (And(Ge(a, 0), Gt(0, b)), Gt(a, b)),
+    (And(Ge(a, 0), Ge(0, b)), Ge(a, b)),
+    (And(Lt(a, 0), Le(0, b)), Lt(a, b)),
+    (And(Le(a, 0), Lt(0, b)), Lt(a, b)),
+    (And(Le(a, 0), Le(0, b)), Le(a, b)),
+    (And(Gt(a, 0), Gt(Add(bs), 0)), Gt(Add(a, bs), 0)),
+    (And(Gt(a, 0), Gt(Mul(bs), 0)), Gt(Mul(a, bs), 0)),
+    (And(Lt(a, 0), Lt(Add(bs), 0)), Lt(Add(a, bs), 0)),
+    (And(Lt(a, 0), Lt(Mul(bs), 0)), Gt(Mul(a, bs), 0)),
+    (And(Lt(a, 0), Gt(Mul(bs), 0)), Lt(Mul(a, bs), 0)),
+    (And(Gt(a, 0), Lt(Mul(bs), 0)), Lt(Mul(a, bs), 0)),
+    (And(Gt(a, 0), Eq(re(b), b)), Gt(a**b, 0)),
+    (Lt(a, 0), Lt(a**-1, 0)),
+    (And(real, Ne(re(b), b)), Ne(a, b)),
+    (And(Ne(re(a), a), Eq(re(b), b)), Ne(a, b)),
+    (And(real, Eq(re(Add(bs)), Add(bs))), Eq(re(Add(a, bs)), Add(a, bs))),
+    (And(real, Eq(re(Mul(bs)), Mul(bs))), Eq(re(Mul(a, bs)), Mul(a, bs))),
+    (And(real, Ne(a, 0)), Gt(a**2, 0)),
+    (real, Ge(a**2, 0)),
+    (real, Gt(exp(a), 0)),
+    (real, Eq(re(exp(a)), exp(a))),
+    (real, Eq(re(sin(a)), sin(a))),
+    (real, Eq(re(cos(a)), cos(a))),
+    (Gt(a, 0), Eq(re(log(a)), log(a))),
+    (And(Gt(a, 0), Eq(re(b), b)), Eq(re(a**b), a**b)),
+    (true, Ne(exp(a), 0)),
 ]
 
 
@@ -84,16 +129,26 @@ def rewrite(e, rules, known=None, normal=None):
 
 
 def holds(c, known=None, depth=2):
-    if c == true or (known is not None and known(c) is True):
+    return _holds(c, known, depth)
+
+
+@lru_cache(maxsize=1 << 16)
+def _holds(c, known, depth):
+    if c == true or _decide(c) is True or (known is not None and known(c) is True):
         return True
     if c.head == And:
-        return all(holds(arg, known, depth) for arg in c.args)
+        return all(_holds(arg, known, depth) for arg in c.args)
     if c.head == Or:
-        return any(holds(arg, known, depth) for arg in c.args)
+        return any(_holds(arg, known, depth) for arg in c.args)
     return depth > 0 and any(
-        holds(_substitute(premise, bindings), known, depth - 1)
+        _holds(_substitute(premise, bindings), known, depth - 1)
         for premise, conclusion in implications for bindings in _match(conclusion, c, {})
     )
+
+
+@lru_cache(maxsize=1 << 14)
+def _decide(c):
+    return decide(c)
 
 
 def has_a_value(e, known=None):
@@ -161,10 +216,12 @@ def _apply(rule, e, known):
         condition = rule.condition
         if condition is not None and not holds(_substitute(condition, bindings), known):
             continue
-        erased = (bindings[v] if is_run(v) else (bindings[v],) for v in rule.erased)
-        if not all(has_a_value(arg, known) for args in erased for arg in args):
-            continue
         replacement = _substitute(rule.replacement, bindings)
+        erased = (bindings[v] if is_run(v) else (bindings[v],) for v in rule.erased)
+        if not (_absorbs(e, replacement) or all(
+            has_a_value(arg, known) for args in erased for arg in args
+        )):
+            continue
         if used is None:
             return replacement
         first = min(used)
@@ -172,6 +229,14 @@ def _apply(rule, e, known):
                 for i, arg in enumerate(e.args) if i == first or i not in used]
         return _flatten(e.head(*args))
     return None
+
+
+def _absorbs(e, z):
+    head = e.head
+    return z in e.args and head.kind.output is BoolKind and any(
+        isinstance(law, Law) and law.title == "absorbing" and law.args[0] == z
+        for law in identities(head)
+    )
 
 
 def _flatten(e):

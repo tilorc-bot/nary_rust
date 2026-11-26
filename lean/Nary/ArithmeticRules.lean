@@ -119,9 +119,6 @@ theorem exp_zero : Statement.exp_zero := by simp [Statement.exp_zero, exp, lit]
 
 theorem exp_one : Statement.exp_one := by simp [Statement.exp_one, exp, lit, E]
 
-theorem exp_product : Statement.exp_product := by
-  intro a b; cases a <;> cases b <;> simp [exp, Mul, Add, Complex.exp_add]
-
 theorem log_one : Statement.log_one := by
   simp [Statement.log_one, log, withDomain, logDomain, lit]
 
@@ -211,26 +208,6 @@ theorem log_real_pos {r : ℝ} (hr : 0 < r) : Complex.log (r : ℂ) = (Real.log 
 private theorem log_neg_real {r : ℝ} (hr : 0 < r) : Complex.log (-(r : ℂ)) = Real.log r + Real.pi * Complex.I := by
   rw [show -(r : ℂ) = r * (-1) by ring, Complex.log_ofReal_mul hr (by norm_num), Complex.log_neg_one]
 
-theorem log_negative_product : Statement.log_negative_product := by
-  intro a h
-  obtain ⟨r, hr, rfl⟩ := holds_pos h
-  have h0 : -(r : ℂ) ≠ 0 := by exact_mod_cast (neg_ne_zero.mpr hr.ne')
-  have h1 : (r : ℂ) ≠ 0 := by exact_mod_cast hr.ne'
-  simp [log, withDomain, logDomain, Mul, Add, lit, I, pi, h0, h1, log_neg_real hr, log_real_pos hr, mul_comm]
-
-theorem log_negative : Statement.log_negative := by
-  intro a h
-  obtain ⟨r, hr, rfl⟩ := holds_neg h
-  have hp : 0 < -r := by linarith
-  have h1 : (r : ℂ) ≠ 0 := by exact_mod_cast hr.ne
-  have e : (r : ℂ) = -((-r : ℝ) : ℂ) := by push_cast; ring
-  have e2 : -(r : ℂ) = ((-r : ℝ) : ℂ) := by push_cast; ring
-  simp [log, withDomain, logDomain, Mul, Add, lit, I, pi, h1, mul_comm]
-  rw [e2, log_real_pos hp]
-  conv_lhs => rw [e]
-  rw [log_neg_real hp]
-  ring
-
 theorem exp_pow : Statement.exp_pow := by
   intro a b h
   obtain ⟨r, rfl⟩ := holds_real h
@@ -268,21 +245,6 @@ theorem log_pow : Statement.log_pow := by
   rw [pow_real hr]
   simp [log, withDomain, logDomain, Mul, h1, log_exp_mul, log_real_pos hr]
 
-theorem pow_pow : Statement.pow_pow := by
-  intro a b c h
-  simp only [holds_and, List.mem_cons, List.not_mem_nil, forall_eq_or_imp] at h
-  obtain ⟨ha, hb, -⟩ := h
-  obtain ⟨r, hr, rfl⟩ := holds_pos ha
-  obtain ⟨s, rfl⟩ := holds_real hb
-  have h1 : (r : ℂ) ≠ 0 := by exact_mod_cast hr.ne'
-  have h2 : ((Real.exp (s * Real.log r) : ℝ) : ℂ) ≠ 0 := by exact_mod_cast (Real.exp_pos _).ne'
-  rw [pow_real hr]
-  cases c with
-  | none => simp [Pow, withDomain₂, Mul]
-  | some w =>
-    simp [Pow, withDomain₂, powDomain, powTotal, Mul, h1, log_exp_mul, log_real_pos hr]
-    ring_nf
-
 theorem pow_mul_pos {r : ℝ} (hr : 0 < r) (x a : Number) :
     Pow (Mul [some (r : ℂ), x]) a = Mul [Pow (some (r : ℂ)) a, Pow x a] := by
   have h1 : (r : ℂ) ≠ 0 := by exact_mod_cast hr.ne'
@@ -296,13 +258,6 @@ theorem pow_mul_pos {r : ℝ} (hr : 0 < r) (x a : Number) :
   · subst hu; by_cases hw : 0 < w.re <;> simp [Pow, withDomain₂, powDomain, powTotal, Mul, h1, hw]
   · simp [Pow, withDomain₂, powDomain, powTotal, Mul, h1, hu, Complex.log_ofReal_mul hr hu,
       log_real_pos hr, mul_add, Complex.exp_add]
-
-theorem pow_positive_factor : Statement.pow_positive_factor := by
-  intro a c b rest h
-  obtain ⟨r, hr, rfl⟩ := holds_pos h
-  rw [← pow_mul_pos hr]
-  congr 1
-  cases c <;> cases hc : rest.mapM id <;> simp [Mul, List.mapM_cons, hc]
 
 theorem exp_period_down : Statement.exp_period_down := by
   intro cs rest h
