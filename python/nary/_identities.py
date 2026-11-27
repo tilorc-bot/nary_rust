@@ -7,8 +7,7 @@
     Equal(f(a, i), e)
 """
 
-from ._core import FunctionKind, declare_kind
-from .commutative import Commutative, declare_commutative
+from ._core import Expr, FunctionKind, declare_kind
 from .kinds import Many
 from .rules import flat, rule, unordered
 
@@ -42,14 +41,14 @@ class Law:
     (identity(0), Equal(f(s, e, t), f(s, t)))
     """
 
-    def __init__(self, title, statement, params=(), args=None, when=None, name=None):
+    def __init__(self, title, statement, params=(), args=None, when=None, name=None, of=None):
         self.title, self.statement, self.params = title, statement, params
-        self.args, self.when, self.name = args, when, name
+        self.args, self.when, self.name, self.of = args, when, name, of or self
 
     def __call__(self, *args, when=None, name=None):
         if self.args is not None or len(args) != len(self.params):
             raise TypeError(f"{self.title} takes {len(self.params)} parameters")
-        return Law(self.title, self.statement, self.params, args, when, name)
+        return Law(self.title, self.statement, self.params, args, when, name, self)
 
     def __repr__(self):
         if not self.params:
@@ -98,7 +97,7 @@ def declare_identities(F, items):
     for item in items:
         if isinstance(item, Law) and item.name is None:
             name = f"{F.name.lower()}_{item.title}"
-            item = Law(item.title, item.statement, item.params, item.args, item.when, name)
+            item = Law(item.title, item.statement, item.params, item.args, item.when, name, item.of)
         if isinstance(item, Equal) and item.name is None:
             raise ValueError(f"{item!r} in the block of {F!r} needs a name=")
         if isinstance(item, Equal):
@@ -122,8 +121,6 @@ def declare_identities(F, items):
         raise ValueError(f"two rules in the block of {F!r} have the same name")
     for fact in facts:
         fact(F)
-    if {"associative", "commutative"} <= titles:
-        declare_commutative(F, _commutative_laws(laws))
     _blocks[F] = list(items)
     return rules
 
@@ -136,17 +133,18 @@ def _bind(F, item):
     """
     if not isinstance(item, Law) or not item.params:
         return item
-    args = [F(F.kind.output("a"), arg).args[1] for arg in item.args]
-    return Law(item.title, item.statement, item.params, args, item.when, item.name)
+    x = F.kind.output("a")
+    args = [F(x, arg).args[1] if _is_element(param) else arg
+            for param, arg in zip(item.params, item.args)]
+    return Law(item.title, item.statement, item.params, args, item.when, item.name, item.of)
 
 
-def _commutative_laws(laws):
+def _is_element(param):
     """
-    >>> _commutative_laws([associative, commutative, identity(0), idempotent])
-    Commutative(unit=0, zero=None, idempotent=True)
+    >>> _is_element(e), _is_element(f), _is_element("n")
+    (True, False, False)
     """
-    plain = {law.title: law.args and law.args[0] for law in reversed(laws) if law.when is None}
-    return Commutative(plain.get("identity"), plain.get("absorbing"), "idempotent" in plain)
+    return isinstance(param, Expr) and param.is_symbol and param.kind == PatternKind
 
 
 def identities(F):

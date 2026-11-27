@@ -7,7 +7,7 @@ from nary._identities import (
     identity, inverse,
 )
 from nary.arithmetic_rules import rules
-from nary.commutative import Commutative, commutative_laws
+from nary.commutative import routine_laws
 from nary.logic import true
 from nary.relational import Ne
 from nary.rules import is_flat, is_unordered, rule
@@ -58,7 +58,7 @@ def test_refused_blocks_record_nothing():
         declare_identities(P, [identity])
     with pytest.raises(TypeError, match="expects NumberKind, got BoolKind"):
         declare_identities(P, [identity(true)])
-    assert identities(P) == [] and commutative_laws(P) is None
+    assert identities(P) == [] and routine_laws(P) == []
 
 
 @pytest.mark.parametrize("block", [
@@ -70,7 +70,7 @@ def test_idempotent_needs_associative_and_commutative(block):
     R = declare_function("R", NumberKind, NumberKind, returns=NumberKind)
     with pytest.raises(ValueError, match="idempotent needs associative and commutative"):
         declare_identities(R, block)
-    assert identities(R) == [] and commutative_laws(R) is None
+    assert identities(R) == [] and routine_laws(R) == []
 
 
 def test_generated_names_and_override():
@@ -84,10 +84,10 @@ def test_the_parameters_are_bound_at_declaration():
     assert unit == Add.kind.output(0) and inverse_of == Mul(-1, a)
 
 
-def test_the_laws_of_an_associative_commutative_head():
-    zero, one = Mul.kind.output(0), Mul.kind.output(1)
-    assert commutative_laws(Mul) == Commutative(unit=one, zero=zero)
-    assert commutative_laws(Pow) is None
+def test_the_laws_the_routine_uses():
+    assert repr(routine_laws(Mul)) == "[identity(1), absorbing(0)]"
+    assert repr(routine_laws(Add)) == "[identity(0)]"
+    assert routine_laws(Pow) == []
     S = declare_function("S", Many(NumberKind), returns=NumberKind)
     declare_identities(S, [associative, commutative, identity(0, when=Ne(a, 0)), idempotent])
-    assert commutative_laws(S) == Commutative(idempotent=True)
+    assert repr(routine_laws(S)) == "[idempotent]"
