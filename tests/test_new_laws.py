@@ -5,40 +5,34 @@ from math import gcd
 
 import pytest
 
-from nary import BoolKind, FunctionKind, Many, Ne, NumberKind, declare_function, log
-from nary._identities import (
-    Equal, Law, PatternKind, a, absorbing, associative, b, commutative, declare_identities, f,
-    idempotent, identity, s, t,
-)
+from nary import BoolKind, Many, Ne, NumberKind, declare_function, log
 from nary.arithmetic import Add
-from nary.argument_collections import acting_laws, collection_step, count_step
+from nary.argument_collections import acting_properties, collection_step, count_step
 from nary.logic import false, true
 from nary.normalising import normalise
+from nary.properties import declare_properties, declare_property
 
 x, y, z = (NumberKind(name) for name in "xyz")
 p, q = BoolKind("p"), BoolKind("q")
 
-minus = FunctionKind((PatternKind,), PatternKind)("minus")
-op = FunctionKind((PatternKind, PatternKind), PatternKind)("op")
-
-torsion = Law("torsion", Equal(f(s, a, a, a, t), f(s, t)), ("n",))
-saturation = Law("saturation", Equal(f(s, a, a, a, t), f(s, a, a, t)), ("k",))
-opposites = Law("opposites", Equal(f(s, a, minus(a), t), f(s, t)), (minus,))
-folds = Law("folds", Equal(f(s, a, b, t), f(s, op(a, b), t)), (op,))
-mystery = Law("mystery", Equal(f(a, a), f(a)))
+declare_property("cancel_after")
+declare_property("saturate_at")
+declare_property("opposite")
+declare_property("fold")
+declare_property("is_mysterious")
 
 
-@count_step(torsion)
+@count_step("cancel_after")
 def _reduce_counts(arg, count, n):
     return count % n
 
 
-@count_step(saturation)
+@count_step("saturate_at")
 def _cap_counts(arg, count, k):
     return min(count, k)
 
 
-@collection_step(opposites, multiset_only=True)
+@collection_step("opposite", multiset_only=True)
 def _cancel_opposites(head, args, has_a_value, neg):
     counts = Counter(args)
     for e in list(counts):
@@ -49,7 +43,7 @@ def _cancel_opposites(head, args, has_a_value, neg):
     return list(counts.elements())
 
 
-@collection_step(folds, multiset_only=True)
+@collection_step("fold", multiset_only=True)
 def _fold_literals(head, args, has_a_value, combine):
     literals = [e for e in args if e.is_literal]
     if len(literals) < 2:
@@ -66,6 +60,7 @@ def head(name, kind=NumberKind):
     return declare_function(name, Many(kind), returns=kind, domain=true)
 
 
+multiset = {"is_associative": True, "is_commutative": True}
 neg = declare_function("neg", NumberKind, returns=NumberKind, domain=true)
 Xor = head("Xor", BoolKind)
 T3 = head("T3")
@@ -74,15 +69,15 @@ Cyc = head("Cyc")
 Gcd = head("Gcd")
 M = head("M")
 Braid = head("Braid")
-declare_identities(Xor, [associative, commutative, identity(false), torsion(2)])
-declare_identities(T3, [associative, commutative, identity(0), torsion(3)])
-declare_identities(Sat, [associative, commutative, saturation(2)])
-declare_identities(Cyc, [associative, commutative, opposites(neg), torsion(4), identity(0)])
-declare_identities(Gcd, [
-    associative, commutative, folds(gcd), identity(0), absorbing(1), idempotent,
-])
-declare_identities(M, [associative, commutative, mystery])
-declare_identities(Braid, [associative, opposites(neg), torsion(2), identity(0)])
+declare_properties(Xor, **multiset, identity_element=false, cancel_after=2)
+declare_properties(T3, **multiset, identity_element=0, cancel_after=3)
+declare_properties(Sat, **multiset, saturate_at=2)
+declare_properties(Cyc, **multiset, opposite=neg, cancel_after=4, identity_element=0)
+declare_properties(
+    Gcd, **multiset, fold=gcd, identity_element=0, absorbing_element=1, is_idempotent=True,
+)
+declare_properties(M, **multiset, is_mysterious=True)
+declare_properties(Braid, is_associative=True, opposite=neg, cancel_after=2, identity_element=0)
 
 
 @pytest.mark.parametrize("e, expected", [
@@ -105,7 +100,7 @@ declare_identities(Braid, [associative, opposites(neg), torsion(2), identity(0)]
     (Braid(x, y, x), Braid(x, y, x)),
     (Braid(neg(x), x), Braid(neg(x), x)),
 ])
-def test_new_laws_on_new_heads(e, expected):
+def test_new_properties_on_new_heads(e, expected):
     expected = expected if not isinstance(expected, int) else e.head.kind.output(expected)
     assert normalise(e) == normalise(expected)
 
@@ -135,38 +130,50 @@ def test_normalising_twice_changes_nothing(e):
     assert normalise(normalise(e)) == normalise(e)
 
 
-def test_the_laws_that_act():
-    assert repr(acting_laws(Cyc)) == "[opposites(neg), torsion(4), identity(0)]"
-    assert acting_laws(Gcd)[0].args == [gcd]
-    assert repr(acting_laws(Gcd)[1:]) == "[identity(0), absorbing(1), idempotent]"
-    assert acting_laws(M) == []
+def test_the_properties_that_act():
+    assert Counter(acting_properties(Cyc)) == Counter(
+        ["opposite", "cancel_after", "identity_element"]
+    )
+    assert Counter(acting_properties(Gcd)) == Counter(
+        ["fold", "identity_element", "absorbing_element", "is_idempotent"]
+    )
+    assert acting_properties(M) == []
 
 
 def test_a_multiset_step_does_not_act_on_a_sequence():
-    assert repr(acting_laws(Braid)) == "[torsion(2), identity(0)]"
+    assert Counter(acting_properties(Braid)) == Counter(["cancel_after", "identity_element"])
 
 
-def test_a_law_without_a_step_only_gets_the_structure():
+def test_a_property_without_a_step_only_gets_the_structure():
     assert normalise(M(y, M(x, x))) == normalise(M(x, y, x))
 
 
-def test_steps_do_not_reach_heads_without_their_law():
+def test_steps_do_not_reach_heads_without_their_property():
     assert normalise(x + x + x) == normalise(Add(x, x, x))
-    assert repr(acting_laws(Add)) == "[identity(0)]"
+    assert acting_properties(Add) == ["identity_element"]
 
 
-def test_a_law_takes_one_step():
-    with pytest.raises(ValueError, match="already has a step"):
-        count_step(torsion)(_cap_counts)
-    with pytest.raises(ValueError, match="already has a step"):
-        collection_step(torsion)(_fold_literals)
+def test_a_property_takes_one_step():
+    with pytest.raises(ValueError, match="cancel_after already has a step"):
+        count_step("cancel_after")(_cap_counts)
+    with pytest.raises(ValueError, match="cancel_after already has a step"):
+        collection_step("cancel_after")(_fold_literals)
+
+
+def test_a_step_needs_a_declared_property():
+    with pytest.raises(ValueError, match="is_unheard_of is not a property"):
+        count_step("is_unheard_of")
+    with pytest.raises(ValueError, match="unheard_of is not a property"):
+        collection_step("unheard_of")
 
 
 @pytest.mark.parametrize("order", list(permutations(range(4))))
-def test_the_order_of_a_block_does_not_change_the_result(order):
-    laws = [folds(gcd), identity(0), absorbing(1), idempotent]
+def test_the_order_of_the_keywords_does_not_change_the_result(order):
+    given = [
+        ("fold", gcd), ("identity_element", 0), ("absorbing_element", 1), ("is_idempotent", True),
+    ]
     G = head(f"Gcd{''.join(map(str, order))}")
-    declare_identities(G, [associative, commutative] + [laws[i] for i in order])
+    declare_properties(G, **multiset, **dict(given[i] for i in order))
     assert normalise(G(4, x, 6, 3)) == G.kind.output(1)
     assert normalise(G(x, 0, G(x, x))) == x
     assert normalise(G(4, x, 6, x, 0)) == normalise(G(2, x))

@@ -1,4 +1,4 @@
-"""normalise applies the laws that act on each head's arguments, from the leaves up.
+"""normalise applies the steps of the properties that act on each head's arguments, from the leaves up.
 
     >>> from nary import BoolKind, NumberKind, Pow, log, sin
     >>> from nary.logic import And, Not, Or, false, true

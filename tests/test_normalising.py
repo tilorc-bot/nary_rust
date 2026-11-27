@@ -5,26 +5,29 @@ import pytest
 
 import nary as nr
 from nary import Many, Ne, NumberKind, Pow, declare_function, exp, log, sin, tan
-from nary._identities import (
-    absorbing, associative, commutative, declare_identities, idempotent, identity,
-)
+from nary.calculus import NumberFunction
 from nary.logic import And, Not, Or, false, true
 from nary.normalising import normalise
+from nary.properties import declare_properties
 
 x, y, z = (NumberKind(name) for name in "xyz")
 p, q = nr.BoolKind("p"), nr.BoolKind("q")
 
 Max = declare_function("Max", Many(NumberKind), returns=NumberKind, domain=true)
-declare_identities(Max, [associative, commutative, idempotent])
+declare_properties(Max, is_associative=True, is_commutative=True, is_idempotent=True)
 
 Cat = declare_function("Cat", Many(NumberKind), returns=NumberKind, domain=true)
-declare_identities(Cat, [associative, identity(0), absorbing(9), idempotent])
+declare_properties(
+    Cat, is_associative=True, identity_element=0, absorbing_element=9, is_idempotent=True,
+)
 
 Hcf = declare_function("Hcf", NumberKind, NumberKind, returns=NumberKind, domain=true)
-declare_identities(Hcf, [commutative, identity(0), absorbing(1), idempotent])
+declare_properties(
+    Hcf, is_commutative=True, identity_element=0, absorbing_element=1, is_idempotent=True,
+)
 
 Sym = declare_function("Sym", Many(NumberKind), returns=NumberKind, domain=true)
-declare_identities(Sym, [commutative, identity(0), idempotent])
+declare_properties(Sym, is_commutative=True, identity_element=0, is_idempotent=True)
 
 
 def same(e, expected, known=None):
@@ -92,10 +95,10 @@ def test_only_a_commutative_head_is_reordered():
 
 
 @pytest.mark.parametrize("order", list(permutations(range(3))))
-def test_the_order_of_a_block_does_not_change_the_result(order):
-    laws = [identity(0), absorbing(9), idempotent]
+def test_the_order_of_the_keywords_does_not_change_the_result(order):
+    given = [("identity_element", 0), ("absorbing_element", 9), ("is_idempotent", True)]
     C = declare_function(f"Cat{order}", Many(NumberKind), returns=NumberKind, domain=true)
-    declare_identities(C, [associative] + [laws[i] for i in order])
+    declare_properties(C, is_associative=True, **dict(given[i] for i in order))
     for e, expected in [
         (C(x, 0, x, y, y), C(x, y)),
         (C(x, C(0, 9), log(y)), C(x, 9, log(y))),
@@ -147,6 +150,12 @@ def test_a_normal_form_is_its_own_normal_form():
     ]
     for e in cases:
         assert normalise(normalise(e)) == normalise(e)
+
+
+def test_a_head_that_is_not_a_declared_function_has_no_properties():
+    f = NumberFunction("f")
+    assert normalise(f(x + 0)) == f(x)
+    assert normalise(f(x) * 1 + f(0 + x)) == normalise(f(x) + f(x))
 
 
 def test_lambdas_are_left_alone():

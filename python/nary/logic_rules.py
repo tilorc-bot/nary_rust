@@ -1,11 +1,11 @@
-from ._identities import (
-    absorbing, associative, commutative, declare_identities, idempotent, identity,
-)
 from .logic import And, Or, false, true
+from .properties import declare_properties
 
-declare_identities(And, [
-    associative, commutative, identity(true), absorbing(false), idempotent,
-])
-declare_identities(Or, [
-    associative, commutative, identity(false), absorbing(true), idempotent,
-])
+declare_properties(
+    And, is_associative=True, is_commutative=True, identity_element=true,
+    absorbing_element=false, is_idempotent=True,
+)
+declare_properties(
+    Or, is_associative=True, is_commutative=True, identity_element=false,
+    absorbing_element=true, is_idempotent=True,
+)

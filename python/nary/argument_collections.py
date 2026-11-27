@@ -1,13 +1,13 @@
-"""A head's associative and commutative laws decide what collection its arguments form.
+"""A head's associative and commutative properties decide what collection its arguments form.
 
-    associative  commutative  arguments   collection     changed by the other laws
+    associative  commutative  arguments   collection     changed by the other properties
     no           no           any         fixed tuple    never
     no           yes          two         unordered pair only when they collapse it
     no           yes          other       fixed tuple    never, only ordered
     yes          no           any         sequence       flattened, equal neighbours merge
     yes          yes          any         multiset       flattened, all equal ones merge
 
-Every other law acts on that collection until it stops shrinking.
+The steps of its other properties act on that collection until it stops shrinking.
 
     >>> from nary import Mul, NumberKind, log
     >>> from nary import arithmetic_rules
@@ -24,9 +24,9 @@ from dataclasses import dataclass
 from typing import Callable, Iterable, NamedTuple
 
 from ._core import Expr
-from ._identities import Law, absorbing, associative, commutative, idempotent, identities, identity
+from .properties import is_property
 
-__all__ = ["acting_laws", "collection_step", "count_step", "normalise_collection"]
+__all__ = ["acting_properties", "collection_step", "count_step", "normalise_collection"]
 
 
 def normalise_collection(
@@ -35,10 +35,10 @@ def normalise_collection(
     shape = _shape(head)
     if shape.associative:
         runs = _merged(_runs(_flattened(head, args)), shape.commutative)
-        return _rebuilt(head, _apply_laws(head, runs, shape, has_a_value), shape)
+        return _rebuilt(head, _apply_steps(head, runs, shape, has_a_value), shape)
     if shape.commutative and len(args) == 2:
         runs = _merged(_runs(args), commutative=True)
-        outcome = _apply_laws(head, runs, shape, has_a_value)
+        outcome = _apply_steps(head, runs, shape, has_a_value)
         return _rebuilt_if_collapsed(head, args, outcome, shape)
     if shape.commutative:
         return head(*sorted(args, key=_order_key))
@@ -74,15 +74,18 @@ def _merged(runs: list[Run], commutative: bool) -> list[Run]:
     [Run(arg=x, count=1), Run(arg=y, count=1), Run(arg=x, count=2)]
     """
     merged: list[Run] = []
+    by_arg: dict[Expr, Run] = {}
     for run in runs:
         if run.count == 0:
             continue
-        partners = merged if commutative else merged[-1:]
-        partner = next((other for other in partners if other.arg == run.arg), None)
-        if partner is None:
-            merged.append(Run(run.arg, run.count))
+        if commutative:
+            partner = by_arg.get(run.arg)
         else:
-            partner.count += run.count
+            partner = merged[-1] if merged and merged[-1].arg == run.arg else None
+        if partner is None:
+            partner = by_arg[run.arg] = Run(run.arg, 0)
+            merged.append(partner)
+        partner.count += run.count
     return merged
 
 
@@ -94,47 +97,51 @@ def _size(runs: list[Run]) -> int:
     return sum(run.count for run in runs)
 
 
-def _apply_laws(head: Expr, runs: list[Run], shape: Shape, has_a_value: Callable) -> list[Run] | Expr:
-    """Each pass applies every law once, and passes repeat only while the collection shrinks.
+def _apply_steps(head: Expr, runs: list[Run], shape: Shape, has_a_value: Callable) -> list[Run] | Expr:
+    """Each pass applies every step once, and passes repeat only while the collection shrinks.
 
     >>> from nary import Mul, NumberKind
     >>> x, one = NumberKind("x"), Mul.kind.output(1)
-    >>> _apply_laws(Mul, _runs([x, one, x]), _shape(Mul), lambda e: True)
+    >>> _apply_steps(Mul, _runs([x, one, x]), _shape(Mul), lambda e: True)
     [Run(arg=x, count=2)]
     """
     while True:
-        after = _apply_laws_once(head, runs, shape, has_a_value)
+        after = _apply_steps_once(head, runs, shape, has_a_value)
         if isinstance(after, Expr) or _size(after) >= _size(runs):
             return after
         runs = after
 
 
-def _apply_laws_once(head: Expr, runs: list[Run], shape: Shape, has_a_value: Callable) -> list[Run] | Expr:
-    runs = [Run(run.arg, _new_count(run, shape.count_laws, has_a_value)) for run in runs]
-    for law in shape.collection_laws:
-        args = _steps[law.of].function(head, _arguments(runs), has_a_value, *law.args or ())
+def _apply_steps_once(head: Expr, runs: list[Run], shape: Shape, has_a_value: Callable) -> list[Run] | Expr:
+    runs = [Run(run.arg, _new_count(head, run, shape.count_properties, has_a_value)) for run in runs]
+    for name in shape.collection_properties:
+        args = _steps[name].function(head, _arguments(runs), has_a_value, *_parameters(head, name))
         if isinstance(args, Expr):
             return args
         runs = _runs(args)
     return _merged(runs, shape.commutative)
 
 
-def _new_count(run: Run, count_laws: list[Law], has_a_value: Callable) -> int:
-    """No count law erases an argument that is not known to have a value.
+def _new_count(head: Expr, run: Run, names: list[str], has_a_value: Callable) -> int:
+    """No count step erases an argument that is not known to have a value.
 
-    >>> from nary import NumberKind, log
-    >>> x = NumberKind("x")
-    >>> _new_count(Run(log(x), 2), [identity(log(x))], lambda e: False)
-    2
-    >>> _new_count(Run(x, 2), [identity(x)], lambda e: True)
+    >>> from nary import Mul, NumberKind, log
+    >>> x, one = NumberKind("x"), Mul.kind.output(1)
+    >>> _new_count(Mul, Run(one, 2), ["identity_element"], lambda e: True)
     0
+    >>> _new_count(Mul, Run(log(x), 2), ["identity_element"], lambda e: False)
+    2
     """
     count = run.count
-    for law in count_laws:
-        count = _steps[law.of].function(run.arg, count, *law.args or ())
+    for name in names:
+        count = _steps[name].function(run.arg, count, *_parameters(head, name))
     if count == 0 and not has_a_value(run.arg):
         return run.count
     return count
+
+
+def _parameters(head: Expr, name: str) -> tuple:
+    return () if name.startswith("is_") else (getattr(head, name),)
 
 
 def _rebuilt(head: Expr, outcome: list[Run] | Expr, shape: Shape) -> Expr:
@@ -149,7 +156,7 @@ def _rebuilt(head: Expr, outcome: list[Run] | Expr, shape: Shape) -> Expr:
 
 
 def _rebuilt_if_collapsed(head: Expr, args: list[Expr], outcome: list[Run] | Expr, shape: Shape) -> Expr:
-    """A pair takes its laws' outcome only if it collapsed: g(a, e) = a, g(a, a) = a, g(a, z) = z need no associativity.
+    """A pair takes its steps' outcome only if it collapsed: g(a, e) = a, g(a, a) = a, g(a, z) = z need no associativity.
 
     >>> from nary import Add, NumberKind
     >>> x, y, zero = NumberKind("x"), NumberKind("y"), Add.kind.output(0)
@@ -189,11 +196,8 @@ class Shape(NamedTuple):
     associative: bool
     commutative: bool
     unit: Expr | None
-    count_laws: list[Law]
-    collection_laws: list[Law]
-
-
-_shapes: dict[Expr, Shape] = {}
+    count_properties: list[str]
+    collection_properties: list[str]
 
 
 def _shape(head: Expr) -> Shape:
@@ -201,41 +205,38 @@ def _shape(head: Expr) -> Shape:
     >>> from nary import Mul
     >>> _shape(Mul).associative, _shape(Mul).commutative, _shape(Mul).unit
     (True, True, 1)
-    >>> _shape(Mul).count_laws, _shape(Mul).collection_laws
-    ([identity(1)], [absorbing(0)])
+    >>> _shape(Mul).count_properties, _shape(Mul).collection_properties
+    (['identity_element'], ['absorbing_element'])
     """
-    if head in _shapes:
-        return _shapes[head]
-    laws = [law for law in identities(head) if isinstance(law, Law)]
-    generic = {law.of for law in laws}
-    is_associative, is_commutative = associative in generic, commutative in generic
-    plain = [law for law in laws if law.when is None]
-    units = [law.args[0] for law in plain if law.of is identity]
-    acting = [law for law in plain if law.of in _steps] if is_associative or is_commutative else []
-    acting = [law for law in acting if is_commutative or not _steps[law.of].multiset_only]
-    shape = Shape(
-        is_associative,
-        is_commutative,
-        units[0] if units else None,
-        [law for law in acting if _steps[law.of].on_counts],
-        [law for law in acting if not _steps[law.of].on_counts],
+    associative, commutative = _declares(head, "is_associative"), _declares(head, "is_commutative")
+    acting = [
+        name for name in _steps
+        if _declares(head, name) and (commutative or associative and not _steps[name].multiset_only)
+    ]
+    return Shape(
+        associative,
+        commutative,
+        getattr(head, "identity_element", None),
+        [name for name in acting if _steps[name].on_counts],
+        [name for name in acting if not _steps[name].on_counts],
     )
-    if laws:
-        _shapes[head] = shape
-    return shape
 
 
-def acting_laws(head: Expr) -> list[Law]:
-    """The laws of a head whose steps act on its arguments, as its block lists them.
+def _declares(head: Expr, name: str) -> bool:
+    value = getattr(head, name, None)
+    return value is not None and value is not False
+
+
+def acting_properties(head: Expr) -> list[str]:
+    """The properties of a head whose steps act on its arguments.
 
     >>> from nary.logic import Or
     >>> from nary import logic_rules
-    >>> acting_laws(Or)
-    [identity(false), absorbing(true), idempotent]
+    >>> acting_properties(Or)
+    ['identity_element', 'is_idempotent', 'absorbing_element']
     """
     shape = _shape(head)
-    acting = shape.count_laws + shape.collection_laws
-    return [law for law in identities(head) if law in acting]
+    return shape.count_properties + shape.collection_properties
 
 
 class Step(NamedTuple):
@@ -244,51 +245,53 @@ class Step(NamedTuple):
     multiset_only: bool
 
 
-_steps: dict[Law, Step] = {}
+_steps: dict[str, Step] = {}
 
 
-def count_step(law: Law) -> Callable:
+def count_step(name: str) -> Callable:
     """A count step gives an argument's new count, and is sound for a sequence and a multiset alike.
 
-    >>> _steps[idempotent].function(None, 3)
+    >>> _steps["is_idempotent"].function(None, 3)
     1
     """
-    return _register(law, on_counts=True, multiset_only=False)
+    return _register(name, on_counts=True, multiset_only=False)
 
 
-def collection_step(law: Law, multiset_only: bool = False) -> Callable:
+def collection_step(name: str, multiset_only: bool = False) -> Callable:
     """A collection step gives new arguments, or the result, from all of them.
 
     >>> from nary import NumberKind
     >>> x, zero = NumberKind("x"), NumberKind(0)
-    >>> _steps[absorbing].function(None, [x, zero], lambda e: True, zero)
+    >>> _steps["absorbing_element"].function(None, [x, zero], lambda e: True, zero)
     0
     """
-    return _register(law, on_counts=False, multiset_only=multiset_only)
+    return _register(name, on_counts=False, multiset_only=multiset_only)
 
 
-def _register(law: Law, on_counts: bool, multiset_only: bool) -> Callable:
+def _register(name: str, on_counts: bool, multiset_only: bool) -> Callable:
+    if not is_property(name):
+        raise ValueError(f"{name} is not a property")
+
     def register(function: Callable) -> Callable:
-        if law in _steps:
-            raise ValueError(f"{law!r} already has a step")
-        _steps[law] = Step(function, on_counts, multiset_only)
-        _shapes.clear()
+        if name in _steps:
+            raise ValueError(f"{name} already has a step")
+        _steps[name] = Step(function, on_counts, multiset_only)
         return function
 
     return register
 
 
-@count_step(identity)
+@count_step("identity_element")
 def _drop_the_unit(arg: Expr, count: int, unit: Expr) -> int:
     return 0 if arg == unit else count
 
 
-@count_step(idempotent)
+@count_step("is_idempotent")
 def _keep_one(arg: Expr, count: int) -> int:
     return min(count, 1)
 
 
-@collection_step(absorbing)
+@collection_step("absorbing_element")
 def _absorb(head: Expr, args: list[Expr], has_a_value: Callable, zero: Expr) -> list[Expr] | Expr:
     if zero in args and all(has_a_value(arg) for arg in args if arg != zero):
         return zero

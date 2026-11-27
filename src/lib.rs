@@ -6,7 +6,7 @@ use pyo3::exceptions::{PyAttributeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::pyclass::CompareOp;
 use pyo3::sync::{MutexExt, PyOnceLock};
-use pyo3::types::{PyString, PyTuple, PyType};
+use pyo3::types::{PyDict, PyString, PyTuple, PyType};
 
 struct KindData {
     id: usize,
@@ -32,6 +32,7 @@ impl Signature {
 }
 
 static MANY: PyOnceLock<Py<KindFamily>> = PyOnceLock::new();
+static PROPERTIES: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
 
 fn run_element(py: Python<'_>, kind: KindRef) -> Option<KindRef> {
     let many = MANY.get(py)?;
@@ -915,8 +916,10 @@ impl Expr {
         expr_hash(py, self)
     }
 
-    fn __getattr__(&self, py: Python<'_>, name: &Bound<'_, PyString>) -> PyResult<Py<PyAny>> {
-        if let Form::Apply { head, args } = &self.form {
+    fn __getattr__(slf: &Bound<'_, Self>, name: &Bound<'_, PyString>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        let this = slf.get();
+        if let Form::Apply { head, args } = &this.form {
             let head = head.get();
             if let (Form::Declared { names: Some(names), .. }, Some(sig)) =
                 (&head.form, &head.kind.signature)
@@ -931,6 +934,14 @@ impl Expr {
                     }
                     return Ok(args.get_item(index)?.unbind());
                 }
+            }
+        }
+        if let (Form::Declared { .. }, Some(_), Some(properties)) =
+            (&this.form, &this.kind.signature, PROPERTIES.get(py))
+        {
+            let properties = properties.bind(py).call1((slf,))?.cast_into::<PyDict>()?;
+            if let Some(value) = properties.get_item(name)? {
+                return Ok(value.unbind());
             }
         }
         Err(PyAttributeError::new_err(format!(
@@ -1035,6 +1046,13 @@ fn set_operator(
     })
 }
 
+#[pyfunction(name = "_set_properties")]
+fn set_properties(py: Python<'_>, properties: Py<PyAny>) -> PyResult<()> {
+    PROPERTIES
+        .set(py, properties)
+        .map_err(|_| PyValueError::new_err("the properties are already set"))
+}
+
 #[pymodule]
 fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Expr>()?;
@@ -1054,5 +1072,6 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(declare_function, m)?)?;
     m.add_function(wrap_pyfunction!(declare_constant, m)?)?;
     m.add_function(wrap_pyfunction!(set_operator, m)?)?;
+    m.add_function(wrap_pyfunction!(set_properties, m)?)?;
     Ok(())
 }
