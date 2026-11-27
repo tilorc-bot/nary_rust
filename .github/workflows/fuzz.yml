@@ -1,0 +1,43 @@
+name: Fuzz
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      seed:
+        type: string
+        default: ""
+      examples:
+        type: number
+        default: 20000
+  pull_request:
+    paths:
+      - .github/workflows/fuzz.yml
+      - pyproject.toml
+      - tests/conftest.py
+      - tests/test_fuzz_*.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      SEED: ${{ inputs.seed }}
+      EXAMPLES: ${{ inputs.examples || (github.event_name == 'pull_request' && 2000) || 20000 }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+      - run: uv venv
+      - run: uvx maturin develop -r
+      - run: uv pip install pytest
+      - run: echo "SEED=${SEED:-$(od -An -N4 -tu4 /dev/urandom | tr -d ' ')}" >> "$GITHUB_ENV"
+      - run: echo "fuzz seed $SEED, examples $EXAMPLES"
+      - run: .venv/bin/python -m pytest -m fuzz -rxX --fuzz-seed="$SEED" --fuzz-examples="$EXAMPLES"

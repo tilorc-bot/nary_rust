@@ -10,3 +10,7 @@ requires-python = ">=3.9"
 [tool.maturin]
 python-source = "python"
 module-name = "nary._core"
+
+[tool.pytest.ini_options]
+markers = ["fuzz"]
+addopts = "-m 'not fuzz'"
