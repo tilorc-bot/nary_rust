@@ -7,7 +7,7 @@ from nary._identities import (
     identity, inverse,
 )
 from nary.arithmetic_rules import rules
-from nary.commutative import routine_laws
+from nary.argument_collections import acting_laws
 from nary.logic import true
 from nary.relational import Ne
 from nary.rules import is_flat, is_unordered, rule
@@ -58,19 +58,13 @@ def test_refused_blocks_record_nothing():
         declare_identities(P, [identity])
     with pytest.raises(TypeError, match="expects NumberKind, got BoolKind"):
         declare_identities(P, [identity(true)])
-    assert identities(P) == [] and routine_laws(P) == []
+    assert identities(P) == [] and acting_laws(P) == []
 
 
-@pytest.mark.parametrize("block", [
-    [idempotent],
-    [associative, idempotent],
-    [commutative, identity(0), idempotent],
-])
-def test_idempotent_needs_associative_and_commutative(block):
+def test_idempotent_needs_no_other_law():
     R = declare_function("R", NumberKind, NumberKind, returns=NumberKind)
-    with pytest.raises(ValueError, match="idempotent needs associative and commutative"):
-        declare_identities(R, block)
-    assert identities(R) == [] and routine_laws(R) == []
+    assert repr(declare_identities(R, [idempotent])) == "[Rule(R(a, a), a, name='r_idempotent')]"
+    assert acting_laws(R) == []
 
 
 def test_generated_names_and_override():
@@ -84,10 +78,10 @@ def test_the_parameters_are_bound_at_declaration():
     assert unit == Add.kind.output(0) and inverse_of == Mul(-1, a)
 
 
-def test_the_laws_the_routine_uses():
-    assert repr(routine_laws(Mul)) == "[identity(1), absorbing(0)]"
-    assert repr(routine_laws(Add)) == "[identity(0)]"
-    assert routine_laws(Pow) == []
+def test_the_laws_that_act_on_the_arguments():
+    assert repr(acting_laws(Mul)) == "[identity(1), absorbing(0)]"
+    assert repr(acting_laws(Add)) == "[identity(0)]"
+    assert acting_laws(Pow) == []
     S = declare_function("S", Many(NumberKind), returns=NumberKind)
     declare_identities(S, [associative, commutative, identity(0, when=Ne(a, 0)), idempotent])
-    assert repr(routine_laws(S)) == "[idempotent]"
+    assert repr(acting_laws(S)) == "[idempotent]"

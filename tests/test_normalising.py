@@ -1,8 +1,13 @@
+from collections import Counter
+from itertools import permutations
+
 import pytest
 
 import nary as nr
 from nary import Many, Ne, NumberKind, Pow, declare_function, exp, log, sin, tan
-from nary._identities import associative, commutative, declare_identities, idempotent
+from nary._identities import (
+    absorbing, associative, commutative, declare_identities, idempotent, identity,
+)
 from nary.logic import And, Not, Or, false, true
 from nary.normalising import normalise
 
@@ -12,10 +17,19 @@ p, q = nr.BoolKind("p"), nr.BoolKind("q")
 Max = declare_function("Max", Many(NumberKind), returns=NumberKind, domain=true)
 declare_identities(Max, [associative, commutative, idempotent])
 
+Cat = declare_function("Cat", Many(NumberKind), returns=NumberKind, domain=true)
+declare_identities(Cat, [associative, identity(0), absorbing(9), idempotent])
+
+Hcf = declare_function("Hcf", NumberKind, NumberKind, returns=NumberKind, domain=true)
+declare_identities(Hcf, [commutative, identity(0), absorbing(1), idempotent])
+
+Sym = declare_function("Sym", Many(NumberKind), returns=NumberKind, domain=true)
+declare_identities(Sym, [commutative, identity(0), idempotent])
+
 
 def same(e, expected, known=None):
     expected = expected if isinstance(expected, nr.Expr) else NumberKind(expected)
-    return normalise(e, known) == expected
+    return normalise(e, known) == normalise(expected)
 
 
 @pytest.mark.parametrize("e, expected", [
@@ -35,9 +49,60 @@ def same(e, expected, known=None):
     (Max(x, x), x),
     (Max(), Max()),
     (Max(Max(y), x, y), Max(x, y)),
+    (Cat(x, x, y), Cat(x, y)),
+    (Cat(x, Cat(x, y), y), Cat(x, y)),
+    (Cat(x, 0, x), x),
+    (Cat(y, Cat(0), x, 9), 9),
+    (Cat(0, 0), 0),
+    (Cat(), 0),
+    (Hcf(x, 0), x),
+    (Hcf(0, 0), 0),
+    (Hcf(x, x), x),
+    (Hcf(1, x), 1),
+    (Hcf(Hcf(x, 0), y), Hcf(x, y)),
+    (Sym(x, 0), x),
+    (Sym(Sym(x, x), y), Sym(x, y)),
+    (Sym(x, x, 0), Sym(x, x, 0)),
 ])
 def test_the_declared_laws(e, expected):
     assert same(e, expected)
+
+
+@pytest.mark.parametrize("e", [
+    Cat(x, y, x),
+    Cat(y, x),
+    Cat(log(x), 9),
+    Hcf(x, y),
+    Hcf(x, Hcf(x, y)),
+    Hcf(log(x), 1),
+    Sym(0, x, y),
+    Sym(x, x, x),
+    Sym(Sym(x, y), y),
+    Pow(x, 1),
+])
+def test_what_the_laws_leave_alone(e):
+    assert (normalise(e).head, Counter(normalise(e).args)) == (e.head, Counter(e.args))
+
+
+def test_only_a_commutative_head_is_reordered():
+    assert normalise(Cat(x, y, x)) == Cat(x, y, x)
+    assert normalise(Cat(y, x)) == Cat(y, x)
+    assert normalise(Hcf(y, x)) == normalise(Hcf(x, y))
+    assert normalise(Sym(y, 0, x)) == normalise(Sym(x, y, 0))
+
+
+@pytest.mark.parametrize("order", list(permutations(range(3))))
+def test_the_order_of_a_block_does_not_change_the_result(order):
+    laws = [identity(0), absorbing(9), idempotent]
+    C = declare_function(f"Cat{order}", Many(NumberKind), returns=NumberKind, domain=true)
+    declare_identities(C, [associative] + [laws[i] for i in order])
+    for e, expected in [
+        (C(x, 0, x, y, y), C(x, y)),
+        (C(x, C(0, 9), log(y)), C(x, 9, log(y))),
+        (C(x, 0, 9), 9),
+        (C(y, x, 0, 0, x), C(y, x)),
+    ]:
+        assert same(e, expected)
 
 
 @pytest.mark.parametrize("e, expected", [
@@ -76,6 +141,9 @@ def test_a_normal_form_is_its_own_normal_form():
         Or(And(p, false), And(q, q), p),
         Pow(x * 0 + 1, Max(x, x)),
         Max(Max(x, 0), Max(y, x), sin(x)),
+        Cat(x, Cat(0, x), y, Cat(y, x)),
+        Hcf(Hcf(y, 0), Hcf(x, x)),
+        Sym(Hcf(y, x), x, Cat(0)),
     ]
     for e in cases:
         assert normalise(normalise(e)) == normalise(e)

@@ -65,7 +65,7 @@ commutative = Law("commutative", Equal(f(s, a, t, b, u), f(s, b, t, a, u)))
 identity = Law("identity", Equal(f(s, e, t), f(s, t)), (e,))
 absorbing = Law("absorbing", Equal(f(s, z, t), z), (z,))
 inverse = Law("inverse", Equal(f(a, i), e), (i,))
-idempotent = Law("idempotent", Equal(f(s, a, t, a, u), f(s, a, t, u)))
+idempotent = Law("idempotent", Equal(f(s, a, a, t), f(s, a, t)))
 
 _blocks = {}
 
@@ -88,9 +88,6 @@ def declare_identities(F, items):
             raise TypeError(f"{item!r} cannot be listed: give it its parameters")
     items = [_bind(F, item) for item in items]
     laws = [item for item in items if isinstance(item, Law)]
-    titles = {law.title for law in laws}
-    if "idempotent" in titles and not {"associative", "commutative"} <= titles:
-        raise ValueError(f"idempotent needs associative and commutative in the block of {F!r}")
     units = [law.args[0] for law in laws if law.title == "identity"]
     x = F.kind.output("a")
     rules, facts = [], []

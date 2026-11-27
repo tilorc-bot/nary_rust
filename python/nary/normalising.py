@@ -1,4 +1,4 @@
-"""normalise applies the laws of each associative, commutative head, from the leaves up.
+"""normalise applies the laws that act on each head's arguments, from the leaves up.
 
     >>> from nary import BoolKind, NumberKind, Pow, log, sin
     >>> from nary.logic import And, Not, Or, false, true
@@ -18,7 +18,7 @@ from typing import Callable
 
 from . import arithmetic_rules, logic_rules  # noqa: F401
 from ._core import Expr
-from .commutative import normalise_commutative
+from .argument_collections import normalise_collection
 from .logic import true
 from .rewriting import _has_a_value
 from .traversal import bottom_up
@@ -31,7 +31,7 @@ def normalise(e: Expr, known: Callable[[Expr], object] | None = None) -> Expr:
         raise TypeError(f"normalise expects an expression, got {e!r}")
     known = known or (lambda condition: False)
 
-    normal = bottom_up(lambda head, args: normalise_commutative(head, args, has_a_value))
+    normal = bottom_up(lambda head, args: normalise_collection(head, args, has_a_value))
 
     def holds(condition: Expr) -> bool:
         condition = normal(condition)
