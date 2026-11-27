@@ -90,6 +90,7 @@ def declare_identities(F, items):
     for item in items:
         if not isinstance(item, Law) or item.args is None and item.params:
             raise TypeError(f"{item!r} cannot be listed: a block lists only laws")
+    items = [_bind(F, item) for item in items]
     units = [item.args[0] for item in items if item.of is identity]
     x = F.kind.output("a")
     rules, facts = [], []
@@ -124,6 +125,22 @@ def declare_identities(F, items):
         fact(F)
     _blocks[F] = list(items)
     return rules
+
+
+def _bind(F, item):
+    """
+    >>> from nary import Pow
+    >>> _bind(Pow, right_identity(1)).args[0].is_literal
+    True
+    """
+    if not item.params:
+        return item
+    x = F.kind.output("a")
+    if item.of is left_absorbing:
+        args = [F(arg, x).args[0] for arg in item.args]
+    else:
+        args = [F(x, arg).args[1] for arg in item.args]
+    return Law(item.title, item.statement, item.params, args, item.when, item.name, item.of)
 
 
 def identities(F):

@@ -57,17 +57,12 @@ def _node(head: Expr, args: list[Expr], has_a_value: Callable[[Expr], bool]) -> 
     laws = {item.of: item for item in identities(head)}
     for law, step in _STEPS:
         if law in laws:
-            params = [_element(head, p) for p in laws[law].args or ()]
             checks = (has_a_value,) if law in _ERASING else ()
-            result = step(head, args, *params, *checks)
+            result = step(head, args, *(laws[law].args or ()), *checks)
             if isinstance(result, Expr):
                 return result
             args = result
     return head(*args)
-
-
-def _element(head: Expr, value: Expr | int) -> Expr:
-    return value if isinstance(value, Expr) else head.kind.output(value)
 
 
 def _key(e: Expr) -> tuple:

@@ -1,9 +1,10 @@
 import pytest
 
-from nary import Add, Mul, NumberKind
+from nary import Add, Mul, NumberKind, Pow
 from nary._core import declare_function
 from nary._identities import Equal, declare_identities, identities, identity, inverse
 from nary.arithmetic_rules import rules
+from nary.logic import true
 from nary.relational import Ne
 from nary.rules import is_flat, is_unordered, rule
 
@@ -47,6 +48,8 @@ def test_refused_blocks_record_nothing():
         declare_identities(P, [identity(0), Equal(P(a, 1), a, name="p_one")])
     with pytest.raises(TypeError, match="only laws"):
         declare_identities(P, [identity])
+    with pytest.raises(TypeError, match="expects NumberKind, got BoolKind"):
+        declare_identities(P, [identity(true)])
     assert identities(P) == []
 
 
@@ -54,3 +57,9 @@ def test_generated_names_and_override():
     Q = declare_function("Q", NumberKind, NumberKind, returns=NumberKind)
     made = declare_identities(Q, [identity(0), inverse(Q(a, a), name="q_self")])
     assert [r.name for r in made] == ["q_identity", "q_self"]
+
+
+def test_the_parameters_are_bound_at_declaration():
+    unit, inverse_of = identities(Add)[2].args[0], identities(Add)[3].args[0]
+    assert unit == Add.kind.output(0) and inverse_of == Mul(-1, a)
+    assert [law.args[0].kind for law in identities(Pow)] == [NumberKind, NumberKind]
