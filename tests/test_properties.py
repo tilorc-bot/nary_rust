@@ -79,7 +79,6 @@ def test_refusals_record_nothing():
 
 
 def test_a_new_property_and_a_function_with_it():
-    declare_property("is_idempotent")
     declare_property("torsion")
     declare_property("pivot_element", element=True)
     T = declare_function("T", Many(NumberKind), returns=NumberKind, domain=true)
@@ -88,6 +87,7 @@ def test_a_new_property_and_a_function_with_it():
     assert T.pivot_element == NumberKind(3) and T.pivot_element.kind is NumberKind
     assert T.is_commutative is False and T.identity_element is None
     assert Add.is_idempotent is False and Add.torsion is None and Add.pivot_element is None
-    assert is_flat(T) and not is_unordered(T) and property_rules(T) == []
+    assert is_flat(T) and not is_unordered(T)
+    assert [repr(r) for r in property_rules(T)] == ["Rule(T(a, a), a, name='t_idempotent')"]
     with pytest.raises(ValueError, match="torsion is already a property"):
         declare_property("torsion")
