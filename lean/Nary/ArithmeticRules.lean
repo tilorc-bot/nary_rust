@@ -22,6 +22,9 @@ theorem mul_absorbing : Statement.mul_absorbing := by
 example : Mul [log (lit 0), lit 0] ≠ lit 0 := by
   simp [Mul, log, withDomain, logDomain, lit]
 
+theorem add_self : Statement.add_self := by
+  intro a; cases a <;> simp [Add, Mul, lit, two_mul]
+
 theorem add_inverse : Statement.add_inverse := by
   intro a h
   obtain ⟨z, rfl⟩ := Option.ne_none_iff_exists'.mp h
@@ -34,7 +37,7 @@ theorem mul_inverse : Statement.mul_inverse := by
     rw [Complex.exp_neg, Complex.exp_log hz, mul_inv_cancel₀ hz]
   simp [Mul, Pow, withDomain₂, powDomain, powTotal, lit, hz, this]
 
-theorem pow_right_identity : Statement.pow_right_identity := by
+theorem pow_one : Statement.pow_one := by
   intro a
   cases a with
   | none => simp [Pow, withDomain₂]
@@ -43,10 +46,15 @@ theorem pow_right_identity : Statement.pow_right_identity := by
     · simp [Pow, withDomain₂, powDomain, powTotal, lit, hz]
     · simp [Pow, withDomain₂, powDomain, powTotal, lit, hz, Complex.exp_log hz]
 
-theorem pow_left_absorbing : Statement.pow_left_absorbing := by
+theorem pow_zero : Statement.pow_zero := by
+  intro a h _
+  obtain ⟨z, rfl, hz⟩ := holds_ne_zero h
+  simp [Pow, withDomain₂, powDomain, powTotal, lit, hz]
+
+theorem exp_log : Statement.exp_log := by
   intro a h
-  obtain ⟨z, rfl⟩ := Option.ne_none_iff_exists'.mp h
-  simp [Pow, withDomain₂, powDomain, powTotal, lit]
+  obtain ⟨z, rfl, hz⟩ := holds_ne_zero h
+  simp [exp, log, withDomain, logDomain, hz, Complex.exp_log hz]
 
 private abbrev values (xs : List Number) : Option (Multiset ℂ) :=
   (xs.mapM id).map (fun l : List ℂ => (l : Multiset ℂ))
@@ -89,10 +97,12 @@ theorem proved : Proved where
   add_identity := add_identity
   mul_identity := mul_identity
   mul_absorbing := mul_absorbing
+  add_self := add_self
   add_inverse := add_inverse
   mul_inverse := mul_inverse
-  pow_right_identity := pow_right_identity
-  pow_left_absorbing := pow_left_absorbing
+  pow_one := pow_one
+  pow_zero := pow_zero
+  exp_log := exp_log
   add_unordered := add_unordered
   add_flat := add_flat
   mul_unordered := mul_unordered

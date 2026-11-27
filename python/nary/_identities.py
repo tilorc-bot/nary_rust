@@ -8,13 +8,13 @@
 """
 
 from ._core import FunctionKind, declare_kind
-from .kinds import Many, NumberKind
+from .commutative import Commutative, declare_commutative
+from .kinds import Many
 from .rules import flat, rule, unordered
 
 __all__ = [
-    "Equal", "absorbing", "associative", "commutative", "declare_identities", "heads",
-    "idempotent", "identities", "identity", "inverse", "involution", "left_absorbing",
-    "right_identity",
+    "Equal", "absorbing", "associative", "commutative", "declare_identities",
+    "idempotent", "identities", "identity", "inverse",
 ]
 
 
@@ -42,14 +42,14 @@ class Law:
     (identity(0), Equal(f(s, e, t), f(s, t)))
     """
 
-    def __init__(self, title, statement, params=(), args=None, when=None, name=None, of=None):
+    def __init__(self, title, statement, params=(), args=None, when=None, name=None):
         self.title, self.statement, self.params = title, statement, params
-        self.args, self.when, self.name, self.of = args, when, name, of or self
+        self.args, self.when, self.name = args, when, name
 
     def __call__(self, *args, when=None, name=None):
         if self.args is not None or len(args) != len(self.params):
             raise TypeError(f"{self.title} takes {len(self.params)} parameters")
-        return Law(self.title, self.statement, self.params, args, when, name, self)
+        return Law(self.title, self.statement, self.params, args, when, name)
 
     def __repr__(self):
         if not self.params:
@@ -59,8 +59,6 @@ class Law:
 
 PatternKind = declare_kind("PatternKind")
 f = FunctionKind((Many(PatternKind),), PatternKind)("f")
-g = FunctionKind((PatternKind, PatternKind), PatternKind)("g")
-h = FunctionKind((PatternKind,), PatternKind)("h")
 a, b, e, i, z, s, t, u = (PatternKind(name) for name in "abeizstu")
 
 associative = Law("associative", Equal(f(s, f(t), u), f(s, t, u)))
@@ -69,9 +67,6 @@ identity = Law("identity", Equal(f(s, e, t), f(s, t)), (e,))
 absorbing = Law("absorbing", Equal(f(s, z, t), z), (z,))
 inverse = Law("inverse", Equal(f(a, i), e), (i,))
 idempotent = Law("idempotent", Equal(f(s, a, t, a, u), f(s, a, t, u)))
-involution = Law("involution", Equal(h(h(a)), a))
-right_identity = Law("right_identity", Equal(g(a, e), a), (e,))
-left_absorbing = Law("left_absorbing", Equal(g(z, a), z), (z,))
 
 _blocks = {}
 
@@ -82,23 +77,33 @@ def declare_identities(F, items):
     >>> from nary._core import declare_function
     >>> a = NumberKind("a")
     >>> G = declare_function("G", NumberKind, NumberKind, returns=NumberKind)
-    >>> declare_identities(G, [identity(0), inverse(a), idempotent])
-    [Rule(G(a, 0), a, name='g_identity'), Rule(G(a, a), 0, name='g_inverse'), Rule(G(a, a), a, name='g_idempotent')]
+    >>> declare_identities(G, [identity(0), inverse(a), Equal(G(a, a), a, name="g_self")])
+    [Rule(G(a, 0), a, name='g_identity'), Rule(G(a, a), 0, name='g_inverse'), Rule(G(a, a), a, name='g_self')]
     """
     if F in _blocks:
         raise ValueError(f"the identities of {F!r} are already declared")
     for item in items:
-        if not isinstance(item, Law) or item.args is None and item.params:
-            raise TypeError(f"{item!r} cannot be listed: a block lists only laws")
+        if not isinstance(item, (Law, Equal)):
+            raise TypeError(f"{item!r} cannot be listed")
+        if isinstance(item, Law) and item.args is None and item.params:
+            raise TypeError(f"{item!r} cannot be listed: give it its parameters")
     items = [_bind(F, item) for item in items]
-    units = [item.args[0] for item in items if item.of is identity]
+    laws = [item for item in items if isinstance(item, Law)]
+    titles = {law.title for law in laws}
+    if "idempotent" in titles and not {"associative", "commutative"} <= titles:
+        raise ValueError(f"idempotent needs associative and commutative in the block of {F!r}")
+    units = [law.args[0] for law in laws if law.title == "identity"]
     x = F.kind.output("a")
     rules, facts = [], []
     for item in items:
-        if item.name is None:
+        if isinstance(item, Law) and item.name is None:
             name = f"{F.name.lower()}_{item.title}"
-            item = Law(item.title, item.statement, item.params, item.args, item.when, name, item.of)
-        if item.title == "associative":
+            item = Law(item.title, item.statement, item.params, item.args, item.when, name)
+        if isinstance(item, Equal) and item.name is None:
+            raise ValueError(f"{item!r} in the block of {F!r} needs a name=")
+        if isinstance(item, Equal):
+            rules.append(rule(item.lhs, item.rhs, when=item.when, name=item.name))
+        elif item.title == "associative":
             facts.append(flat)
         elif item.title == "commutative":
             facts.append(unordered)
@@ -106,46 +111,43 @@ def declare_identities(F, items):
             rules.append(rule(F(x, item.args[0]), x, when=item.when, name=item.name))
         elif item.title == "absorbing":
             rules.append(rule(F(x, item.args[0]), item.args[0], when=item.when, name=item.name))
-        elif item.title == "right_identity":
-            rules.append(rule(F(x, item.args[0]), x, when=item.when, name=item.name))
-        elif item.title == "left_absorbing":
-            rules.append(rule(F(item.args[0], x), item.args[0], when=item.when, name=item.name))
         elif item.title == "inverse":
             if not units:
                 raise ValueError(f"inverse needs an identity in the block of {F!r}")
             rules.append(rule(F(x, item.args[0]), units[0], when=item.when, name=item.name))
         elif item.title == "idempotent":
             rules.append(rule(F(x, x), x, when=item.when, name=item.name))
-        elif item.title == "involution":
-            rules.append(rule(F(F(x)), x, when=item.when, name=item.name))
     names = [r.name for r in rules]
     if len(set(names)) < len(names):
         raise ValueError(f"two rules in the block of {F!r} have the same name")
     for fact in facts:
         fact(F)
+    if {"associative", "commutative"} <= titles:
+        declare_commutative(F, _commutative_laws(laws))
     _blocks[F] = list(items)
     return rules
 
 
 def _bind(F, item):
     """
-    >>> from nary import Pow
-    >>> _bind(Pow, right_identity(1)).args[0].is_literal
+    >>> from nary import Mul
+    >>> _bind(Mul, absorbing(0)).args[0].is_literal
     True
     """
-    if not item.params:
+    if not isinstance(item, Law) or not item.params:
         return item
-    x = F.kind.output("a")
-    if item.of is left_absorbing:
-        args = [F(arg, x).args[0] for arg in item.args]
-    else:
-        args = [F(x, arg).args[1] for arg in item.args]
-    return Law(item.title, item.statement, item.params, args, item.when, item.name, item.of)
+    args = [F(F.kind.output("a"), arg).args[1] for arg in item.args]
+    return Law(item.title, item.statement, item.params, args, item.when, item.name)
+
+
+def _commutative_laws(laws):
+    """
+    >>> _commutative_laws([associative, commutative, identity(0), idempotent])
+    Commutative(unit=0, zero=None, idempotent=True)
+    """
+    plain = {law.title: law.args and law.args[0] for law in reversed(laws) if law.when is None}
+    return Commutative(plain.get("identity"), plain.get("absorbing"), "idempotent" in plain)
 
 
 def identities(F):
     return list(_blocks.get(F, []))
-
-
-def heads():
-    return list(_blocks)

@@ -58,10 +58,9 @@ def test_to_lean_rule():
         "abbrev mul_absorbing : Prop :=\n"
         "  ∀ (a : Nary.Number), a ≠ none → Nary.Mul [a, Nary.lit 0] = Nary.lit 0"
     )
-    assert to_lean_rule(by_name["mul_inverse"]) == (
-        "abbrev mul_inverse : Prop :=\n"
-        "  ∀ (a : Nary.Number), Nary.Holds (Nary.Ne a (Nary.lit 0)) → a ≠ none → "
-        "Nary.Mul [a, Nary.Pow a (Nary.lit (-1))] = Nary.lit 1"
+    assert to_lean_rule(by_name["exp_log"]) == (
+        "abbrev exp_log : Prop :=\n"
+        "  ∀ (a : Nary.Number), Nary.Holds (Nary.Ne a (Nary.lit 0)) → Nary.exp (Nary.log a) = a"
     )
     assert to_lean_rule(rule(f(x) * 0, 0, name="wrong")) == (
         "abbrev wrong : Prop :=\n  ∀ (x : Nary.Number) (f : Nary.NumberFunction), "

@@ -1,9 +1,13 @@
 import pytest
 
-from nary import Add, Mul, NumberKind, Pow
+from nary import Add, Many, Mul, NumberKind, Pow, exp, log
 from nary._core import declare_function
-from nary._identities import Equal, declare_identities, identities, identity, inverse
+from nary._identities import (
+    Equal, associative, commutative, declare_identities, idempotent, identities,
+    identity, inverse,
+)
 from nary.arithmetic_rules import rules
+from nary.commutative import Commutative, commutative_laws
 from nary.logic import true
 from nary.relational import Ne
 from nary.rules import is_flat, is_unordered, rule
@@ -16,10 +20,12 @@ def test_the_rules_are_those_listed_before_the_blocks():
         rule(a + 0, a, name="add_identity"),
         rule(a * 1, a, name="mul_identity"),
         rule(a * 0, 0, name="mul_absorbing"),
+        rule(a + a, 2 * a, name="add_self"),
         rule(a - a, 0, name="add_inverse"),
         rule(a / a, 1, when=Ne(a, 0), name="mul_inverse"),
-        rule(a ** 1, a, name="pow_right_identity"),
-        rule(1 ** a, 1, name="pow_left_absorbing"),
+        rule(a ** 1, a, name="pow_one"),
+        rule(a ** 0, 1, when=Ne(a, 0), name="pow_zero"),
+        rule(exp(log(a)), a, when=Ne(a, 0), name="exp_log"),
     ]
     by_name = {r.name: r for r in rules}
     assert len(by_name) == len(rules) == len(before)
@@ -44,13 +50,27 @@ def test_refused_blocks_record_nothing():
         declare_identities(P, [inverse(a, name="p_inverse")])
     with pytest.raises(ValueError, match="same name"):
         declare_identities(P, [identity(0), identity(1)])
-    with pytest.raises(TypeError, match="only laws"):
-        declare_identities(P, [identity(0), Equal(P(a, 1), a, name="p_one")])
-    with pytest.raises(TypeError, match="only laws"):
+    with pytest.raises(ValueError, match="same name"):
+        declare_identities(P, [identity(0), Equal(P(a, 1), a, name="p_identity")])
+    with pytest.raises(ValueError, match="needs a name="):
+        declare_identities(P, [Equal(P(a, 0), a)])
+    with pytest.raises(TypeError, match="give it its parameters"):
         declare_identities(P, [identity])
     with pytest.raises(TypeError, match="expects NumberKind, got BoolKind"):
         declare_identities(P, [identity(true)])
-    assert identities(P) == []
+    assert identities(P) == [] and commutative_laws(P) is None
+
+
+@pytest.mark.parametrize("block", [
+    [idempotent],
+    [associative, idempotent],
+    [commutative, identity(0), idempotent],
+])
+def test_idempotent_needs_associative_and_commutative(block):
+    R = declare_function("R", NumberKind, NumberKind, returns=NumberKind)
+    with pytest.raises(ValueError, match="idempotent needs associative and commutative"):
+        declare_identities(R, block)
+    assert identities(R) == [] and commutative_laws(R) is None
 
 
 def test_generated_names_and_override():
@@ -60,6 +80,14 @@ def test_generated_names_and_override():
 
 
 def test_the_parameters_are_bound_at_declaration():
-    unit, inverse_of = identities(Add)[2].args[0], identities(Add)[3].args[0]
+    unit, inverse_of = identities(Add)[2].args[0], identities(Add)[4].args[0]
     assert unit == Add.kind.output(0) and inverse_of == Mul(-1, a)
-    assert [law.args[0].kind for law in identities(Pow)] == [NumberKind, NumberKind]
+
+
+def test_the_laws_of_an_associative_commutative_head():
+    zero, one = Mul.kind.output(0), Mul.kind.output(1)
+    assert commutative_laws(Mul) == Commutative(unit=one, zero=zero)
+    assert commutative_laws(Pow) is None
+    S = declare_function("S", Many(NumberKind), returns=NumberKind)
+    declare_identities(S, [associative, commutative, identity(0, when=Ne(a, 0)), idempotent])
+    assert commutative_laws(S) == Commutative(idempotent=True)

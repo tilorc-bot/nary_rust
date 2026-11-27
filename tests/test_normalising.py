@@ -31,13 +31,10 @@ def same(e, expected, known=None):
     (Or(p, true, q), true),
     (And(p, false), false),
     (Or(p, Or(q, p)), Or(p, q)),
-    (Not(Not(Not(p))), Not(p)),
     (Max(x, y, x, Max(y, 3)), Max(3, x, y)),
-    (Pow(x, 1), x),
-    (Pow(x * 1, 0 + nr.Mul(1)), x),
-    (Pow(1, x + y), 1),
-    (Pow(x, 2), Pow(x, 2)),
-    (Pow(2, 1), 2),
+    (Max(x, x), x),
+    (Max(), Max()),
+    (Max(Max(y), x, y), Max(x, y)),
 ])
 def test_the_declared_laws(e, expected):
     assert same(e, expected)
@@ -49,7 +46,6 @@ def test_the_declared_laws(e, expected):
     (log(x) * 0, nr.Mul(0, log(x))),
     (tan(x) * y * 0, nr.Mul(0, y, tan(x))),
     (x / x, nr.Mul(x, x ** -1)),
-    (Pow(1, log(x)), Pow(1, log(x))),
 ])
 def test_nothing_without_a_value_is_erased(e, expected):
     assert same(e, expected)
@@ -58,7 +54,18 @@ def test_nothing_without_a_value_is_erased(e, expected):
 def test_known_conditions_allow_more():
     assert same(log(x) * 0, 0, known=lambda c: c == Ne(x, 0))
     assert same(log(x) * 0, nr.Mul(0, log(x)), known=lambda c: 1)
-    assert same(Pow(1, log(x)), 1, known=lambda c: c == Ne(x, 0))
+
+
+@pytest.mark.parametrize("e, expected", [
+    (Pow(x, 1), Pow(x, 1)),
+    (Pow(x * 1, 0 + nr.Mul(1)), Pow(x, 1)),
+    (Pow(1, x + y), Pow(1, nr.Add(x, y))),
+    (Not(Not(p)), Not(Not(p))),
+    (Not(And(q, p, true)), Not(And(p, q))),
+    (exp(log(y + 0)), exp(log(y))),
+])
+def test_other_heads_only_get_normal_arguments(e, expected):
+    assert normalise(e) == expected
 
 
 def test_a_normal_form_is_its_own_normal_form():
@@ -66,6 +73,8 @@ def test_a_normal_form_is_its_own_normal_form():
         (x + y) * (y + x) * 1 + x * 0,
         sin(x + 0) * sin(0 + x) + log(x * 1 * y),
         And(Or(p, q), Or(q, p), Not(Not(Or(p, q)))),
+        Or(And(p, false), And(q, q), p),
+        Pow(x * 0 + 1, Max(x, x)),
         Max(Max(x, 0), Max(y, x), sin(x)),
     ]
     for e in cases:
