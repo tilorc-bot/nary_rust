@@ -17,21 +17,23 @@ The rule a * 0 -> 0 erases a.
 from .arithmetic import Add, Mul, Pow
 from .elementary import exp, log
 from .kinds import NumberKind
-from .properties import declare_properties, properties, property_rules
+from .properties import declare_properties, property_rules
 from .relational import Ne
 from .rules import rule
 
 a = NumberKind("a")
 
-declare_properties(Add, associative=True, commutative=True, identity=0)
-declare_properties(Mul, associative=True, commutative=True, identity=1, absorbing=0)
+declare_properties(Add, is_associative=True, is_commutative=True, identity_element=0)
+declare_properties(
+    Mul, is_associative=True, is_commutative=True, identity_element=1, absorbing_element=0
+)
 
 add = property_rules(Add) + [
     rule(a + a, 2 * a, name="add_self"),
-    rule(Add(a, Mul(-1, a)), properties(Add).identity, name="add_inverse"),
+    rule(Add(a, Mul(-1, a)), Add.identity_element, name="add_inverse"),
 ]
 mul = property_rules(Mul) + [
-    rule(Mul(a, Pow(a, -1)), properties(Mul).identity, when=Ne(a, 0), name="mul_inverse"),
+    rule(Mul(a, Pow(a, -1)), Mul.identity_element, when=Ne(a, 0), name="mul_inverse"),
 ]
 power = [
     rule(a ** 1, a, name="pow_one"),

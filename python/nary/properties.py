@@ -1,57 +1,58 @@
 """
     >>> import nary.arithmetic_rules
     >>> from nary import Add, Mul, Pow
-    >>> properties(Mul)
-    Properties(associative=True, commutative=True, identity=1, absorbing=0)
-    >>> properties(Mul).identity, properties(Add).absorbing, properties(Pow).associative
-    (1, None, False)
-    >>> property_rules(Mul)
-    [Rule(Mul(a, 1), a, name='mul_identity'), Rule(Mul(a, 0), 0, name='mul_absorbing')]
+    >>> Mul.is_associative, Mul.is_commutative, Mul.identity_element, Mul.absorbing_element
+    (True, True, 1, 0)
+    >>> Add.absorbing_element, Pow.is_associative, Pow.identity_element
+    (None, False, None)
 """
 
-from types import SimpleNamespace
+from . import _core
+from .rules import _check_declared_function, flat, rule, unordered
 
-from .rules import flat, rule, unordered
-
-__all__ = ["declare_properties", "declare_property", "properties", "property_rules"]
+__all__ = ["declare_properties", "declare_property", "property_rules"]
 
 _defaults = {}
 _elements = set()
 _declared = {}
 
 
-class Properties(SimpleNamespace):
-    def __getattr__(self, name):
-        if name not in _defaults:
-            raise AttributeError(f"{name} is not a property")
-        return _defaults[name]
-
-    def __setattr__(self, name, value):
-        raise AttributeError("Properties cannot be changed")
-
-
-def declare_property(name, default=None, element=False):
+def declare_property(name, element=False):
     """
-    >>> declare_property("identity")
+    >>> declare_property("kind")
     Traceback (most recent call last):
         ...
-    ValueError: identity is already a property
+    ValueError: kind is already an attribute of Expr
+    >>> declare_property("is_even", element=True)
+    Traceback (most recent call last):
+        ...
+    ValueError: is_even is True or False, so it cannot be an element
     """
     if name in _defaults:
         raise ValueError(f"{name} is already a property")
-    _defaults[name] = default
+    if hasattr(_core.Expr, name):
+        raise ValueError(f"{name} is already an attribute of Expr")
+    if element and name.startswith("is_"):
+        raise ValueError(f"{name} is True or False, so it cannot be an element")
+    _defaults[name] = False if name.startswith("is_") else None
     if element:
         _elements.add(name)
 
 
-declare_property("associative", default=False)
-declare_property("commutative", default=False)
-declare_property("identity", element=True)
-declare_property("absorbing", element=True)
+declare_property("is_associative")
+declare_property("is_commutative")
+declare_property("identity_element", element=True)
+declare_property("absorbing_element", element=True)
 
 
-def _element(F, value):
-    return F(F.kind.output("a"), value).args[1]
+def _bind(F, name, value):
+    if name not in _defaults:
+        raise TypeError(f"{name} is not a property")
+    if name.startswith("is_") and type(value) is not bool:
+        raise TypeError(f"{name} must be True or False, got {value!r}")
+    if name in _elements:
+        return F(F.kind.output("a"), value).args[1]
+    return value
 
 
 def declare_properties(F, **given):
@@ -59,41 +60,39 @@ def declare_properties(F, **given):
     >>> from nary import NumberKind, declare_function
     >>> from nary.logic import true
     >>> G = declare_function("G", NumberKind, NumberKind, returns=NumberKind, domain=true)
-    >>> declare_properties(G, idenity=0)
+    >>> declare_properties(G, is_commutative=1)
     Traceback (most recent call last):
         ...
-    TypeError: idenity is not a property
-    >>> declare_properties(G, commutative=True, absorbing=true)
+    TypeError: is_commutative must be True or False, got 1
+    >>> declare_properties(G, is_commutative=True, absorbing_element=true)
     Traceback (most recent call last):
         ...
     TypeError: G expects NumberKind, got BoolKind: true
-    >>> declare_properties(G, commutative=True, identity=0)
-    >>> properties(G), property_rules(G)
-    (Properties(commutative=True, identity=0), [Rule(G(a, 0), a, name='g_identity')])
+    >>> declare_properties(G, is_commutative=True, identity_element=0)
+    >>> G.is_commutative, G.identity_element, G.absorbing_element, property_rules(G)
+    (True, 0, None, [Rule(G(a, 0), a, name='g_identity')])
     """
+    _check_declared_function("declare_properties", F)
     if F in _declared:
         raise ValueError(f"the properties of {F!r} are already declared")
-    for name in given:
-        if name not in _defaults:
-            raise TypeError(f"{name} is not a property")
-    bound = {
-        name: _element(F, value) if name in _elements else value
-        for name, value in given.items()
-    }
-    if bound.get("associative"):
+    bound = {name: _bind(F, name, value) for name, value in given.items()}
+    if bound.get("is_associative"):
         flat(F)
-    if bound.get("commutative"):
+    if bound.get("is_commutative"):
         unordered(F)
-    _declared[F] = Properties(**bound)
+    _declared[F] = bound
 
 
-def properties(F):
-    return _declared.get(F, Properties())
+def _properties_of(F):
+    return {**_defaults, **_declared.get(F, {})}
+
+
+_core._set_properties(_properties_of)
 
 
 def property_rules(F):
     a, prefix = F.kind.output("a"), F.name.lower()
-    unit, zero = properties(F).identity, properties(F).absorbing
+    unit, zero = F.identity_element, F.absorbing_element
     rules = []
     if unit is not None:
         rules.append(rule(F(a, unit), a, name=f"{prefix}_identity"))
