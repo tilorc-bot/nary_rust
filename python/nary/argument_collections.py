@@ -32,15 +32,14 @@ __all__ = ["acting_properties", "collection_step", "count_step", "normalise_coll
 def normalise_collection(
     head: Expr, args: list[Expr], has_a_value: Callable[[Expr], bool],
 ) -> Expr:
-    shape = _shape(head)
-    if shape.associative:
-        runs = _merged(_runs(_flattened(head, args)), shape.commutative)
-        return _rebuilt(head, _apply_steps(head, runs, shape, has_a_value), shape)
-    if shape.commutative and len(args) == 2:
+    associative, commutative = _declares(head, "is_associative"), _declares(head, "is_commutative")
+    if associative:
+        runs = _merged(_runs(_flattened(head, args)), commutative)
+        return _rebuilt(head, _apply_steps(head, runs, has_a_value))
+    if commutative and len(args) == 2:
         runs = _merged(_runs(args), commutative=True)
-        outcome = _apply_steps(head, runs, shape, has_a_value)
-        return _rebuilt_if_collapsed(head, args, outcome, shape)
-    if shape.commutative:
+        return _rebuilt_if_collapsed(head, args, _apply_steps(head, runs, has_a_value))
+    if commutative:
         return head(*sorted(args, key=_order_key))
     return head(*args)
 
@@ -97,29 +96,30 @@ def _size(runs: list[Run]) -> int:
     return sum(run.count for run in runs)
 
 
-def _apply_steps(head: Expr, runs: list[Run], shape: Shape, has_a_value: Callable) -> list[Run] | Expr:
+def _apply_steps(head: Expr, runs: list[Run], has_a_value: Callable) -> list[Run] | Expr:
     """Each pass applies every step once, and passes repeat only while the collection shrinks.
 
     >>> from nary import Mul, NumberKind
     >>> x, one = NumberKind("x"), Mul.kind.output(1)
-    >>> _apply_steps(Mul, _runs([x, one, x]), _shape(Mul), lambda e: True)
+    >>> _apply_steps(Mul, _runs([x, one, x]), lambda e: True)
     [Run(arg=x, count=2)]
     """
     while True:
-        after = _apply_steps_once(head, runs, shape, has_a_value)
+        after = _apply_steps_once(head, runs, has_a_value)
         if isinstance(after, Expr) or _size(after) >= _size(runs):
             return after
         runs = after
 
 
-def _apply_steps_once(head: Expr, runs: list[Run], shape: Shape, has_a_value: Callable) -> list[Run] | Expr:
-    runs = [Run(run.arg, _new_count(head, run, shape.count_properties, has_a_value)) for run in runs]
-    for name in shape.collection_properties:
+def _apply_steps_once(head: Expr, runs: list[Run], has_a_value: Callable) -> list[Run] | Expr:
+    count_steps, collection_steps = _acting_steps(head)
+    runs = [Run(run.arg, _new_count(head, run, count_steps, has_a_value)) for run in runs]
+    for name in collection_steps:
         args = _steps[name].function(head, _arguments(runs), has_a_value, *_parameters(head, name))
         if isinstance(args, Expr):
             return args
         runs = _runs(args)
-    return _merged(runs, shape.commutative)
+    return _merged(runs, _declares(head, "is_commutative"))
 
 
 def _new_count(head: Expr, run: Run, names: list[str], has_a_value: Callable) -> int:
@@ -144,25 +144,25 @@ def _parameters(head: Expr, name: str) -> tuple:
     return () if name.startswith("is_") else (getattr(head, name),)
 
 
-def _rebuilt(head: Expr, outcome: list[Run] | Expr, shape: Shape) -> Expr:
+def _rebuilt(head: Expr, outcome: list[Run] | Expr) -> Expr:
     if isinstance(outcome, Expr):
         return outcome
     args = _arguments(outcome)
-    if shape.commutative:
+    if _declares(head, "is_commutative"):
         args.sort(key=_order_key)
-    if not args and shape.unit is not None:
-        return shape.unit
+    if not args and _property(head, "identity_element") is not None:
+        return _property(head, "identity_element")
     return args[0] if len(args) == 1 else head(*args)
 
 
-def _rebuilt_if_collapsed(head: Expr, args: list[Expr], outcome: list[Run] | Expr, shape: Shape) -> Expr:
+def _rebuilt_if_collapsed(head: Expr, args: list[Expr], outcome: list[Run] | Expr) -> Expr:
     """A pair takes its steps' outcome only if it collapsed: g(a, e) = a, g(a, a) = a, g(a, z) = z need no associativity.
 
     >>> from nary import Add, NumberKind
     >>> x, y, zero = NumberKind("x"), NumberKind("y"), Add.kind.output(0)
-    >>> _rebuilt_if_collapsed(Add, [y, x], [Run(x, 1)], _shape(Add))
+    >>> _rebuilt_if_collapsed(Add, [y, x], [Run(x, 1)])
     x
-    >>> _rebuilt_if_collapsed(Add, [y, x], [Run(x, 1), Run(zero, 1)], _shape(Add))
+    >>> _rebuilt_if_collapsed(Add, [y, x], [Run(x, 1), Run(zero, 1)])
     Add(x, y)
     """
     if isinstance(outcome, Expr):
@@ -170,8 +170,8 @@ def _rebuilt_if_collapsed(head: Expr, args: list[Expr], outcome: list[Run] | Exp
     remaining = _arguments(outcome)
     if len(remaining) == 1:
         return remaining[0]
-    if not remaining and shape.unit is not None:
-        return shape.unit
+    if not remaining and _property(head, "identity_element") is not None:
+        return _property(head, "identity_element")
     return head(*sorted(args, key=_order_key))
 
 
@@ -192,39 +192,37 @@ def _order_key(e: Expr) -> tuple:
     return 3, _order_key(e.head), tuple(_order_key(arg) for arg in e.args)
 
 
-class Shape(NamedTuple):
-    associative: bool
-    commutative: bool
-    unit: Expr | None
-    count_properties: list[str]
-    collection_properties: list[str]
+def _property(head: Expr, name: str) -> object:
+    """A property's value, or None for a head that is not a declared function and so has none."""
+    return getattr(head, name, None)
 
 
-def _shape(head: Expr) -> Shape:
-    """
+def _declares(head: Expr, name: str) -> bool:
+    value = _property(head, name)
+    return value is not None and value is not False
+
+
+_acting: dict[Expr, tuple[list[str], list[str]]] = {}
+
+
+def _acting_steps(head: Expr) -> tuple[list[str], list[str]]:
+    """The count steps and the collection steps that act on a head; only a declared head has any, so only those are cached.
+
     >>> from nary import Mul
-    >>> _shape(Mul).associative, _shape(Mul).commutative, _shape(Mul).unit
-    (True, True, 1)
-    >>> _shape(Mul).count_properties, _shape(Mul).collection_properties
+    >>> _acting_steps(Mul)
     (['identity_element'], ['absorbing_element'])
     """
+    if head in _acting:
+        return _acting[head]
     associative, commutative = _declares(head, "is_associative"), _declares(head, "is_commutative")
     acting = [
         name for name in _steps
         if _declares(head, name) and (commutative or associative and not _steps[name].multiset_only)
     ]
-    return Shape(
-        associative,
-        commutative,
-        getattr(head, "identity_element", None),
-        [name for name in acting if _steps[name].on_counts],
-        [name for name in acting if not _steps[name].on_counts],
-    )
-
-
-def _declares(head: Expr, name: str) -> bool:
-    value = getattr(head, name, None)
-    return value is not None and value is not False
+    steps = [n for n in acting if _steps[n].on_counts], [n for n in acting if not _steps[n].on_counts]
+    if acting:
+        _acting[head] = steps
+    return steps
 
 
 def acting_properties(head: Expr) -> list[str]:
@@ -235,8 +233,8 @@ def acting_properties(head: Expr) -> list[str]:
     >>> acting_properties(Or)
     ['identity_element', 'is_idempotent', 'absorbing_element']
     """
-    shape = _shape(head)
-    return shape.count_properties + shape.collection_properties
+    count_steps, collection_steps = _acting_steps(head)
+    return count_steps + collection_steps
 
 
 class Step(NamedTuple):
@@ -276,6 +274,7 @@ def _register(name: str, on_counts: bool, multiset_only: bool) -> Callable:
         if name in _steps:
             raise ValueError(f"{name} already has a step")
         _steps[name] = Step(function, on_counts, multiset_only)
+        _acting.clear()
         return function
 
     return register

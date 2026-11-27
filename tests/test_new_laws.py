@@ -167,6 +167,24 @@ def test_a_step_needs_a_declared_property():
         collection_step("unheard_of")
 
 
+def test_a_head_declared_after_it_was_normalised():
+    Late = head("Late")
+    assert normalise(Late(x, 0, x)) == Late(x, 0, x)
+    assert acting_properties(Late) == []
+    declare_properties(Late, **multiset, identity_element=0, cancel_after=2)
+    assert normalise(Late(x, 0, x)) == Late.kind.output(0)
+    assert Counter(acting_properties(Late)) == Counter(["identity_element", "cancel_after"])
+
+
+def test_a_step_registered_after_a_head_was_normalised():
+    declare_property("is_late_step")
+    Early = head("Early")
+    declare_properties(Early, **multiset, identity_element=0, is_late_step=True)
+    assert normalise(Early(x, x, 0)) == normalise(Early(x, x))
+    count_step("is_late_step")(lambda arg, count: min(count, 1))
+    assert normalise(Early(x, x, 0)) == x
+
+
 @pytest.mark.parametrize("order", list(permutations(range(4))))
 def test_the_order_of_the_keywords_does_not_change_the_result(order):
     given = [
