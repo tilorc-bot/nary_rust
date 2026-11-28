@@ -25,9 +25,6 @@ def bottom_up(
     innermost first, and returns what at_node returned for e. head and args are what walk
     returned for e.head and each of e.args.
 
-    at_node must depend only on head and args: results are remembered, so a
-    subexpression that occurs twice is passed to at_node once. Lambdas are returned as they are.
-
     If flat(e.head) is true, arguments of e with that same head are replaced by their own
     arguments first, and so on.
 
