@@ -12,6 +12,7 @@ from ._core import set_operator
 from .domains import declare_function
 from .kinds import Many, NumberKind
 from .logic import Or, true
+from .properties import declare_properties
 from .relational import Gt, Ne, re
 
 __all__ = ["Add", "Mul", "Pow", "NegativeOne"]
@@ -20,7 +21,11 @@ base, exponent = NumberKind("base"), NumberKind("exp")
 terms, factors = Many(NumberKind)("terms"), Many(NumberKind)("factors")
 
 Add = declare_function("Add", terms, returns=NumberKind, domain=true)
+declare_properties(Add, is_associative=True, is_commutative=True, identity_element=0)
 Mul = declare_function("Mul", factors, returns=NumberKind, domain=true)
+declare_properties(
+    Mul, is_associative=True, is_commutative=True, identity_element=1, absorbing_element=0
+)
 Pow = declare_function(
     "Pow", base, exponent, returns=NumberKind,
     domain=Or(Ne(base, 0), Gt(re(exponent), 0)),
