@@ -3,8 +3,11 @@
     >>> from nary import Add, Many, NumberKind, Pow, declare_function, sin
     >>> from nary.logic import true
     >>> from nary.normalising import normalise
-    >>> Add.evaluate_literals(2, 3), Pow.evaluate_literals(2, 3), sin.evaluate_literals
-    (5, Fraction(8, 1), None)
+    >>> x = NumberKind("x")
+    >>> Add.evaluate_literals(2, 3), Pow.evaluate_literals(NumberKind(2), NumberKind(3))
+    (5, 8)
+    >>> Add.evaluate_literals(x, 3), Pow.evaluate_literals(0, -1), sin.evaluate_literals
+    (None, None, None)
     >>> Largest = declare_function(
     ...     "Largest", Many(NumberKind), returns=NumberKind, domain=true, evaluate_literals=max,
     ... )
@@ -18,34 +21,7 @@ from itertools import groupby
 
 from ._core import Expr
 
-__all__ = ["literal_of", "with_literals_combined"]
-
-
-def literal_of(head: Expr, args: list[Expr]) -> Expr | None:
-    """The literal that head(*args) is equal to, or None where it is not known to be one.
-
-    Args:
-        head: A function.
-        args: Its arguments.
-
-    Returns:
-        A literal of the kind that head returns. None if head.evaluate_literals is None
-        or returns None, or if an argument is not a literal.
-
-    >>> from nary import Lt, NumberKind, Pow, sin
-    >>> two, three, x = NumberKind(2), NumberKind(3), NumberKind("x")
-    >>> literal_of(Pow, [two, three]), literal_of(Lt, [two, three])
-    (8, true)
-    >>> literal_of(Pow, [x, three]), literal_of(Pow, [NumberKind(0), NumberKind(-1)])
-    (None, None)
-    >>> literal_of(sin, [two]) is None
-    True
-    """
-    evaluate_literals = head.evaluate_literals
-    if evaluate_literals is None or not all(arg.is_literal for arg in args):
-        return None
-    value = evaluate_literals(*(arg.value for arg in args))
-    return None if value is None else head.kind.output(value)
+__all__ = ["with_literals_combined"]
 
 
 def with_literals_combined(head: Expr, args: list[Expr]) -> list[Expr]:
@@ -72,12 +48,15 @@ def with_literals_combined(head: Expr, args: list[Expr]) -> list[Expr]:
     >>> with_literals_combined(Last, [one, two, x, four])
     [2, x, 4]
     """
+    evaluate_literals = head.evaluate_literals
+    if evaluate_literals is None:
+        return args
     literals_together = (
         sorted(args, key=lambda arg: not arg.is_literal) if head.is_commutative else args
     )
     new_args = []
     for is_literal, neighbours in groupby(literals_together, key=lambda arg: arg.is_literal):
         neighbours = list(neighbours)
-        literal = literal_of(head, neighbours) if is_literal and len(neighbours) > 1 else None
+        literal = evaluate_literals(*neighbours) if is_literal and len(neighbours) > 1 else None
         new_args += neighbours if literal is None else [literal]
     return new_args if len(new_args) < len(args) else args

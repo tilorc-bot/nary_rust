@@ -296,23 +296,45 @@ def test_zero_absorbs_a_square():
     assert normalise(Mul(0, Pow(NumberKind("x"), 2))) == NumberKind(0)
 
 
-def test_add_and_mul_declare_how_their_literals_compute():
-    assert (Add.evaluate_literals(2, 3), Mul.evaluate_literals(2, 3)) == (5, 6)
+def test_evaluate_literals_of_add_gives_the_literal_of_the_sum():
+    assert Add.evaluate_literals(NumberKind(2), NumberKind(3)) == NumberKind(5)
 
 
-def test_a_comparison_gives_true_or_false_for_numbers():
-    assert Lt.evaluate_literals(1, 2) is True
+def test_evaluate_literals_takes_python_numbers_as_calling_the_function_does():
+    assert Add.evaluate_literals(2, 3) == NumberKind(5)
+
+
+def test_evaluate_literals_of_a_comparison_gives_true():
+    assert Lt.evaluate_literals(NumberKind(1), NumberKind(2)) == true
+
+
+def test_evaluate_literals_of_pow_gives_an_integer_literal():
+    result = Pow.evaluate_literals(2, 3)
+    assert repr(result) == "8" and type(result.value) is int
+
+
+def test_evaluate_literals_gives_none_where_the_declared_function_gives_none():
+    assert Pow.evaluate_literals(NumberKind(0), NumberKind(-1)) is None
+
+
+def test_evaluate_literals_gives_none_for_an_argument_that_is_not_a_literal():
+    assert Add.evaluate_literals(NumberKind("x"), 3) is None
+
+
+def test_evaluate_literals_rejects_an_argument_of_another_kind_as_calling_the_function_does():
+    with pytest.raises(TypeError, match="^Add expects NumberKind, got BoolKind: true$"):
+        Add.evaluate_literals(true, 3)
 
 
 def test_sin_does_not_declare_how_its_literals_compute():
     assert sin.evaluate_literals is None
 
 
-def test_a_function_declared_with_evaluate_literals_gives_it_back():
+def test_a_freshly_declared_function_evaluates_literals_with_the_function_it_was_given():
     Smallest = declare_function(
         "EvalSmallest", Many(NumberKind), returns=NumberKind, domain=true, evaluate_literals=min,
     )
-    assert Smallest.evaluate_literals is min
+    assert Smallest.evaluate_literals(NumberKind(2), NumberKind(3)) == NumberKind(2)
 
 
 def test_a_function_declared_without_evaluate_literals_has_none():

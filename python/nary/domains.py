@@ -69,9 +69,17 @@ def declare_function(name, *parameters, returns, domain, evaluate_literals=None)
 
     if symbols:
         parameters = [symbol.kind for symbol in symbols]
+
+    def evaluate_literal_arguments(*args):
+        args = function(*args).args
+        if not all(arg.is_literal for arg in args):
+            return None
+        value = evaluate_literals(*(arg.value for arg in args))
+        return None if value is None else returns(value)
+
     function = _core.declare_function(
         name, *parameters, returns=returns, names=tuple(names),
-        evaluate_literals=evaluate_literals,
+        evaluate_literals=evaluate_literal_arguments if evaluate_literals else None,
     )
     if domain is not None:
         _domains[function] = domain
