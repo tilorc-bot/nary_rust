@@ -1,275 +1,355 @@
+from fractions import Fraction
+
 import pytest
 
 from nary import (
-    Add, E, Eq, Expr, Ge, Gt, Le, Lt, Mul, Ne, NumberKind, Pow, Rational, declare_kind, log, re, sin,
+    Add, BoolKind, E, Eq, Ge, Gt, Le, Lt, Many, Mul, Ne, NumberKind, Pow, Rational,
+    declare_function, declare_kind, log, re, sin,
 )
-from nary._numbers import MAX_BITS, evaluate
+from nary.properties import declare_properties
+from nary._numbers import MAX_BITS
 from nary.logic import false, true
 from nary.normalising import normalise
 
 
-def numbers(*values):
-    return [value if isinstance(value, Expr) else NumberKind(value) for value in values]
+Max = declare_function("EvalMax", Many(NumberKind), returns=NumberKind, domain=true)
+declare_properties(
+    Max, is_associative=True, is_commutative=True,
+    value_of_literals=lambda *values: NumberKind(max(values)),
+)
+First = declare_function("EvalFirst", Many(NumberKind), returns=NumberKind, domain=true)
+declare_properties(First, is_associative=True, value_of_literals=lambda first, *rest: NumberKind(first))
 
 
 def test_a_sum_of_integers():
-    assert evaluate(Add, numbers(2, 3, -7)) == NumberKind(-2)
+    assert normalise(Add(2, 3, -7)) == NumberKind(-2)
 
 
 def test_a_sum_of_rationals():
-    assert evaluate(Add, numbers(Rational(1, 2), Rational(1, 3))) == Rational(5, 6)
+    assert normalise(Add(Rational(1, 2), Rational(1, 3))) == Rational(5, 6)
 
 
 def test_a_sum_of_an_integer_and_a_rational():
-    assert evaluate(Add, numbers(3, Rational(-1, 2))) == Rational(5, 2)
+    assert normalise(Add(3, Rational(-1, 2))) == Rational(5, 2)
 
 
 def test_a_sum_of_rationals_that_is_an_integer_is_the_integer_literal():
-    result = evaluate(Add, numbers(Rational(1, 2), Rational(1, 2)))
+    result = normalise(Add(Rational(1, 2), Rational(1, 2)))
     assert repr(result) == "1" and type(result.value) is int
 
 
 def test_a_sum_of_no_arguments_is_zero():
-    assert evaluate(Add, []) == NumberKind(0)
+    assert normalise(Add()) == NumberKind(0)
 
 
 def test_a_sum_of_one_argument_is_that_argument():
-    assert evaluate(Add, numbers(Rational(1, 2))) == Rational(1, 2)
+    assert normalise(Add(Rational(1, 2))) == Rational(1, 2)
 
 
 def test_a_product_of_integers():
-    assert evaluate(Mul, numbers(2, -3, 4)) == NumberKind(-24)
+    assert normalise(Mul(2, -3, 4)) == NumberKind(-24)
 
 
 def test_a_product_of_rationals():
-    assert evaluate(Mul, numbers(Rational(2, 3), Rational(3, 4))) == Rational(1, 2)
+    assert normalise(Mul(Rational(2, 3), Rational(3, 4))) == Rational(1, 2)
 
 
 def test_a_product_of_an_integer_and_a_rational():
-    assert evaluate(Mul, numbers(3, Rational(1, 2))) == Rational(3, 2)
+    assert normalise(Mul(3, Rational(1, 2))) == Rational(3, 2)
 
 
 def test_a_product_of_rationals_that_is_an_integer_is_the_integer_literal():
-    result = evaluate(Mul, numbers(4, Rational(1, 2)))
+    result = normalise(Mul(4, Rational(1, 2)))
     assert repr(result) == "2" and type(result.value) is int
 
 
 def test_a_product_of_no_arguments_is_one():
-    assert evaluate(Mul, []) == NumberKind(1)
+    assert normalise(Mul()) == NumberKind(1)
 
 
 def test_a_product_with_zero_is_zero():
-    assert evaluate(Mul, numbers(0, Rational(1, 2))) == NumberKind(0)
+    assert normalise(Mul(0, Rational(1, 2))) == NumberKind(0)
 
 
 def test_an_integer_to_a_positive_integer_power():
-    assert evaluate(Pow, numbers(2, 10)) == NumberKind(1024)
+    assert normalise(Pow(2, 10)) == NumberKind(1024)
 
 
 def test_an_integer_to_a_negative_integer_power_is_a_rational():
-    assert evaluate(Pow, numbers(2, -1)) == Rational(1, 2)
+    assert normalise(Pow(2, -1)) == Rational(1, 2)
 
 
 def test_a_negative_integer_to_a_negative_integer_power_has_its_sign_on_the_numerator():
-    assert repr(evaluate(Pow, numbers(-2, -1))) == "Rational(-1, 2)"
+    assert repr(normalise(Pow(-2, -1))) == "Rational(-1, 2)"
 
 
 def test_a_rational_to_a_positive_integer_power():
-    assert evaluate(Pow, numbers(Rational(-2, 3), 3)) == Rational(-8, 27)
+    assert normalise(Pow(Rational(-2, 3), 3)) == Rational(-8, 27)
 
 
 def test_a_rational_to_a_negative_integer_power():
-    assert evaluate(Pow, numbers(Rational(-2, 3), -3)) == Rational(-27, 8)
+    assert normalise(Pow(Rational(-2, 3), -3)) == Rational(-27, 8)
 
 
 def test_a_rational_to_a_negative_integer_power_that_is_an_integer_is_the_integer_literal():
-    result = evaluate(Pow, numbers(Rational(1, 2), -2))
+    result = normalise(Pow(Rational(1, 2), -2))
     assert repr(result) == "4" and type(result.value) is int
 
 
 def test_a_nonzero_number_to_the_power_zero_is_one():
-    assert evaluate(Pow, numbers(Rational(7, 2), 0)) == NumberKind(1)
+    assert normalise(Pow(Rational(7, 2), 0)) == NumberKind(1)
 
 
 def test_zero_to_a_positive_integer_power_is_zero():
-    assert evaluate(Pow, numbers(0, 3)) == NumberKind(0)
+    assert normalise(Pow(0, 3)) == NumberKind(0)
 
 
 def test_zero_to_the_power_zero_has_no_value():
-    assert evaluate(Pow, numbers(0, 0)) is None
+    assert normalise(Pow(0, 0)) == Pow(0, 0)
 
 
 def test_zero_to_a_negative_integer_power_has_no_value():
-    assert evaluate(Pow, numbers(0, -1)) is None
+    assert normalise(Pow(0, -1)) == Pow(0, -1)
 
 
 def test_zero_to_a_negative_rational_power_has_no_value():
-    assert evaluate(Pow, numbers(0, Rational(-1, 2))) is None
+    assert normalise(Pow(0, Rational(-1, 2))) == Pow(0, Rational(-1, 2))
 
 
 def test_a_square_root_that_is_not_rational_is_left_alone():
-    assert evaluate(Pow, numbers(2, Rational(1, 2))) is None
+    assert normalise(Pow(2, Rational(1, 2))) == Pow(2, Rational(1, 2))
 
 
 def test_a_square_root_that_is_rational_is_left_alone_too():
-    assert evaluate(Pow, numbers(4, Rational(1, 2))) is None
+    assert normalise(Pow(4, Rational(1, 2))) == Pow(4, Rational(1, 2))
 
 
 def test_a_rational_power_of_a_rational_is_left_alone():
-    assert evaluate(Pow, numbers(Rational(4, 9), Rational(-3, 2))) is None
+    assert normalise(Pow(Rational(4, 9), Rational(-3, 2))) == Pow(Rational(4, 9), Rational(-3, 2))
 
 
 def test_the_real_part_of_an_integer():
-    assert evaluate(re, numbers(-3)) == NumberKind(-3)
+    assert normalise(re(-3)) == NumberKind(-3)
 
 
 def test_the_real_part_of_a_rational():
-    assert evaluate(re, numbers(Rational(1, 2))) == Rational(1, 2)
+    assert normalise(re(Rational(1, 2))) == Rational(1, 2)
 
 
 def test_equal_numbers_are_equal():
-    assert evaluate(Eq, numbers(Rational(1, 2), Rational(1, 2))) == true
+    assert normalise(Eq(Rational(1, 2), Rational(1, 2))) == true
 
 
 def test_different_numbers_are_not_equal():
-    assert evaluate(Eq, numbers(Rational(1, 2), Rational(1, 3))) == false
+    assert normalise(Eq(Rational(1, 2), Rational(1, 3))) == false
 
 
 def test_ne_of_different_numbers():
-    assert evaluate(Ne, numbers(1, Rational(1, 2))) == true
+    assert normalise(Ne(1, Rational(1, 2))) == true
 
 
 def test_ne_of_equal_numbers():
-    assert evaluate(Ne, numbers(2, 2)) == false
+    assert normalise(Ne(2, 2)) == false
 
 
 def test_lt_between_rationals_with_different_denominators():
-    assert evaluate(Lt, numbers(Rational(1, 3), Rational(1, 2))) == true
+    assert normalise(Lt(Rational(1, 3), Rational(1, 2))) == true
 
 
 def test_lt_of_equal_numbers():
-    assert evaluate(Lt, numbers(2, 2)) == false
+    assert normalise(Lt(2, 2)) == false
 
 
 def test_gt_between_a_negative_rational_and_zero():
-    assert evaluate(Gt, numbers(Rational(-1, 2), 0)) == false
+    assert normalise(Gt(Rational(-1, 2), 0)) == false
 
 
 def test_le_of_equal_numbers():
-    assert evaluate(Le, numbers(Rational(1, 2), Rational(1, 2))) == true
+    assert normalise(Le(Rational(1, 2), Rational(1, 2))) == true
 
 
 def test_ge_between_an_integer_and_a_larger_rational():
-    assert evaluate(Ge, numbers(1, Rational(3, 2))) == false
+    assert normalise(Ge(1, Rational(3, 2))) == false
 
 
 def test_rationals_that_differ_only_far_from_the_leading_digits_are_compared_exactly():
-    assert evaluate(Lt, numbers(Rational(10**30, 10**30 + 1), Rational(10**30 + 1, 10**30 + 2))) == true
+    assert normalise(Lt(Rational(10**30, 10**30 + 1), Rational(10**30 + 1, 10**30 + 2))) == true
 
 
 def test_a_symbol_among_the_arguments_gives_none():
-    assert evaluate(Add, [NumberKind(1), NumberKind("x")]) is None
+    assert normalise(Add(1, NumberKind("x"))) == Add(1, NumberKind("x"))
 
 
 def test_a_constant_among_the_arguments_gives_none():
-    assert evaluate(Mul, [NumberKind(2), E]) is None
+    assert normalise(Mul(2, E)) == Mul(2, E)
 
 
-def test_an_argument_that_is_not_yet_a_literal_gives_none():
-    assert evaluate(Add, [NumberKind(1), Mul(2, 3)]) is None
+def test_an_argument_that_becomes_a_literal_is_evaluated_first():
+    assert normalise(Add(1, Mul(2, 3))) == NumberKind(7)
 
 
-def test_a_literal_of_another_kind_gives_none():
+def test_literals_of_a_head_without_value_of_literals_are_left_alone():
     Float = declare_kind("FloatForEvaluation", literals=float)
-    assert evaluate(Add, [Float(0.5), Float(0.5)]) is None
+    Total = declare_function("FloatTotal", Many(Float), returns=Float, domain=true)
+    declare_properties(Total, is_associative=True, is_commutative=True)
+    assert normalise(Total(Float(0.5), Float(0.5))) == Total(Float(0.5), Float(0.5))
 
 
 def test_a_head_that_is_not_evaluated_gives_none():
-    assert evaluate(sin, numbers(0)) is None
-
-
-def test_a_power_of_three_arguments_gives_none():
-    assert evaluate(Pow, numbers(2, 3, 4)) is None
-
-
-def test_a_real_part_of_two_arguments_gives_none():
-    assert evaluate(re, numbers(1, 2)) is None
-
-
-def test_a_comparison_of_three_arguments_gives_none():
-    assert evaluate(Eq, numbers(1, 1, 1)) is None
+    assert normalise(sin(0)) == sin(0)
 
 
 def test_the_largest_power_of_two_that_is_computed():
-    assert evaluate(Pow, numbers(2, MAX_BITS)) == NumberKind(2**MAX_BITS)
+    assert normalise(Pow(2, MAX_BITS)) == NumberKind(2**MAX_BITS)
 
 
 def test_a_power_above_the_size_limit_is_left_alone():
-    assert evaluate(Pow, numbers(2, MAX_BITS + 1)) is None
+    assert normalise(Pow(2, MAX_BITS + 1)) == Pow(2, MAX_BITS + 1)
 
 
 def test_a_power_with_a_denominator_above_the_size_limit_is_left_alone():
-    assert evaluate(Pow, numbers(2, -MAX_BITS - 1)) is None
+    assert normalise(Pow(2, -MAX_BITS - 1)) == Pow(2, -MAX_BITS - 1)
 
 
 def test_a_power_of_a_rational_above_the_size_limit_is_left_alone():
-    assert evaluate(Pow, numbers(Rational(3, 2), MAX_BITS)) is None
+    assert normalise(Pow(Rational(3, 2), MAX_BITS)) == Pow(Rational(3, 2), MAX_BITS)
 
 
 def test_a_power_with_an_enormous_exponent_is_left_alone_without_being_computed():
-    assert evaluate(Pow, numbers(3, 10**100)) is None
+    assert normalise(Pow(3, 10**100)) == Pow(3, 10**100)
 
 
 def test_one_to_an_enormous_power_is_one():
-    assert evaluate(Pow, numbers(1, 10**100)) == NumberKind(1)
+    assert normalise(Pow(1, 10**100)) == NumberKind(1)
 
 
 def test_minus_one_to_an_enormous_odd_power_is_minus_one():
-    assert evaluate(Pow, numbers(-1, -(10**100) - 1)) == NumberKind(-1)
+    assert normalise(Pow(-1, -(10**100) - 1)) == NumberKind(-1)
 
 
 def test_zero_to_an_enormous_power_is_zero():
-    assert evaluate(Pow, numbers(0, 10**100)) == NumberKind(0)
+    assert normalise(Pow(0, 10**100)) == NumberKind(0)
 
 
 def test_the_largest_product_of_two_powers_of_two_that_is_computed():
     half = MAX_BITS // 2
-    assert evaluate(Mul, numbers(2**half, 2**half)) == NumberKind(2**MAX_BITS)
+    assert normalise(Mul(2**half, 2**half)) == NumberKind(2**MAX_BITS)
 
 
 def test_a_product_above_the_size_limit_is_left_alone():
     half = MAX_BITS // 2
-    assert evaluate(Mul, numbers(2**half, 2 ** (half + 1))) is None
+    assert normalise(Mul(2**half, 2 ** (half + 1))) == Mul(2**half, 2 ** (half + 1))
 
 
 def test_a_product_with_a_denominator_above_the_size_limit_is_left_alone():
     half = MAX_BITS // 2
-    assert evaluate(Mul, numbers(Rational(1, 2**half), Rational(1, 2 ** (half + 1)))) is None
+    product = Mul(Rational(1, 2**half), Rational(1, 2 ** (half + 1)))
+    assert normalise(product) == product
 
 
 def test_a_product_of_many_copies_of_a_large_literal_is_left_alone():
-    assert evaluate(Mul, numbers(2**13_000) * 4096) is None
+    assert normalise(Mul(*[2**13_000] * 4096)) == Mul(*[2**13_000] * 4096)
 
 
 def test_the_largest_sum_of_two_powers_of_two_that_is_computed():
-    assert evaluate(Add, numbers(2 ** (MAX_BITS - 1), 2 ** (MAX_BITS - 1))) == NumberKind(2**MAX_BITS)
+    assert normalise(Add(2 ** (MAX_BITS - 1), 2 ** (MAX_BITS - 1))) == NumberKind(2**MAX_BITS)
 
 
 def test_a_sum_above_the_size_limit_is_left_alone():
-    assert evaluate(Add, numbers(2**MAX_BITS, 1)) is None
+    assert normalise(Add(2**MAX_BITS, 1)) == Add(1, 2**MAX_BITS)
 
 
 def test_a_sum_with_a_denominator_above_the_size_limit_is_left_alone():
     half = MAX_BITS // 2
-    assert evaluate(Add, numbers(Rational(1, 2**half + 1), Rational(1, 2**half + 3))) is None
+    total = Add(Rational(1, 2**half + 1), Rational(1, 2**half + 3))
+    assert normalise(total) == total
 
 
 def test_a_sum_of_more_integers_than_the_size_limit_is_computed():
-    assert evaluate(Add, numbers(1) * (MAX_BITS + 1)) == NumberKind(MAX_BITS + 1)
+    assert normalise(Add(*[1] * (MAX_BITS + 1))) == NumberKind(MAX_BITS + 1)
 
 
 def test_a_result_at_the_size_limit_still_has_a_repr():
-    assert len(repr(evaluate(Pow, numbers(2, MAX_BITS)))) == 4215
+    assert len(repr(normalise(Pow(2, MAX_BITS)))) == 4215
+
+
+def test_a_power_of_a_fraction_with_a_denominator_above_the_size_limit_is_left_alone():
+    assert normalise(Pow(Rational(1, 2), MAX_BITS + 1)) == Pow(Rational(1, 2), MAX_BITS + 1)
+
+
+def test_gt_of_equal_numbers_is_false():
+    assert normalise(Gt(2, 2)) == false
+
+
+def test_ge_of_equal_numbers_is_true():
+    assert normalise(Ge(2, 2)) == true
+
+
+def test_zero_does_not_absorb_zero_to_the_power_zero():
+    assert normalise(Mul(0, Pow(0, 0))) == Mul(0, Pow(0, 0))
+
+
+def test_zero_absorbs_a_square():
+    assert normalise(Mul(0, Pow(NumberKind("x"), 2))) == NumberKind(0)
+
+
+def test_add_and_mul_declare_how_their_literals_compute():
+    assert (Add.value_of_literals(2, 3), Mul.value_of_literals(2, 3)) == (NumberKind(5), NumberKind(6))
+
+
+def test_a_comparison_gives_true_or_false_for_numbers():
+    assert Lt.value_of_literals(1, 2) == true
+
+
+def test_sin_does_not_declare_how_its_literals_compute():
+    assert sin.value_of_literals is None
+
+
+def test_a_freshly_declared_maximum_of_two_numbers_is_the_larger():
+    assert normalise(Max(2, 3)) == NumberKind(3)
+
+
+def test_a_freshly_declared_maximum_combines_its_numbers_beside_a_symbol():
+    assert normalise(Max(NumberKind("x"), 2, 3)) == Max(3, NumberKind("x"))
+
+
+def test_a_freshly_declared_head_of_one_argument_is_evaluated():
+    Negate = declare_function("EvalNegate", NumberKind, returns=NumberKind, domain=true)
+    declare_properties(Negate, value_of_literals=lambda value: NumberKind(-value))
+    assert normalise(Negate(Rational(1, 2))) == Rational(-1, 2)
+
+
+def test_a_freshly_declared_head_of_one_argument_is_left_alone_on_a_symbol():
+    Opposite = declare_function("EvalOpposite", NumberKind, returns=NumberKind, domain=true)
+    declare_properties(Opposite, value_of_literals=lambda value: NumberKind(-value))
+    assert normalise(Opposite(NumberKind("x"))) == Opposite(NumberKind("x"))
+
+
+def test_a_head_of_one_argument_without_value_of_literals_keeps_its_argument():
+    Wrap = declare_function("EvalWrap", NumberKind, returns=NumberKind, domain=true)
+    assert normalise(Wrap(2)) == Wrap(2)
+
+
+def test_neighbouring_numbers_of_a_freshly_declared_head_that_is_not_commutative_are_combined():
+    x = NumberKind("x")
+    assert normalise(First(x, 2, 3)) == First(x, 2)
+
+
+def test_numbers_of_a_head_that_is_not_commutative_are_not_combined_across_a_symbol():
+    x = NumberKind("x")
+    assert normalise(First(2, x, 3)) == First(2, x, 3)
+
+
+def test_a_freshly_declared_head_may_give_none_to_leave_its_literals():
+    Ratio = declare_function("EvalRatio", NumberKind, NumberKind, returns=NumberKind, domain=true)
+    declare_properties(Ratio, value_of_literals=lambda a, b: NumberKind(Fraction(a) / b) if b else None)
+    assert (normalise(Ratio(1, 2)), normalise(Ratio(1, 0))) == (Rational(1, 2), Ratio(1, 0))
+
+
+def test_a_freshly_declared_comparison_gives_a_result_of_another_kind():
+    Divides = declare_function("EvalDivides", NumberKind, NumberKind, returns=BoolKind, domain=true)
+    declare_properties(Divides, value_of_literals=lambda a, b: true if b % a == 0 else false)
+    assert (normalise(Divides(3, 6)), normalise(Divides(4, 6))) == (true, false)
 
 
 def test_normalise_adds_integers():
@@ -351,13 +431,11 @@ def test_normalise_of_a_literal_result_changes_nothing():
     assert normalise(half) == half
 
 
-@pytest.mark.xfail(strict=True, reason="numbers are evaluated only where every argument is a number")
 def test_normalise_adds_the_numbers_among_the_arguments_of_a_sum():
     x = NumberKind("x")
     assert normalise(Add(x, 1, 2)) == Add(3, x)
 
 
-@pytest.mark.xfail(strict=True, reason="numbers are evaluated only where every argument is a number")
 def test_normalise_multiplies_the_numbers_among_the_arguments_of_a_product():
     x = NumberKind("x")
     assert normalise(Mul(2, x, Rational(1, 2))) == x
@@ -365,16 +443,16 @@ def test_normalise_multiplies_the_numbers_among_the_arguments_of_a_product():
 
 @pytest.mark.xfail(strict=True, reason="no power with a rational exponent is evaluated")
 def test_a_square_root_that_is_rational():
-    assert evaluate(Pow, numbers(4, Rational(1, 2))) == NumberKind(2)
+    assert normalise(Pow(4, Rational(1, 2))) == NumberKind(2)
 
 
 @pytest.mark.xfail(strict=True, reason="the size of a product is estimated from its factors before they cancel")
 def test_a_small_product_of_large_factors_that_cancel():
     large = 2**MAX_BITS
-    assert evaluate(Mul, numbers(large, large, Rational(1, large))) == NumberKind(large)
+    assert normalise(Mul(large, large, Rational(1, large))) == NumberKind(large)
 
 
 @pytest.mark.xfail(strict=True, reason="the size of a sum is estimated as if no denominator divided another")
 def test_a_small_sum_of_rationals_with_one_large_denominator():
     large = 2**MAX_BITS
-    assert evaluate(Add, numbers(Rational(1, large), Rational(1, large))) == Rational(2, large)
+    assert normalise(Add(Rational(1, large), Rational(1, large))) == Rational(2, large)
