@@ -6,6 +6,7 @@ import pytest
 from nary import Add, BoolKind, Lt, Many, Mul, NumberKind, Pow, declare_function, log, sin
 from nary.property_steps import step
 from nary.logic import And, Not, Or, false, true
+from nary.expanding import expand
 from nary.normalising import normalise
 from nary.properties import declare_properties, declare_property
 
@@ -253,6 +254,24 @@ def test_normalising_keeps_the_value_of_a_polynomial(fuzz):
             at = {s: Fraction(rng.randint(-9, 9), rng.randint(1, 4)) for s in (x, y, z)}
             if number_value(normal, at) != number_value(e, at):
                 return f"normalises to {normal!r}, which differs at {at}"
+        return True
+
+    fuzz.check(polynomial, holds)
+
+
+def test_expanding_keeps_the_value_of_a_polynomial_and_is_left_by_normalise(fuzz):
+    def polynomial(rng):
+        leaves = [x, y, z, n(1), n(-1), n(2), Pow(x + 1, 2), Pow(y - z, 3)]
+        return tree(rng, 3, lambda rng: rng.choice(leaves), [Add, Mul])
+
+    def holds(e, rng):
+        expanded = expand(e)
+        if normalise(expanded) != expanded:
+            return f"expands to {expanded!r}, which normalises to {normalise(expanded)!r}"
+        for _ in range(3):
+            at = {s: Fraction(rng.randint(-9, 9), rng.randint(1, 4)) for s in (x, y, z)}
+            if number_value(expanded, at) != number_value(e, at):
+                return f"expands to {expanded!r}, which differs at {at}"
         return True
 
     fuzz.check(polynomial, holds)
