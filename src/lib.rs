@@ -554,13 +554,7 @@ fn form_hash(py: Python<'_>, kind: KindRef, form: &Form) -> Option<isize> {
         Form::Symbol { name } => [0, kind.id, name.bind(py).hash().ok()? as usize],
         Form::Declared { .. } => [1, kind.id, DECLARED_COUNT.fetch_add(1, Ordering::Relaxed)],
         Form::Literal { value } => [3, kind.id, value.bind(py).hash().ok()? as usize],
-        Form::Apply { head, args } => {
-            let mut hash = mix(mix(0, 2), head.get().hash? as usize);
-            for arg in args.bind(py).iter_borrowed() {
-                hash = mix(hash, arg.cast_exact::<Expr>().ok()?.get().hash? as usize);
-            }
-            return Some(hash as isize);
-        }
+        Form::Apply { .. } => unreachable!("apply computes the hash of an application"),
     };
     Some(parts.into_iter().fold(0, mix) as isize)
 }
@@ -686,6 +680,7 @@ fn apply<'py>(head: &Bound<'py, Expr>, args: &Bound<'py, PyTuple>) -> PyResult<B
         )));
     }
     let mut converted: Option<Vec<Bound<'py, PyAny>>> = None;
+    let mut hash = expr.hash.map(|head_hash| mix(mix(0, 2), head_hash as usize));
     for (position, arg) in args.iter_borrowed().enumerate() {
         let expected = match sig.run_element {
             Some(element) if position >= fixed => element,
@@ -693,15 +688,17 @@ fn apply<'py>(head: &Bound<'py, Expr>, args: &Bound<'py, PyTuple>) -> PyResult<B
         };
         match arg.cast_exact::<Expr>() {
             Ok(expr_arg) if same_kind(expr_arg.get().kind, expected) => {
+                hash = hash.zip(expr_arg.get().hash).map(|(h, a)| mix(h, a as usize));
                 if let Some(converted) = converted.as_mut() {
                     converted.push(arg.to_owned());
                 }
             }
             Err(_) if expected.accepts(&arg) => {
-                let node = literal(expected, &arg)?.into_any();
+                let node = literal(expected, &arg)?;
+                hash = hash.zip(node.get().hash).map(|(h, a)| mix(h, a as usize));
                 converted
                     .get_or_insert_with(|| args.iter().take(position).collect())
-                    .push(node);
+                    .push(node.into_any());
             }
             _ => return Err(wrong_kind(py, expr, expected, &arg)),
         }
@@ -713,7 +710,14 @@ fn apply<'py>(head: &Bound<'py, Expr>, args: &Bound<'py, PyTuple>) -> PyResult<B
     if let Form::Declared { symbols: Some(symbols), .. } = &expr.form {
         check_symbols(py, expr, &sig.inputs, symbols, &args)?;
     }
-    new_expr(py, sig.output, Form::Apply { head: head.clone().unbind(), args: args.unbind() })
+    Bound::new(
+        py,
+        Expr {
+            kind: sig.output,
+            hash: hash.map(|h| h as isize),
+            form: Form::Apply { head: head.clone().unbind(), args: args.unbind() },
+        },
+    )
 }
 
 #[derive(Clone, Copy)]
