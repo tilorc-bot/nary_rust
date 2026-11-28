@@ -5,7 +5,7 @@
     >>> from nary.normalising import normalise
     >>> x, y, p, q = NumberKind("x"), NumberKind("y"), BoolKind("p"), BoolKind("q")
     >>> normalise(y + (x + 0) + x * 1), normalise(Pow(y * (2 * x) * 1, 1))
-    (Add(x, x, y), Pow(Mul(2, x, y), 1))
+    (Add(Mul(2, x), y), Pow(Mul(2, x, y), 1))
     >>> normalise(And(q, Or(p, false), q, true)), normalise(Not(Not(p)))
     (And(p, q), Not(Not(p)))
     >>> normalise(sin(x) * 0), normalise(log(x) * 0)
@@ -44,7 +44,7 @@ def normalise(e: Expr, known: Callable[[Expr], object] | None = None) -> Expr:
     >>> from nary import Ne, NumberKind, log
     >>> x, y = NumberKind("x"), NumberKind("y")
     >>> normalise((y + 0) + (x + y) * 1)
-    Add(x, y, y)
+    Add(Mul(2, y), x)
     >>> normalise(log(x) * 0), normalise(log(x) * 0, lambda condition: condition == Ne(x, 0))
     (Mul(0, log(x)), 0)
     """

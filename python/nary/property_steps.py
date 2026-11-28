@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Iterator
 from itertools import groupby
-from typing import Callable, NamedTuple
+from typing import NamedTuple
 
 from ._core import Expr
-from .properties import is_property
+from .properties import heads_declaring, is_property
 
 __all__ = ["apply_property_steps", "step"]
 
@@ -16,6 +17,7 @@ class _Step(NamedTuple):
     commutative_only: bool
     per_argument: bool
     merges: bool
+    on_the_value: bool
 
 
 _step_of_property: dict[str, _Step] = {}
@@ -23,6 +25,7 @@ _step_of_property: dict[str, _Step] = {}
 
 def step(
     name: str, commutative_only: bool = False, per_argument: bool = False, merges: bool = False,
+    on_the_value: bool = False,
 ) -> Callable:
     """Register a function that changes the arguments of a head that has the property name.
 
@@ -35,6 +38,8 @@ def step(
         merges: If True, the function returns a list of (group, merged) pairs, and each
             merged replaces the arguments in its group. It is used only where
             head.is_commutative.
+        on_the_value: If True, the function is used on each head that is getattr(F, name)
+            for some function F, and F is passed in place of the value.
 
     Returns:
         A decorator. Unless per_argument is True, the function it registers is called as
@@ -88,7 +93,8 @@ def step(
         raise ValueError(f"{name} already has a step")
 
     def register(function: Callable) -> Callable:
-        _step_of_property[name] = _Step(function, commutative_only or merges, per_argument, merges)
+        commutative = commutative_only or merges
+        _step_of_property[name] = _Step(function, commutative, per_argument, merges, on_the_value)
         return function
 
     return register
@@ -163,11 +169,9 @@ def _apply_steps_until_unchanged(
             raise RuntimeError(f"the steps for {head!r} never stop changing {args!r}")
         seen_before.add(tuple(args))
         args_after_steps = args
-        for name, value in properties.items():
-            registered = _step_of_property.get(name)
-            if registered is None or (registered.commutative_only and not commutative):
+        for registered, declared_value in _steps_and_values(head):
+            if registered.commutative_only and not commutative:
                 continue
-            declared_value = () if name.startswith("is_") else (value,)
             args_after_steps = _apply_step_keeping_arguments_without_a_value(
                 registered, head, args_after_steps, declared_value, has_a_value, normalise,
             )
@@ -176,6 +180,17 @@ def _apply_steps_until_unchanged(
         if args_after_steps == args:
             return args
         args = args_after_steps
+
+
+def _steps_and_values(head: Expr) -> Iterator[tuple[_Step, tuple]]:
+    for name, value in head.properties.items():
+        registered = _step_of_property.get(name)
+        if registered is not None and not registered.on_the_value:
+            yield registered, () if name.startswith("is_") else (value,)
+    for name, registered in _step_of_property.items():
+        if registered.on_the_value:
+            for declaring in heads_declaring(name, head):
+                yield registered, (declaring,)
 
 
 def _apply_step_keeping_arguments_without_a_value(
@@ -238,3 +253,47 @@ def _literals_replaced_by_their_value(
         value = value_of_literals(*(arg.value for arg in run)) if literal and len(run) > 1 else None
         new_args += run if value is None else [value]
     return new_args if len(new_args) < len(args) else args
+
+
+@step("distributes_over", merges=True, on_the_value=True)
+def _terms_that_differ_by_a_coefficient_added(
+    head: Expr, args: list[Expr], product: Expr,
+) -> list[tuple[list[Expr], Expr]]:
+    terms_and_coefficients = {}
+    for arg in args:
+        split = _coefficient_and_the_rest(arg, product, head)
+        if split is not None:
+            coefficient, rest = split
+            terms_and_coefficients.setdefault(rest, []).append((arg, coefficient))
+    return [
+        ([term for term, _ in group], product(*before, head(*(c for _, c in group)), *after))
+        for (before, after), group in terms_and_coefficients.items() if len(group) > 1
+    ]
+
+
+def _coefficient_and_the_rest(
+    term: Expr, product: Expr, total: Expr,
+) -> tuple[Expr, tuple[tuple[Expr, ...], tuple[Expr, ...]]] | None:
+    """(c, (before, after)) with term equal to product(*before, c, *after), or None.
+
+    >>> from nary import Add, Mul, NumberKind
+    >>> x, y = NumberKind("x"), NumberKind("y")
+    >>> _coefficient_and_the_rest(Mul(3, x, y), Mul, Add)
+    (3, ((), (x, y)))
+    >>> _coefficient_and_the_rest(Mul(x, y), Mul, Add), _coefficient_and_the_rest(x, Mul, Add)
+    ((1, ((), (x, y))), (1, ((), (x,))))
+    """
+    if term.is_literal:
+        return None
+    kind = total.kind.output
+    args = term.args if not term.is_atom and term.head == product else None
+    literals = [i for i, arg in enumerate(args or ()) if arg.is_literal and arg.kind == kind]
+    if len(literals) == 1:
+        i = literals[0]
+        if product.is_commutative:
+            return args[i], ((), args[:i] + args[i + 1:])
+        return args[i], (args[:i], args[i + 1:])
+    identity = product.identity_element
+    if identity is None or identity.kind != kind:
+        return None
+    return identity, ((), args if args is not None and product.is_associative else (term,))

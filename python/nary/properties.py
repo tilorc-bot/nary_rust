@@ -14,10 +14,10 @@
     Traceback (most recent call last):
         ...
     AttributeError: 'Expr' object has no attribute 'is_commutative'
-    >>> list(Mul.properties)
-    ['is_associative', 'is_commutative', 'identity_element', 'absorbing_element', 'value_of_literals']
-    >>> Mul.value_of_literals(2, 3), list(Pow.properties), f.properties
-    (6, ['value_of_literals'], mappingproxy({}))
+    >>> list(Mul.properties)[-2:], Mul.value_of_literals(2, 3), Mul.distributes_over
+    (['value_of_literals', 'distributes_over'], 6, Add)
+    >>> list(Pow.properties), f.properties
+    (['value_of_literals'], mappingproxy({}))
 """
 
 from types import MappingProxyType
@@ -25,7 +25,9 @@ from types import MappingProxyType
 from . import _core
 from .rules import _check_declared_function, flat, rule, unordered
 
-__all__ = ["declare_properties", "declare_property", "is_property", "property_rules"]
+__all__ = [
+    "declare_properties", "declare_property", "heads_declaring", "is_property", "property_rules",
+]
 
 _defaults = {}
 _elements = set()
@@ -69,6 +71,7 @@ declare_property("identity_element", element=True)
 declare_property("absorbing_element", element=True)
 declare_property("is_idempotent")
 declare_property("value_of_literals")
+declare_property("distributes_over")
 
 
 def is_property(name):
@@ -84,6 +87,23 @@ def is_property(name):
     (True, False)
     """
     return name in _defaults
+
+
+def heads_declaring(name, value):
+    """The functions F with getattr(F, name) == value, in the order they were declared.
+
+    Args:
+        name: A property.
+        value: Its value.
+
+    Returns:
+        A list of functions.
+
+    >>> from nary import Add
+    >>> heads_declaring("distributes_over", Add)
+    [Mul]
+    """
+    return [F for F, properties in _declared.items() if properties[name] == value]
 
 
 def _bind(F, name, value):
