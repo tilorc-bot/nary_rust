@@ -1,194 +1,166 @@
-"""A temporary stand-in for number arithmetic, to be replaced by reviewed code.
-
-    >>> from nary import Add, Gt, I, Mul, NumberKind, Pow
-    >>> from nary._numbers import evaluate, is_number
-    >>> half, twelve = Pow(2, -1), NumberKind(12)
-    >>> evaluate(Add, (half, half)), evaluate(Pow, (twelve, half)), evaluate(Mul, (I, I))
-    (1, Mul(2, Pow(3, Pow(2, -1))), -1)
-    >>> evaluate(Pow, (NumberKind(0), NumberKind(-1))), evaluate(Gt, (half, NumberKind(0)))
-    (None, true)
-    >>> is_number(Mul(3, half)), is_number(Mul(2, I)), is_number(Add(1, I))
-    (True, True, False)
-"""
+"""Exact arithmetic on integers and fractions, written as the library writes them."""
 
 from fractions import Fraction
-from math import lcm, prod
+from math import prod
 
 from ._core import Expr
 from .arithmetic import Add, Mul, Pow
-from .constants import I
 from .kinds import NumberKind
 from .logic import false, true
 from .relational import Eq, Ge, Gt, Le, Lt, Ne, re
 
 __all__ = ["evaluate", "is_number"]
 
-LARGEST_EXPONENT = 10_000
-TRIAL_DIVISION_LIMIT = 10_000
+MAX_POWER_BITS = 14_000
 
 
 def is_number(e):
-    return _read(e) is not None
+    """Whether e is an integer literal or a reduced fraction in the one form the library writes.
+
+    >>> from nary import Mul, NumberKind, Pow
+    >>> is_number(NumberKind(-3)), is_number(Pow(2, -1)), is_number(Mul(-3, Pow(2, -1)))
+    (True, True, True)
+    >>> is_number(Mul(2, Pow(4, -1))), is_number(Mul(1, Pow(2, -1))), is_number(Pow(-2, -1))
+    (False, False, False)
+    >>> is_number(Pow(0, -1)), is_number(Pow(2, Pow(2, -1))), is_number(NumberKind("x"))
+    (False, False, False)
+    """
+    return _value(e) is not None
 
 
 def evaluate(head, args):
-    values = [_read(arg) for arg in args]
-    if None in values:
+    """The value of head(*args) when every argument is a number and the result is one too.
+
+    Args:
+        head: Add, Mul, Pow, re, Eq, Ne, Lt, Gt, Le or Ge. Any other head gives None.
+        args: The arguments. Each must pass is_number(arg).
+
+    Returns:
+        A number that passes is_number, or true or false for a comparison. None where
+        head(*args) has no value, is not such a number, or is a power whose numerator or
+        denominator would take more than MAX_POWER_BITS bits.
+
+    >>> from nary import Add, Eq, Lt, Mul, NumberKind, Pow, sin
+    >>> half, zero, three = Pow(2, -1), NumberKind(0), NumberKind(3)
+    >>> evaluate(Add, (half, half)), evaluate(Mul, (three, half)), evaluate(Add, ())
+    (1, Mul(3, Pow(2, -1)), 0)
+    >>> evaluate(Pow, (Mul(-2, Pow(3, -1)), NumberKind(-3))), evaluate(Lt, (half, three))
+    (Mul(-27, Pow(8, -1)), true)
+    >>> evaluate(Pow, (zero, NumberKind(-1))), evaluate(Pow, (zero, zero))
+    (None, None)
+    >>> evaluate(Pow, (NumberKind(4), half)), evaluate(sin, (zero,)), evaluate(Eq, (half,))
+    (None, None, None)
+    """
+    if not isinstance(head, Expr):
         return None
-    if head in _COMPARISONS:
-        sign = _compare(*values)
-        return None if sign is None else (true if sign in _COMPARISONS[head] else false)
-    if head in _EQUALITIES:
-        return true if (values[0] == values[1]) == _EQUALITIES[head] else false
-    if head not in _OPERATIONS:
+    operation = _OPERATIONS.get(head)
+    if operation is None:
         return None
-    result = _OPERATIONS[head](*values)
-    return None if result is None else _write(result)
+    values = []
+    for arg in args:
+        value = _value(arg)
+        if value is None:
+            return None
+        values.append(value)
+    return operation(values)
 
 
-def _make(coefficient, roots, turn):
-    turn %= 2
-    if turn >= 1:
-        coefficient, turn = -coefficient, turn - 1
-    kept = {}
-    for p, exponent in roots.items():
-        whole = exponent.numerator // exponent.denominator
-        coefficient *= Fraction(p) ** whole
-        if exponent != whole:
-            kept[p] = exponent - whole
-    if coefficient == 0:
-        return Fraction(0), (), Fraction(0)
-    return coefficient, tuple(sorted(kept.items())), turn
+def _integer(e):
+    if e.is_literal and e.kind is NumberKind and type(e.value) is int:
+        return e.value
+    return None
 
 
-def _factor(n):
-    factors, p = {}, 2
-    while p * p <= n and p < TRIAL_DIVISION_LIMIT:
-        while n % p == 0:
-            factors[p] = factors.get(p, 0) + 1
-            n //= p
-        p += 1 if p == 2 else 2
-    if n > 1:
-        factors[n] = factors.get(n, 0) + 1
-    return factors
-
-
-def _powers(q, x):
-    powers = {p: k * x for p, k in _factor(q.numerator).items()}
-    powers.update({p: -k * x for p, k in _factor(q.denominator).items()})
-    return powers
-
-
-def _rational(value):
-    if value is None or value[1] or value[2]:
+def _denominator(e):
+    if not isinstance(e, Expr) or e.head != Pow:
         return None
-    if abs(value[0].numerator) > LARGEST_EXPONENT:
+    args = e.args
+    if len(args) != 2:
         return None
-    return value[0]
+    base, exponent = args
+    if _integer(exponent) != -1:
+        return None
+    d = _integer(base)
+    return d if d is not None and d >= 2 else None
 
 
-def _read(e):
-    if not isinstance(e, Expr) or e.kind is not NumberKind:
+def _value(e):
+    if not isinstance(e, Expr):
         return None
     if e.is_literal:
-        return _make(Fraction(e.value), {}, Fraction(0))
-    if e == I:
-        return _make(Fraction(1), {}, Fraction(1, 2))
-    if e.head == Mul:
-        values = [_read(arg) for arg in e.args]
-        return None if None in values else _multiply(*values)
-    if e.head == Pow:
-        base, exponent = e.args
-        x = _rational(_read(exponent))
-        if x is None or not base.is_literal:
+        n = _integer(e)
+        return None if n is None else Fraction(n)
+    head = e.head
+    if head is None:
+        return None
+    if head == Pow:
+        d = _denominator(e)
+        return None if d is None else Fraction(1, d)
+    if head != Mul:
+        return None
+    args = e.args
+    if len(args) != 2:
+        return None
+    n, d = _integer(args[0]), _denominator(args[1])
+    if n is None or d is None or n in (0, 1):
+        return None
+    q = Fraction(n, d)
+    return q if q.denominator == d else None
+
+
+def _written(q):
+    n, d = q.numerator, q.denominator
+    if d == 1:
+        return NumberKind(n)
+    if n == 1:
+        return Pow(d, -1)
+    return Mul(n, Pow(d, -1))
+
+
+def _add(values):
+    return _written(sum(values, Fraction(0)))
+
+
+def _multiply(values):
+    return _written(prod(values, start=Fraction(1)))
+
+
+def _power(values):
+    if len(values) != 2 or values[1].denominator != 1:
+        return None
+    base, k = values[0], values[1].numerator
+    if base == 0:
+        return _written(base) if k > 0 else None
+    if base == 1 or base == -1:
+        return _written(base ** (k % 2))
+    bits = max(abs(base.numerator).bit_length(), base.denominator.bit_length())
+    if abs(k) * bits > MAX_POWER_BITS:
+        return None
+    return _written(base**k)
+
+
+def _real_part(values):
+    return _written(values[0]) if len(values) == 1 else None
+
+
+def _comparison(holds):
+    def compare(values):
+        if len(values) != 2:
             return None
-        if base.value == -1:
-            return _make(Fraction(1), {}, x)
-        if base.value > 0:
-            return _make(Fraction(1), _powers(Fraction(base.value), x), Fraction(0))
-    return None
+        return true if holds(*values) else false
+
+    return compare
 
 
-def _rational_expressions(q):
-    if q.denominator == 1:
-        return [NumberKind(q.numerator)]
-    if q.numerator == 1:
-        return [Pow(q.denominator, -1)]
-    return [NumberKind(q.numerator), Pow(q.denominator, -1)]
-
-
-def _write(value):
-    coefficient, roots, turn = value
-    by_denominator = {}
-    for p, exponent in roots:
-        by_denominator.setdefault(exponent.denominator, []).append(p ** exponent.numerator)
-    pieces = [Pow(prod(powers), Pow(d, -1)) for d, powers in sorted(by_denominator.items())]
-    if turn == Fraction(1, 2):
-        pieces.append(I)
-    elif turn:
-        pieces.append(Pow(-1, _write((turn, (), Fraction(0)))))
-    if coefficient != 1 or not pieces:
-        pieces = _rational_expressions(coefficient) + pieces
-    return pieces[0] if len(pieces) == 1 else Mul(*pieces)
-
-
-def _multiply(*values):
-    coefficient, roots, turn = Fraction(1), {}, Fraction(0)
-    for c, value_roots, value_turn in values:
-        coefficient, turn = coefficient * c, turn + value_turn
-        for p, exponent in value_roots:
-            roots[p] = roots.get(p, 0) + exponent
-    return _make(coefficient, roots, turn)
-
-
-def _add(*values):
-    nonzero = [value for value in values if value[0]]
-    if len({(roots, turn) for _, roots, turn in nonzero}) > 1:
-        return None
-    if not nonzero:
-        return Fraction(0), (), Fraction(0)
-    _, roots, turn = nonzero[0]
-    return _make(sum(c for c, _, _ in nonzero), dict(roots), turn)
-
-
-def _power(base, exponent):
-    x = _rational(exponent)
-    coefficient, roots, turn = base
-    if x is None:
-        return None
-    if coefficient == 0:
-        return base if x > 0 else None
-    if x.denominator == 1:
-        return _make(coefficient ** x, {p: e * x for p, e in roots}, turn * x)
-    angle = turn + (coefficient < 0)
-    if angle > 1:
-        angle -= 2
-    powers = _powers(abs(coefficient), x)
-    for p, e in roots:
-        powers[p] = powers.get(p, 0) + e * x
-    return _make(Fraction(1), powers, angle * x)
-
-
-def _real_part(value):
-    if not value[2]:
-        return value
-    if value[2] == Fraction(1, 2):
-        return Fraction(0), (), Fraction(0)
-    return None
-
-
-def _compare(a, b):
-    if a[2] or b[2]:
-        return None
-    sign_a, sign_b = (a[0] > 0) - (a[0] < 0), (b[0] > 0) - (b[0] < 0)
-    if sign_a != sign_b or sign_a == 0:
-        return (sign_a > sign_b) - (sign_a < sign_b)
-    d = lcm(*(e.denominator for _, e in a[1] + b[1]))
-    size_a = abs(a[0]) ** d * prod(Fraction(p) ** int(e * d) for p, e in a[1])
-    size_b = abs(b[0]) ** d * prod(Fraction(p) ** int(e * d) for p, e in b[1])
-    return sign_a * ((size_a > size_b) - (size_a < size_b))
-
-
-_OPERATIONS = {Add: _add, Mul: _multiply, Pow: _power, re: _real_part}
-_COMPARISONS = {Lt: (-1,), Le: (-1, 0), Gt: (1,), Ge: (0, 1)}
-_EQUALITIES = {Eq: True, Ne: False}
+_OPERATIONS = {
+    Add: _add,
+    Mul: _multiply,
+    Pow: _power,
+    re: _real_part,
+    Eq: _comparison(lambda a, b: a == b),
+    Ne: _comparison(lambda a, b: a != b),
+    Lt: _comparison(lambda a, b: a < b),
+    Gt: _comparison(lambda a, b: a > b),
+    Le: _comparison(lambda a, b: a <= b),
+    Ge: _comparison(lambda a, b: a >= b),
+}
