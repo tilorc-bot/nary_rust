@@ -12,9 +12,14 @@ A Python bool is not accepted where a BoolKind is required.
     Traceback (most recent call last):
         ...
     TypeError: Or expects BoolKind, got bool: True
+
+Calling BoolKind with a Python bool gives true or false.
+
+    >>> nr.BoolKind(True), nr.BoolKind(x == y), Or(x < y, nr.BoolKind(True))
+    (true, false, Or(Lt(x, y), true))
 """
 
-from ._core import declare_constant
+from ._core import _calling_with_returns, declare_constant
 from .domains import declare_function
 from .kinds import BoolKind, Many
 
@@ -22,6 +27,8 @@ __all__ = ["And", "Not", "Or", "false", "true"]
 
 true = declare_constant("true", BoolKind)
 false = declare_constant("false", BoolKind)
+_calling_with_returns(BoolKind, True, true)
+_calling_with_returns(BoolKind, False, false)
 
 And = declare_function("And", Many(BoolKind), returns=BoolKind, domain=true)
 Or = declare_function("Or", Many(BoolKind), returns=BoolKind, domain=true)
