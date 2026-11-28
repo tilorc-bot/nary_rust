@@ -21,12 +21,16 @@ def bottom_up(
 ) -> Callable[[Expr], Expr | Result]:
     """Return a function walk(e).
 
-    walk(e) calls at_node(head, args) for e and for everything inside it that has a head,
-    innermost first, and returns what at_node returned for e. head and args are what walk
-    returned for e.head and each of e.args.
+    Args:
+        at_node: Called as at_node(head, args) for e and for everything inside it that
+            has a head, innermost first, skipping lambdas whole. head and args are what
+            walk returned for e.head and each of e.args.
+        flat: Called as flat(e.head). If true, arguments of e with that same head are
+            replaced by their own arguments first, and so on.
 
-    If flat(e.head) is true, arguments of e with that same head are replaced by their own
-    arguments first, and so on.
+    Returns:
+        walk, where walk(e) is what at_node returned for e, or e itself if at_node
+        was not called for e.
 
     >>> from nary import Add, Mul, NumberKind, sin
     >>> x, y, z = NumberKind("x"), NumberKind("y"), NumberKind("z")
