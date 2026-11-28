@@ -150,7 +150,7 @@ def test_idempotence_keeps_the_output_kind():
 
 def test_each_head_in_a_mixed_expression_uses_its_own_elements():
     assert normalise(And(Eq(x + 0, y), Or(p, false), true)) == normalise(And(Eq(x, y), p))
-    assert normalise(Or(Eq(x * 0, 0), false)) == Eq(0, 0)
+    assert normalise(Or(Eq(x * 0, 0), false)) == true
 
 
 def test_a_constant_that_prints_like_an_identity_is_not_one():

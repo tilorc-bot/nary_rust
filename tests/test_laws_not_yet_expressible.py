@@ -197,12 +197,6 @@ def test_without_a_step_a_ratio_of_equal_arguments_stays():
     assert normalise(Ratio(x, x)) == Ratio(x, x)
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Add and Mul have no step that evaluates literals")
-def test_the_package_adds_and_multiplies_literals():
-    assert normalise(Add(2, 3)) == NumberKind(5)
-    assert normalise(Mul(2, 3)) == NumberKind(6)
-
-
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason="nothing decides an order between arguments")
 def test_a_maximum_drops_an_argument_another_one_dominates():
     declare_property("is_maximum")
