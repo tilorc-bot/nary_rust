@@ -141,10 +141,10 @@ def test_an_idempotent_head_over_which_a_head_with_an_identity_distributes():
     assert normalise(Top(x, Plus(2, x))) == Plus(Top(0, 2), x)
 
 
-def test_coefficients_are_evaluated_where_the_head_distributed_over_declares_value_of_literals():
+def test_coefficients_are_evaluated_where_the_head_distributed_over_declares_evaluate_literals():
     Max = number_head(
         "DistMax", is_associative=True, is_commutative=True, is_idempotent=True,
-        value_of_literals=lambda *values: NumberKind(max(values)),
+        evaluate_literals=lambda *values: NumberKind(max(values)),
     )
     Plus = number_head(
         "DistPlus", is_associative=True, is_commutative=True, identity_element=0, distributes_over=Max,
