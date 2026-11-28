@@ -493,3 +493,18 @@ def test_the_order_of_the_keywords_does_not_change_the_result():
         assert normalise(G(4, x, 6, 3)) == NumberKind(1)
         assert normalise(G(x, 0, G(x, x))) == x
         assert normalise(G(4, x, 6, x, 0)) == normalise(G(2, x))
+
+
+def test_steps_that_never_stop_changing_the_arguments_raise():
+    declare_property("is_kept_in_reverse")
+
+    @step("is_kept_in_reverse")
+    def reverse(head, args):
+        return args[::-1]
+
+    Shelf = declare_function("Shelf", Many(NumberKind), returns=NumberKind, domain=true)
+    declare_properties(Shelf, is_associative=True, is_commutative=True, is_kept_in_reverse=True)
+
+    assert normalise(Shelf(x)) == x
+    with pytest.raises(RuntimeError, match="never stop changing"):
+        normalise(Shelf(x, y))

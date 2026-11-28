@@ -204,3 +204,14 @@ def test_a_kind_declared_here_with_a_plain_head_and_a_commutative_associative_he
     assert Counter(normalise(Overlay(b, Overlay(c, a))).args) == Counter([a, b, c])
     assert normalise(Rotate(Overlay(c, Overlay(b, a)))) == Rotate(normalise(Overlay(a, b, c)))
     assert normalise(Overlay(Overlay(a))) == a and normalise(Overlay(a)).kind is Shape
+
+
+def test_an_identity_element_is_dropped_from_either_side_of_a_two_argument_head():
+    After = declare_function("After", NumberKind, NumberKind, returns=NumberKind, domain=true)
+    declare_properties(After, identity_element=0)
+
+    assert normalise(After(x, 0)) == x
+    assert normalise(After(0, x)) == x
+    assert normalise(After(y, x)) == After(y, x)
+    assert normalise(After(log(x), 0)) == log(x)
+

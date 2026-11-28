@@ -135,9 +135,13 @@ def _apply_steps_until_unchanged(
     head: Expr, args: list[Expr], commutative: bool, has_a_value: Callable,
 ) -> list[Expr]:
     properties = head.properties
+    seen_before = set()
     while True:
         if commutative:
             args = sorted(args, key=_sort_key)
+        if tuple(args) in seen_before:
+            raise RuntimeError(f"the steps for {head!r} never stop changing {args!r}")
+        seen_before.add(tuple(args))
         args_after_steps = args
         for name, value in properties.items():
             registered = _step_of_property.get(name)
