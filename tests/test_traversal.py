@@ -274,6 +274,47 @@ def test_walk_called_from_inside_at_node():
     ]
 
 
+def test_again_walks_what_at_node_returns_until_it_returns_the_same_node():
+    def at_node(head, args):
+        calls.append((head, args))
+        return args[0] if head == Mul and args[1] == NumberKind(1) else head(*args)
+
+    calls = []
+    walk = bottom_up(at_node, again=True)
+    assert walk(Mul(Mul(sin(x), 1), 1)) == sin(x)
+    one = NumberKind(1)
+    assert calls == [(sin, [x]), (Mul, [sin(x), one]), (Mul, [sin(x), one])]
+
+
+def test_again_walks_new_arguments_of_what_at_node_returns_and_takes_the_rest_from_memory():
+    def at_node(head, args):
+        calls.append((head, args))
+        return Add(args[0], sin(y)) if head == Mul else head(*args)
+
+    calls = []
+    assert bottom_up(at_node, again=True)(Mul(sin(x), z)) == Add(sin(x), sin(y))
+    assert calls == [(sin, [x]), (Mul, [sin(x), z]), (sin, [y]), (Add, [sin(x), sin(y)])]
+
+
+def test_again_does_not_call_at_node_twice_where_it_returns_the_same_node():
+    e = sin(x + y) * (sin(x + y) + z)
+    assert calls_of(bottom_up, e, again=True) == calls_of(bottom_up, e)
+
+
+def test_orderless_sorts_the_arguments_by_repr():
+    assert calls_of(bottom_up, Add(z, Mul(y, x)), orderless=flat_add) == [
+        (Mul, [y, x]),
+        (Add, [Mul(y, x), z]),
+    ]
+
+
+def test_again_raises_where_at_node_returns_to_what_it_is_walking():
+    swap = bottom_up(lambda head, args: head(*reversed(args)), again=True)
+    assert swap(sin(x)) == sin(x)
+    with pytest.raises(RuntimeError, match="never stop changing"):
+        swap(Add(x, y))
+
+
 def test_deeper_than_the_recursion_limit():
     depth = 3 * sys.getrecursionlimit()
     e = chain(depth)
@@ -301,6 +342,7 @@ DEEP = (
     [
         "assert len(bottom_up(lambda h, a: h(*a), flat=lambda h: h == Add)(e).args) == 100001",
         "assert bottom_up(lambda h, a: h(*a))(e) == e",
+        "assert bottom_up(lambda h, a: h(*a), again=True)(e) == e",
     ],
 )
 def test_a_chain_100000_deep(check):
@@ -319,7 +361,7 @@ def test_the_walker_imports_only_is_lambda():
     ]
     names = {name for name in vars(traversal) if not name.startswith("__")}
     assert names == {
-        "bottom_up", "is_lambda", "_never", "annotations", "Callable", "Iterator", "Expr"
+        "bottom_up", "is_lambda", "_never", "_is", "annotations", "Callable", "Iterator", "Expr"
     }
     assert traversal.is_lambda is is_lambda
 

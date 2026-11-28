@@ -16,10 +16,12 @@
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable, Iterator
 
 from . import arithmetic_rules, logic_rules  # noqa: F401
 from ._core import Expr
+from .domains import domain_of
+from .functions import is_lambda
 from .property_steps import apply_property_steps
 from .logic import true
 from .rewriting import _has_a_value
@@ -53,13 +55,36 @@ def normalise(e: Expr, known: Callable[[Expr], object] | None = None) -> Expr:
     walk = bottom_up(
         lambda head, args: apply_property_steps(head, args, has_a_value),
         flat=lambda head: head.is_associative,
+        orderless=lambda head: head.is_commutative,
+        again=True,
     )
 
-    def holds(condition: Expr) -> bool:
+    def holds(condition: Expr, assumed: set[Expr]) -> bool:
         condition = walk(condition)
-        return condition == true or known(condition) is True
+        return condition == true or condition in assumed or known(condition) is True
 
-    def has_a_value(e: Expr) -> bool:
-        return _has_a_value(e, holds)
+    def has_a_value(e: Expr, wherever_these_have_values: list[Expr]) -> bool:
+        assumed = {walk(domain) for domain in _domains_inside(wherever_these_have_values)}
+        return _has_a_value(e, lambda condition: holds(condition, assumed))
 
     return walk(e)
+
+
+def _domains_inside(es: list[Expr]) -> Iterator[Expr]:
+    """The domains of es and of everything inside them that has a value wherever they do.
+
+    >>> from nary import NumberKind, Pow, log, sin
+    >>> from nary.functions import Lambda
+    >>> x, y = NumberKind("x"), NumberKind("y")
+    >>> list(_domains_inside([sin(log(x)), Pow(y, -1)]))
+    [true, Ne(x, 0), Or(Ne(y, 0), Gt(re(-1), 0))]
+    >>> list(_domains_inside([Lambda(y, log(y))(x)]))
+    []
+    """
+    for e in es:
+        if e.is_atom or is_lambda(e) or not e.head.is_constant:
+            continue
+        domain = domain_of(e)
+        if domain is not None:
+            yield domain
+            yield from _domains_inside(e.args)
