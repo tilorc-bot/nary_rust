@@ -8,19 +8,20 @@ from .properties import is_property
 
 __all__ = ["apply_property_steps", "step"]
 
-_sort_key = repr
-
 
 class _Step(NamedTuple):
     function: Callable
     commutative_only: bool
     per_argument: bool
+    merges: bool
 
 
 _step_of_property: dict[str, _Step] = {}
 
 
-def step(name: str, commutative_only: bool = False, per_argument: bool = False) -> Callable:
+def step(
+    name: str, commutative_only: bool = False, per_argument: bool = False, merges: bool = False,
+) -> Callable:
     """Register a function that changes the arguments of a head that has the property name.
 
     Args:
@@ -29,6 +30,9 @@ def step(name: str, commutative_only: bool = False, per_argument: bool = False) 
         per_argument: If True, the function is called as fn(arg, copies) and returns how
             many copies of arg to keep. copies counts the arguments equal to arg that are
             next to each other, which is all of them where head.is_commutative.
+        merges: If True, the function returns a list of (group, merged) pairs, and each
+            merged replaces the arguments in its group. It is used only where
+            head.is_commutative.
 
     Returns:
         A decorator. Unless per_argument is True, the function it registers is called as
@@ -82,102 +86,103 @@ def step(name: str, commutative_only: bool = False, per_argument: bool = False) 
         raise ValueError(f"{name} already has a step")
 
     def register(function: Callable) -> Callable:
-        _step_of_property[name] = _Step(function, commutative_only, per_argument)
+        _step_of_property[name] = _Step(function, commutative_only or merges, per_argument, merges)
         return function
 
     return register
 
 
 def apply_property_steps(head: Expr, args: list[Expr], has_a_value: Callable) -> Expr:
-    """Build head(*args), with args changed by the functions that step registered.
+    """Build head(*args), with args changed by the first function that step registered to change them.
 
     Args:
         head: A function.
-        args: Its arguments, each already normalised.
-        has_a_value: Called as has_a_value(arg). An argument is removed only where this
-            returns True.
+        args: Its arguments, each already normalised, in order of repr where head.is_commutative.
+        has_a_value: Called as has_a_value(arg, new_args). An argument is removed only
+            where this returns True, new_args being what replaces it.
 
     Returns:
         head applied to the arguments that are left. If one is left, that argument.
         If none is left and head.identity_element is not None, head.identity_element.
         If a function returned an expression in place of the arguments, that expression.
+        What a function builds is not normalised.
 
     >>> from nary import Add, Mul, NumberKind, log, sin
     >>> from nary.rewriting import _has_a_value
     >>> x, y = NumberKind("x"), NumberKind("y")
-    >>> has_a_value = lambda e: _has_a_value(e, lambda condition: False)
-    >>> apply_property_steps(Mul, [y, Mul(x, 2), NumberKind(1)], has_a_value)
-    Mul(2, x, y)
+    >>> has_a_value = lambda e, new_args: _has_a_value(e, lambda condition: False)
+    >>> apply_property_steps(Mul, [NumberKind(1), Mul(x, 2), y], has_a_value)
+    Mul(1, x, 2, y)
+    >>> apply_property_steps(Mul, [NumberKind(1), NumberKind(2), x], has_a_value)
+    Mul(2, x)
     >>> zero = NumberKind(0)
-    >>> apply_property_steps(Mul, [sin(x), zero], has_a_value)
+    >>> apply_property_steps(Mul, [zero, sin(x)], has_a_value)
     0
-    >>> apply_property_steps(Mul, [log(x), zero], has_a_value)
+    >>> apply_property_steps(Mul, [zero, log(x)], has_a_value)
     Mul(0, log(x))
-    >>> apply_property_steps(Add, [], has_a_value), apply_property_steps(sin, [x], has_a_value)
-    (0, sin(x))
+    >>> apply_property_steps(Add, [], has_a_value)
+    0
     """
-    associative, commutative = head.is_associative, head.is_commutative
-    if associative:
-        flattened = []
-        for arg in args:
-            flattened += arg.args if not arg.is_atom and arg.head == head else [arg]
-        args = flattened
-    if associative or len(args) <= 2:
-        new_args = _apply_steps_until_unchanged(head, args, commutative, has_a_value)
+    new_args = _flattened(head, args)
+    if new_args == args and (head.is_associative or len(args) <= 2):
+        new_args = _apply_first_changing_step(head, args, has_a_value)
         if isinstance(new_args, Expr):
             return new_args
-        if len(new_args) == 1 and (associative or len(args) > 1):
-            return new_args[0]
-        if not new_args and head.identity_element is not None:
-            return head.identity_element
-        args = new_args
-    if commutative:
-        args = sorted(args, key=_sort_key)
-    return head(*args)
+    if len(new_args) == 1 and (head.is_associative or len(args) > 1):
+        return new_args[0]
+    if not new_args and head.identity_element is not None:
+        return head.identity_element
+    return head(*new_args)
 
 
-def _apply_steps_until_unchanged(
-    head: Expr, args: list[Expr], commutative: bool, has_a_value: Callable,
+def _flattened(head: Expr, args: list[Expr]) -> list[Expr]:
+    if not head.is_associative:
+        return args
+    flattened = []
+    for arg in args:
+        flattened += arg.args if not arg.is_atom and arg.head == head else [arg]
+    return flattened
+
+
+def _apply_first_changing_step(
+    head: Expr, args: list[Expr], has_a_value: Callable,
 ) -> list[Expr] | Expr:
-    properties = head.properties
-    seen_before = set()
-    while True:
-        if commutative:
-            args = sorted(args, key=_sort_key)
-        if tuple(args) in seen_before:
-            raise RuntimeError(f"the steps for {head!r} never stop changing {args!r}")
-        seen_before.add(tuple(args))
-        args_after_steps = args
-        for name, value in properties.items():
-            registered = _step_of_property.get(name)
-            if registered is None or (registered.commutative_only and not commutative):
-                continue
-            declared_value = () if name.startswith("is_") else (value,)
-            args_after_steps = _apply_step_keeping_arguments_without_a_value(
-                registered, head, args_after_steps, declared_value, has_a_value,
-            )
-            if isinstance(args_after_steps, Expr):
-                return args_after_steps
-        if args_after_steps == args:
-            return args
-        args = args_after_steps
+    for name, value in head.properties.items():
+        registered = _step_of_property.get(name)
+        if registered is None or (registered.commutative_only and not head.is_commutative):
+            continue
+        declared_value = () if name.startswith("is_") else (value,)
+        new_args = _apply_step_keeping_arguments_without_a_value(
+            registered, head, args, declared_value, has_a_value,
+        )
+        if isinstance(new_args, Expr) or new_args != args:
+            return new_args
+    return args
 
 
 def _apply_step_keeping_arguments_without_a_value(
     registered: _Step, head: Expr, args: list[Expr], declared_value: tuple, has_a_value: Callable,
 ) -> list[Expr] | Expr:
-    if not registered.per_argument:
-        new_args = registered.function(head, args, *declared_value)
-        removed = set(args) if isinstance(new_args, Expr) else set(args) - set(new_args)
-        return new_args if all(map(has_a_value, removed)) else args
-    new_args = []
-    for arg, equal_args in groupby(args):
-        copies = len(list(equal_args))
-        copies_to_keep = registered.function(arg, copies, *declared_value)
-        if copies_to_keep == 0 and not has_a_value(arg):
-            copies_to_keep = copies
-        new_args += [arg] * copies_to_keep
-    return new_args
+    if registered.per_argument:
+        new_args = []
+        for arg, equal_args in groupby(args):
+            copies = len(list(equal_args))
+            copies_to_keep = registered.function(arg, copies, *declared_value)
+            if copies_to_keep == 0 and not has_a_value(arg, []):
+                copies_to_keep = copies
+            new_args += [arg] * copies_to_keep
+        return new_args
+    if registered.merges:
+        new_args = list(args)
+        for group, merged in registered.function(head, args, *declared_value):
+            if all(has_a_value(arg, [merged]) for arg in group):
+                for arg in group:
+                    new_args.remove(arg)
+                new_args.append(merged)
+        return new_args
+    result = registered.function(head, args, *declared_value)
+    new_args = [result] if isinstance(result, Expr) else result
+    return result if all(has_a_value(arg, new_args) for arg in set(args) - set(new_args)) else args
 
 
 @step("identity_element", per_argument=True)

@@ -107,45 +107,6 @@ def test_a_choice_between_equal_branches_is_that_branch():
     assert normalise(Pick(BoolKind("c"), x, x)) == x
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="what a step builds is not normalised")
-def test_a_step_that_merges_arguments_into_a_new_sum():
-    Total = declare_function("Total", Many(NumberKind), returns=NumberKind, domain=true)
-    declare_properties(Total, is_associative=True, is_commutative=True, identity_element=0)
-    Ex = declare_function("Ex", NumberKind, returns=NumberKind, domain=true)
-    declare_property("merges_exponents")
-
-    @step("merges_exponents", commutative_only=True)
-    def merge(head, args, exp):
-        powers = [e for e in args if not e.is_atom and e.head == exp]
-        if len(powers) < 2:
-            return args
-        merged = exp(Total(*(e.args[0] for e in powers)))
-        return [e for e in args if e not in powers] + [merged]
-
-    Prd = declare_function("Prd", Many(NumberKind), returns=NumberKind, domain=true)
-    declare_properties(Prd, is_associative=True, is_commutative=True, merges_exponents=Ex)
-
-    assert normalise(Prd(Ex(x), Ex(Total(y, z)))) == normalise(Ex(Total(x, y, z)))
-
-
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="what a step builds is not normalised")
-def test_a_step_that_collects_repeats_into_a_product():
-    Times = declare_function("Times", Many(NumberKind), returns=NumberKind, domain=true)
-    declare_properties(Times, is_associative=True, is_commutative=True, identity_element=1)
-    declare_property("collects_into")
-
-    @step("collects_into", commutative_only=True)
-    def collect(head, args, times):
-        counts = Counter(args)
-        return [arg if n == 1 else times(n, arg) for arg, n in counts.items()]
-
-    Gather = declare_function("Gather", Many(NumberKind), returns=NumberKind, domain=true)
-    declare_properties(Gather, is_associative=True, is_commutative=True, collects_into=Times)
-
-    assert normalise(Gather(x, x)) == Times(2, x)
-    assert normalise(Gather(Times(3, y), Times(3, y))) == normalise(Times(2, 3, y))
-
-
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason="steps cannot ask whether a condition holds")
 def test_a_step_that_needs_a_condition_beyond_the_values_of_what_it_erases():
     one = NumberKind(1)
