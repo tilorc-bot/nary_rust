@@ -23,6 +23,9 @@ def test_to_lean():
     assert to_lean(Derivative(nr.Lambda(x, nr.sin(x)))(f(y))) == (
         "Nary.apply (Nary.Derivative (fun x => Nary.sin (some x))) (Nary.apply f (some y))"
     )
+    assert to_lean(nr.floor(nr.arg(x)) + nr.Abs(nr.tanh(y))) == (
+        "Nary.Add [Nary.floor (Nary.arg (some x)), Nary.Abs (Nary.tanh (some y))]"
+    )
     assert to_lean(nr.NumberKind("I") + nr.NumberKind("fun")) == "Nary.Add [some I, some «fun»]"
     assert to_lean_example(f(x) * y + nr.sin(x)) == (
         "noncomputable example (x y : ℂ) (f : ℂ → Nary.Number) : Nary.Number := "

@@ -51,4 +51,30 @@ def log : Number → Number := withDomain logDomain Complex.log
 
 def re (a : Number) : Number := a.map fun z => (z.re : ℂ)
 
+def sinh (a : Number) : Number := a.map Complex.sinh
+
+def cosh (a : Number) : Number := a.map Complex.cosh
+
+def tanhDomain (z : ℂ) : Prop := Complex.cosh z ≠ 0
+
+def tanh : Number → Number := withDomain tanhDomain Complex.tanh
+
+def im (a : Number) : Number := a.map fun z => (z.im : ℂ)
+
+def Abs (a : Number) : Number := a.map fun z => (‖z‖ : ℂ)
+
+def argDomain (z : ℂ) : Prop := z ≠ 0
+
+def arg : Number → Number := withDomain argDomain fun z => (Complex.arg z : ℂ)
+
+def conjugate (a : Number) : Number := a.map (starRingEnd ℂ)
+
+def sign (a : Number) : Number := a.map fun z => z / (‖z‖ : ℂ)
+
+def realDomain (z : ℂ) : Prop := z.im = 0
+
+def floor : Number → Number := withDomain realDomain fun z => (⌊z.re⌋ : ℂ)
+
+def ceiling : Number → Number := withDomain realDomain fun z => (⌈z.re⌉ : ℂ)
+
 end Nary
