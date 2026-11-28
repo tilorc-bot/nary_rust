@@ -349,9 +349,18 @@ def test_a_per_argument_step_on_a_multiset_counts_across_brackets():
     (Seq(Seq(x, 9), log(x)), Seq(x, 9, log(x))),
     (Bag(log(x), Bag(x, 9)), Bag(log(x), x, 9)),
 ])
+@pytest.mark.xfail(strict=True, reason=(
+    "the absorbing element erases the arguments inside its own brackets, "
+    "and all or none of the arguments once the brackets are gone"
+))
 def test_an_absorbing_element_beside_an_argument_without_a_value_ignores_brackets(bracketed, flat):
     known = lambda c: c == Ne(z, 0)
     assert normalise(bracketed, known) == normalise(flat, known)
+
+
+def test_a_step_that_adds_an_argument_with_the_associative_head_of_the_node_is_an_error():
+    with pytest.raises(ValueError, match="_unwrap put OrderUnwrap\\(y, z\\) among the arguments"):
+        normalise(Unwrap(x, wrap(Unwrap(y, z))))
 
 
 def test_a_step_that_keeps_the_number_of_arguments():

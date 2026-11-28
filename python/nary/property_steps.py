@@ -93,7 +93,8 @@ def apply_property_steps(head: Expr, args: list[Expr], has_a_value: Callable) ->
 
     Args:
         head: A function.
-        args: Its arguments, each already normalised.
+        args: Its arguments, each already normalised. Where head.is_associative, none
+            of them has head as its own head.
         has_a_value: Called as has_a_value(arg). An argument is removed only where this
             returns True.
 
@@ -105,7 +106,7 @@ def apply_property_steps(head: Expr, args: list[Expr], has_a_value: Callable) ->
     >>> from nary.rewriting import _has_a_value
     >>> x, y = NumberKind("x"), NumberKind("y")
     >>> has_a_value = lambda e: _has_a_value(e, lambda condition: False)
-    >>> apply_property_steps(Mul, [y, Mul(x, 2), NumberKind(1)], has_a_value)
+    >>> apply_property_steps(Mul, [y, x, NumberKind(2), NumberKind(1)], has_a_value)
     Mul(2, x, y)
     >>> zero = NumberKind(0)
     >>> apply_property_steps(Mul, [sin(x), zero], has_a_value)
@@ -115,13 +116,8 @@ def apply_property_steps(head: Expr, args: list[Expr], has_a_value: Callable) ->
     >>> apply_property_steps(Add, [], has_a_value), apply_property_steps(sin, [x], has_a_value)
     (0, sin(x))
     """
-    associative, commutative = head.is_associative, head.is_commutative
-    if associative:
-        flattened = []
-        for arg in args:
-            flattened += arg.args if not arg.is_atom and arg.head == head else [arg]
-        args = flattened
-    if associative or len(args) == 2:
+    commutative = head.is_commutative
+    if head.is_associative or len(args) == 2:
         args = _apply_steps_until_unchanged(head, args, commutative, has_a_value)
         if len(args) == 1:
             return args[0]
@@ -164,6 +160,8 @@ def _apply_step_keeping_arguments_without_a_value(
 ) -> list[Expr]:
     if not registered.per_argument:
         new_args = registered.function(head, args, *declared_value)
+        if head.is_associative:
+            _raise_if_an_added_argument_has_the_head(head, args, new_args, registered)
         removed = set(args) - set(new_args)
         return new_args if all(map(has_a_value, removed)) else args
     new_args = []
@@ -174,6 +172,18 @@ def _apply_step_keeping_arguments_without_a_value(
             copies_to_keep = copies
         new_args += [arg] * copies_to_keep
     return new_args
+
+
+def _raise_if_an_added_argument_has_the_head(
+    head: Expr, args: list[Expr], new_args: list[Expr], registered: _Step,
+) -> None:
+    for added in set(new_args) - set(args):
+        if not added.is_atom and added.head == head:
+            raise ValueError(
+                f"the step {registered.function.__name__} put {added!r} among the arguments "
+                f"of {head!r}: {head!r} is associative, so the step has to put the arguments "
+                f"of {added!r} there instead"
+            )
 
 
 @step("identity_element", per_argument=True)
