@@ -8,6 +8,8 @@ from .properties import is_property
 
 __all__ = ["apply_property_steps", "step"]
 
+_sort_key = repr
+
 
 class _Step(NamedTuple):
     function: Callable
@@ -124,7 +126,9 @@ def apply_property_steps(head: Expr, args: list[Expr], has_a_value: Callable) ->
             return args[0]
         if not args and head.identity_element is not None:
             return head.identity_element
-    return head(*_sorted_if_commutative(args, commutative))
+    if commutative:
+        args = sorted(args, key=_sort_key)
+    return head(*args)
 
 
 def _apply_steps_until_unchanged(
@@ -132,7 +136,8 @@ def _apply_steps_until_unchanged(
 ) -> list[Expr]:
     properties = head.properties
     while True:
-        args = _sorted_if_commutative(args, commutative)
+        if commutative:
+            args = sorted(args, key=_sort_key)
         args_after_steps = args
         for name, value in properties.items():
             registered = _step_of_property.get(name)
@@ -162,10 +167,6 @@ def _apply_step_keeping_arguments_without_a_value(
             copies_to_keep = copies
         new_args += [arg] * copies_to_keep
     return new_args
-
-
-def _sorted_if_commutative(args: list[Expr], commutative: bool) -> list[Expr]:
-    return sorted(args, key=repr) if commutative else args
 
 
 @step("identity_element", per_argument=True)
