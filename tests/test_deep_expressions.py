@@ -101,24 +101,13 @@ OPERATIONS = {
     "Lambda": ("e = chain[shape](n)\nprint(Lambda(z, e).args[1] is e)", "True"),
 }
 
-HASH = "hash recurses in the core: SIGSEGV at depth 1e5"
-EQUAL = "== recurses in the core and through tuple ==: RecursionError"
-REPR = "repr recurses through repr of the args: RecursionError"
 REWRITE = "rewrite recurses in Python: RecursionError from depth ~1e3"
 TO_LEAN = "to_lean recurses in Python: RecursionError from depth ~1e3"
 FAILS_TODAY = {
-    "hash": HASH,
-    "dict key": "a dict hashes its key: " + HASH,
-    "set member": "a set hashes its members: " + HASH,
-    "equal chains": EQUAL,
-    "differ innermost": EQUAL,
-    ("differ outermost", "left"): EQUAL,
-    "repr": REPR,
-    "str": REPR,
     "rewrite": REWRITE,
     "to_lean": TO_LEAN,
 }
-CRASHES_TODAY = {"hash": HASH}
+CRASHES_TODAY = {}
 
 
 def depth_of(operation):
@@ -277,10 +266,6 @@ TallyKind = declare_kind("TallyKind", literals=Tally)
 grow = declare_function("grow", TallyKind, returns=TallyKind, domain=true)
 
 
-@pytest.mark.xfail(
-    sys.version_info < (3, 14), strict=True,
-    reason="the core does not cache the hash, and tuples cache theirs only from Python 3.14: quadratic",
-)
 def test_hashing_every_subterm_of_a_chain_is_linear():
     subterms = [TallyKind(Tally())]
     for _ in range(COST_DEPTH - 1):
