@@ -244,15 +244,20 @@ def _literals_evaluated(
     if not head.is_associative:
         if not all(arg.is_literal for arg in args):
             return args
-        value = evaluate_literals(*(arg.value for arg in args))
-        return args if value is None else value
+        literal = _evaluated(head, args, evaluate_literals)
+        return args if literal is None else literal
     ordered = sorted(args, key=lambda arg: not arg.is_literal) if head.is_commutative else args
     new_args = []
-    for literal, run in groupby(ordered, key=lambda arg: arg.is_literal):
+    for is_literal, run in groupby(ordered, key=lambda arg: arg.is_literal):
         run = list(run)
-        value = evaluate_literals(*(arg.value for arg in run)) if literal and len(run) > 1 else None
-        new_args += run if value is None else [value]
+        literal = _evaluated(head, run, evaluate_literals) if is_literal and len(run) > 1 else None
+        new_args += run if literal is None else [literal]
     return new_args if len(new_args) < len(args) else args
+
+
+def _evaluated(head: Expr, literals: list[Expr], evaluate_literals: Callable) -> Expr | None:
+    value = evaluate_literals(*(literal.value for literal in literals))
+    return None if value is None else head.kind.output(value)
 
 
 @step("distributes_over", merges=True, on_the_value=True)
