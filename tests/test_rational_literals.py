@@ -225,8 +225,8 @@ def test_normalise_lets_zero_absorb_a_rational_literal():
     assert normalise(Mul(0, Fraction(1, 2))) == NumberKind(0)
 
 
-def test_normalise_does_not_add_rational_literals():
-    assert repr(normalise(Add(Fraction(1, 2), Fraction(1, 2)))) == "Add(Rational(1, 2), Rational(1, 2))"
+def test_normalise_adds_rational_literals():
+    assert normalise(Add(Rational(1, 2), Rational(1, 2))) == NumberKind(1)
 
 
 def test_normalise_orders_rational_literals_by_repr():
