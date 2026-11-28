@@ -78,8 +78,25 @@ impl KindData {
     }
 }
 
+static FRACTION: PyOnceLock<Py<PyType>> = PyOnceLock::new();
+
+fn integer_if_denominator_is_one<'py>(
+    kind: KindRef,
+    value: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let fraction = FRACTION.import(value.py(), "fractions", "Fraction")?;
+    if value.get_type().is(fraction) && value.getattr("denominator")?.eq(1)? {
+        let numerator = value.getattr("numerator")?;
+        if kind.accepts(&numerator) {
+            return Ok(numerator);
+        }
+    }
+    Ok(value.clone())
+}
+
 fn literal<'py>(kind: KindRef, value: &Bound<'py, PyAny>) -> PyResult<Bound<'py, Expr>> {
-    new_expr(value.py(), kind, Form::Literal { value: value.clone().unbind() })
+    let value = integer_if_denominator_is_one(kind, value)?;
+    new_expr(value.py(), kind, Form::Literal { value: value.unbind() })
 }
 
 fn kind_object(py: Python<'_>, data: KindRef) -> PyResult<Py<Kind>> {

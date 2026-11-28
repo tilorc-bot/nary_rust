@@ -2,6 +2,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from fractions import Fraction
 from pathlib import Path
 
 import nary as nr
@@ -18,6 +19,7 @@ f = NumberFunction("f")
 EXAMPLES = [
     x - y,
     x / 2,
+    x * Fraction(-1, 2) + Fraction(3, 4),
     nr.Pow(nr.E, nr.I * nr.pi) + nr.log(nr.sin(x) + nr.cos(y) * nr.tan(x)),
     nr.exp(nr.re(x)) ** -3,
     nr.Add() * nr.Mul(),

@@ -10,6 +10,8 @@ abbrev Number := Option ℂ
 
 def lit (n : ℤ) : Number := some (n : ℂ)
 
+def rat (q : ℚ) : Number := some (q : ℂ)
+
 def pi : Number := some (Real.pi : ℂ)
 
 def E : Number := some (Complex.exp 1)
