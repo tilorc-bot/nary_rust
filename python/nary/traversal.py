@@ -19,9 +19,11 @@ def bottom_up(
     at_node: Callable[[Expr | Result, list[Expr | Result]], Result],
     flat: Callable[[Expr], bool] = _never,
 ) -> Callable[[Expr], Expr | Result]:
-    """Return walk, where walk(e) calls at_node(head, args) for e and for each expression
-    inside it that has a head, innermost first, and returns what at_node returned for e.
-    head and args are what walk returned for e.head and each of e.args.
+    """Return a function walk(e).
+
+    walk(e) calls at_node(head, args) for e and for everything inside it that has a head,
+    innermost first, and returns what at_node returned for e. head and args are what walk
+    returned for e.head and each of e.args.
 
     at_node must depend only on head and args: results are remembered, so a
     subexpression that occurs twice is passed to at_node once. Lambdas are returned as they are.
