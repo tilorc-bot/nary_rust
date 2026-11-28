@@ -1,4 +1,4 @@
-from . import arithmetic, constants, elementary, functions, kinds, relational
+from . import arithmetic, constants, elementary, functions, kinds, printing, relational
 from ._core import (
     Expr,
     FunctionKind,
