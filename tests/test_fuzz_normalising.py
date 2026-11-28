@@ -234,6 +234,8 @@ def number_value(e, at, pair=None):
         for arg in args:
             product_ *= arg
         return product_
+    if e.head == Pow and args[1].denominator == 1:
+        return args[0] ** int(args[1])
     if e.head == Max:
         return max(args, default=Fraction(0))
     if e.head == Pair:

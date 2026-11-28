@@ -81,7 +81,7 @@ def test_the_declared_laws(e, expected):
     Sym(0, x, y),
     Sym(x, x, x),
     Sym(Sym(x, y), y),
-    Pow(x, 1),
+    Pow(x, 2),
 ])
 def test_what_the_laws_leave_alone(e):
     assert (normalise(e).head, Counter(normalise(e).args)) == (e.head, Counter(e.args))
@@ -125,8 +125,8 @@ def test_known_conditions_allow_more():
 
 
 @pytest.mark.parametrize("e, expected", [
-    (Pow(x, 1), Pow(x, 1)),
-    (Pow(x * 1, 0 + nr.Mul(1)), Pow(x, 1)),
+    (Pow(x, 2), Pow(x, 2)),
+    (Pow(x * 1, 1 + nr.Mul(1)), Pow(x, 2)),
     (Pow(1, x + y), Pow(1, nr.Add(x, y))),
     (Not(Not(p)), Not(Not(p))),
     (Not(And(q, p, true)), Not(And(p, q))),

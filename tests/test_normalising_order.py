@@ -158,7 +158,7 @@ def test_bracketings_of_four_arguments():
 @pytest.mark.parametrize("f, args, expected", [
     (Add, [x, y, x, n(0)], Add(Mul(2, x), y)),
     (Mul, [sin(x), n(0), y, n(1)], n(0)),
-    (Mul, [Add(y, x), x, Add(x, y)], Mul(x, Add(x, y), Add(x, y))),
+    (Mul, [Add(y, x), x, Add(x, y)], Mul(Pow(Add(x, y), 2), x)),
     (And, [p, q, true, Or(q, p)], And(p, q, Or(p, q))),
     (And, [p, q, p, false], false),
     (Or, [p, And(q, r), And(r, q), false], Or(p, And(q, r))),
@@ -192,7 +192,7 @@ def test_arguments_equal_after_their_own_normalising_combine(e, expected):
 
 def test_arguments_equal_after_normalising_still_count_without_idempotence():
     assert normalise(Mul(Add(x, y), Add(y, x))) == normalise(Mul(Add(x, y), Add(x, y)))
-    assert normalises_to(Mul(Add(x, y), Add(y, x)), Mul(Add(x, y), Add(x, y)))
+    assert normalises_to(Mul(Add(x, y), Add(y, x)), Pow(Add(x, y), 2))
 
 
 @pytest.mark.parametrize("i", range(3))
