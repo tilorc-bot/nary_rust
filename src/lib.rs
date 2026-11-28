@@ -586,6 +586,24 @@ enum Piece<'py> {
     Expr(Bound<'py, Expr>),
 }
 
+static KIND_PRINTING_RATIONAL: AtomicUsize = AtomicUsize::new(usize::MAX);
+
+#[pyfunction(name = "_print_fractions_as_rational")]
+fn print_fractions_as_rational(kind: &Bound<'_, PyAny>) -> PyResult<()> {
+    KIND_PRINTING_RATIONAL.store(expect_kind(kind)?.id, Ordering::Relaxed);
+    Ok(())
+}
+
+fn literal_repr(kind: KindRef, value: &Bound<'_, PyAny>) -> PyResult<String> {
+    let fraction = FRACTION.import(value.py(), "fractions", "Fraction")?;
+    if kind.id == KIND_PRINTING_RATIONAL.load(Ordering::Relaxed) && value.get_type().is(fraction) {
+        let numerator = value.getattr("numerator")?.repr()?;
+        let denominator = value.getattr("denominator")?.repr()?;
+        return Ok(format!("Rational({numerator}, {denominator})"));
+    }
+    Ok(value.repr()?.to_cow()?.into_owned())
+}
+
 fn expr_repr(py: Python<'_>, root: &Expr) -> PyResult<String> {
     let mut text = String::new();
     let mut pending = Vec::new();
@@ -597,7 +615,7 @@ fn expr_repr(py: Python<'_>, root: &Expr) -> PyResult<String> {
                 Form::Symbol { name } | Form::Declared { name, .. } => {
                     text.push_str(&name.bind(py).to_cow()?)
                 }
-                Form::Literal { value } => text.push_str(&value.bind(py).repr()?.to_cow()?),
+                Form::Literal { value } => text.push_str(&literal_repr(e.kind, value.bind(py))?),
                 Form::Apply { head, args } => {
                     let args = args.bind(py);
                     if !(args.is_empty() && head.get().plain_name().is_some()) {
@@ -1161,6 +1179,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(declare_function, m)?)?;
     m.add_function(wrap_pyfunction!(declare_constant, m)?)?;
     m.add_function(wrap_pyfunction!(set_operator, m)?)?;
+    m.add_function(wrap_pyfunction!(print_fractions_as_rational, m)?)?;
     m.add_function(wrap_pyfunction!(set_properties, m)?)?;
     Ok(())
 }

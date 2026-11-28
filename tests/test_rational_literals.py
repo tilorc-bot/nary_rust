@@ -2,9 +2,10 @@ from fractions import Fraction
 
 import pytest
 
-from nary import Add, E, Mul, NumberKind, Pow, declare_kind, sin
+from nary import Add, E, Many, Mul, NumberKind, Pow, Rational, declare_function, declare_kind, sin
 from nary.arithmetic_rules import rules
 from nary.lean import to_lean
+from nary.logic import true
 from nary.normalising import normalise
 from nary.rewriting import _has_a_value, rewrite
 from nary.rules import rule
@@ -29,22 +30,63 @@ def test_numerator_and_denominator_of_an_integer_literal_are_read_the_same_way()
     assert (value.numerator, value.denominator) == (3, 1)
 
 
-def test_repr_is_the_repr_of_the_fraction():
-    assert repr(NumberKind(Fraction(1, 2))) == "Fraction(1, 2)"
+def test_rational_makes_a_literal_of_number_kind():
+    half = Rational(1, 2)
+    assert (half.is_literal, half.kind, half.value) == (True, NumberKind, Fraction(1, 2))
+
+
+def test_rational_is_equal_to_the_literal_made_from_the_fraction():
+    assert Rational(1, 2) == NumberKind(Fraction(1, 2))
+
+
+def test_rational_is_in_lowest_terms():
+    assert Rational(2, 4) == Rational(1, 2)
+
+
+def test_rational_with_denominator_one_is_the_integer_literal():
+    assert Rational(4, 2) == NumberKind(2)
+
+
+def test_rational_with_denominator_zero_raises():
+    with pytest.raises(ZeroDivisionError):
+        Rational(1, 0)
+
+
+def test_repr_of_a_rational_literal():
+    assert repr(NumberKind(Fraction(3, 4))) == "Rational(3, 4)"
+
+
+def test_repr_of_a_negative_rational_literal():
+    assert repr(NumberKind(Fraction(-3, 4))) == "Rational(-3, 4)"
+
+
+def test_repr_of_a_rational_literal_too_long_to_print_raises_as_it_does_for_an_integer():
+    with pytest.raises(ValueError, match="^Exceeds the limit"):
+        repr(NumberKind(Fraction(10**5000 + 1, 10**5000)))
+
+
+def test_repr_of_a_fraction_literal_of_another_kind_is_the_repr_of_the_fraction():
+    Real = declare_kind("Real", literals=(int, float, Fraction))
+    Plus = declare_function("Plus", Many(Real), returns=Real, domain=true)
+    r = Real("r")
+    e = Plus(r, Fraction(1, 2))
+    assert repr(e) == "Plus(r, Fraction(1, 2))" and eval(repr(e)) == e
 
 
 def test_repr_of_an_expression_evaluates_to_the_expression():
-    x = NumberKind("x")
-    e = Add(x, Mul(Fraction(-1, 2), x))
-    assert repr(e) == "Add(x, Mul(Fraction(-1, 2), x))" and eval(repr(e)) == e
+    names = {}
+    exec("from nary import *", names)
+    e = Add(sin(E), Mul(Fraction(-1, 2), Pow(E, Fraction(3, 4))))
+    assert repr(e) == "Add(sin(E), Mul(Rational(-1, 2), Pow(E, Rational(3, 4))))"
+    assert eval(repr(e), names) == e
 
 
 def test_lowest_terms():
-    assert repr(NumberKind(Fraction(2, 4))) == "Fraction(1, 2)"
+    assert repr(NumberKind(Fraction(2, 4))) == "Rational(1, 2)"
 
 
 def test_a_negative_denominator_moves_its_sign_to_the_numerator():
-    assert repr(NumberKind(Fraction(1, -2))) == "Fraction(-1, 2)"
+    assert repr(NumberKind(Fraction(1, -2))) == "Rational(-1, 2)"
 
 
 def test_denominator_one_is_the_integer_literal():
@@ -134,7 +176,7 @@ def test_rational_literals_work_as_set_members():
 
 
 def test_adding_two_rational_literals_is_not_simplified_at_construction():
-    assert repr(Add(Fraction(1, 2), Fraction(1, 2))) == "Add(Fraction(1, 2), Fraction(1, 2))"
+    assert repr(Add(Fraction(1, 2), Fraction(1, 2))) == "Add(Rational(1, 2), Rational(1, 2))"
 
 
 def test_the_division_tree_is_not_turned_into_a_rational_literal():
@@ -147,11 +189,11 @@ def test_dividing_integer_literals_still_builds_the_division_tree():
 
 def test_dividing_by_a_rational_literal_builds_a_tree():
     x = NumberKind("x")
-    assert repr(x / Fraction(1, 2)) == "Mul(x, Pow(Fraction(1, 2), -1))"
+    assert repr(x / Fraction(1, 2)) == "Mul(x, Pow(Rational(1, 2), -1))"
 
 
 def test_negating_a_rational_literal_builds_a_tree():
-    assert repr(-NumberKind(Fraction(1, 2))) == "Mul(-1, Fraction(1, 2))"
+    assert repr(-NumberKind(Fraction(1, 2))) == "Mul(-1, Rational(1, 2))"
 
 
 def test_to_lean():
@@ -184,13 +226,13 @@ def test_normalise_lets_zero_absorb_a_rational_literal():
 
 
 def test_normalise_does_not_add_rational_literals():
-    assert repr(normalise(Add(Fraction(1, 2), Fraction(1, 2)))) == "Add(Fraction(1, 2), Fraction(1, 2))"
+    assert repr(normalise(Add(Fraction(1, 2), Fraction(1, 2)))) == "Add(Rational(1, 2), Rational(1, 2))"
 
 
 def test_normalise_orders_rational_literals_by_repr():
     x = NumberKind("x")
     e = normalise(Add(x, Fraction(1, 3), 2, Fraction(1, 2)))
-    assert repr(e) == "Add(2, Fraction(1, 2), Fraction(1, 3), x)"
+    assert repr(e) == "Add(2, Rational(1, 2), Rational(1, 3), x)"
 
 
 def test_normalise_gives_the_same_result_for_any_order_of_arguments():
@@ -213,6 +255,6 @@ def test_rewrite_does_not_cancel_against_a_power_with_a_rational_exponent():
     assert rewrite(e, rules, known=lambda condition: True) == e
 
 
-@pytest.mark.xfail(strict=True, reason="arguments are sorted by repr, and 'E' comes before 'Fraction(1, 2)'")
+@pytest.mark.xfail(strict=True, reason="arguments are sorted by repr, and 'E' comes before 'Rational(1, 2)'")
 def test_normalise_puts_a_rational_literal_before_a_constant_as_it_does_an_integer():
     assert normalise(Mul(E, Fraction(1, 2))).args[0] == NumberKind(Fraction(1, 2))
