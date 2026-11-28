@@ -14,23 +14,23 @@
     Traceback (most recent call last):
         ...
     AttributeError: 'Expr' object has no attribute 'is_commutative'
+    >>> Mul.properties
+    mappingproxy({'is_associative': True, 'is_commutative': True, 'identity_element': 1, 'absorbing_element': 0})
+    >>> Pow.properties, f.properties
+    (mappingproxy({}), mappingproxy({}))
 """
 
+from types import MappingProxyType
+
 from . import _core
-from ._core import Expr
 from .rules import _check_declared_function, flat, rule, unordered
 
-__all__ = [
-    "declare_properties",
-    "declare_property",
-    "declared_properties",
-    "is_property",
-    "property_rules",
-]
+__all__ = ["declare_properties", "declare_property", "is_property", "property_rules"]
 
 _defaults = {}
 _elements = set()
 _declared = {}
+_undeclared = {"properties": MappingProxyType({})}
 
 
 def declare_property(name, element=False):
@@ -39,6 +39,10 @@ def declare_property(name, element=False):
     Traceback (most recent call last):
         ...
     ValueError: kind is already an attribute of Expr
+    >>> declare_property("properties")
+    Traceback (most recent call last):
+        ...
+    ValueError: properties is already an attribute of functions
     >>> declare_property("is_even", element=True)
     Traceback (most recent call last):
         ...
@@ -48,9 +52,13 @@ def declare_property(name, element=False):
         raise ValueError(f"{name} is already a property")
     if hasattr(_core.Expr, name):
         raise ValueError(f"{name} is already an attribute of Expr")
+    if name == "properties":
+        raise ValueError("properties is already an attribute of functions")
     if element and name.startswith("is_"):
         raise ValueError(f"{name} is True or False, so it cannot be an element")
     _defaults[name] = False if name.startswith("is_") else None
+    for properties in (_undeclared, *_declared.values()):
+        properties[name] = _defaults[name]
     if element:
         _elements.add(name)
 
@@ -112,29 +120,12 @@ def declare_properties(F, **given):
         flat(F)
     if bound.get("is_commutative"):
         unordered(F)
-    _declared[F] = bound
-
-
-def declared_properties(F):
-    """
-    >>> from nary import Add, NumberKind, Pow
-    >>> from nary.calculus import NumberFunction
-    >>> declared_properties(Add)
-    {'is_associative': True, 'is_commutative': True, 'identity_element': 0}
-    >>> declared_properties(Pow), declared_properties(NumberFunction("f"))
-    ({}, {})
-    >>> declared_properties(NumberKind("x"))
-    Traceback (most recent call last):
-        ...
-    TypeError: declared_properties expects a function, got x
-    """
-    if not (isinstance(F, Expr) and F.kind.inputs is not None):
-        raise TypeError(f"declared_properties expects a function, got {F!r}")
-    return dict(_declared.get(F, {}))
+    has = {name: v for name, v in bound.items() if v is not None and v is not False}
+    _declared[F] = {**_defaults, **bound, "properties": MappingProxyType(has)}
 
 
 def _properties_of(F):
-    return {**_defaults, **_declared.get(F, {})}
+    return _declared.get(F, _undeclared)
 
 
 _core._set_properties(_properties_of)

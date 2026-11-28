@@ -10,7 +10,6 @@ from nary.logic import true
 from nary.properties import (
     declare_properties,
     declare_property,
-    declared_properties,
     property_rules,
 )
 from nary.relational import Ne
@@ -89,23 +88,83 @@ def test_import_nary_alone_declares_add_and_mul():
         "assert zero == nary.NumberKind(0) and zero.kind is nary.NumberKind\n"
         "assert all(is_flat(F) and is_unordered(F) for F in (nary.Add, nary.Mul))\n"
         "assert not is_flat(nary.Pow) and not is_unordered(nary.Pow)\n"
+        "one, zero = nary.NumberKind(1), nary.NumberKind(0)\n"
+        "assert dict(nary.Mul.properties) == {'is_associative': True, 'is_commutative': True,"
+        " 'identity_element': one, 'absorbing_element': zero}\n"
+        "assert dict(nary.Pow.properties) == {}\n"
         "import nary.arithmetic_rules\n"
         "assert len(nary.arithmetic_rules.rules) == 9\n"
     )
     subprocess.run([sys.executable, "-c", code], check=True)
 
 
-def test_declared_properties():
-    assert declared_properties(Mul) == {
-        "is_associative": True, "is_commutative": True,
-        "identity_element": NumberKind(1), "absorbing_element": NumberKind(0),
-    }
-    assert declared_properties(Pow) == {} and declared_properties(NumberFunction("f")) == {}
-    declared_properties(Mul).clear()
-    assert len(declared_properties(Mul)) == 4 and Mul.identity_element == NumberKind(1)
-    for e in (NumberKind("x"), NumberKind(1), Add(NumberKind("x"), 1), 1):
-        with pytest.raises(TypeError, match="declared_properties expects a function"):
-            declared_properties(e)
+def test_properties_in_the_order_declared():
+    assert list(Add.properties.items()) == [
+        ("is_associative", True), ("is_commutative", True), ("identity_element", NumberKind(0)),
+    ]
+    assert list(Mul.properties.items()) == [
+        ("is_associative", True), ("is_commutative", True),
+        ("identity_element", NumberKind(1)), ("absorbing_element", NumberKind(0)),
+    ]
+    assert Mul.properties["identity_element"] is Mul.identity_element
+    assert Mul.properties["identity_element"].kind is NumberKind
+    declare_property("winding")
+    Q = declare_function("Q", Many(NumberKind), returns=NumberKind, domain=true)
+    declare_properties(
+        Q, absorbing_element=0, is_associative=False, winding=None, is_commutative=True
+    )
+    assert list(Q.properties.items()) == [
+        ("absorbing_element", NumberKind(0)), ("is_commutative", True),
+    ]
+    assert "is_associative" not in Q.properties and "winding" not in Q.properties
+    assert Q.is_associative is False and Q.winding is None
+
+
+def test_properties_of_functions_that_declared_nothing():
+    x = NumberKind("x")
+    f = NumberFunction("f")
+    for F in (Pow, f, Lambda(x, x * x), Derivative(f)):
+        assert dict(F.properties) == {}
+    for e in (x, NumberKind(1), pi, Add(x, 1), f(x)):
+        with pytest.raises(AttributeError, match="no attribute 'properties'"):
+            e.properties
+
+
+def test_properties_are_read_only():
+    for F in (Mul, Pow):
+        with pytest.raises(TypeError):
+            F.properties["is_idempotent"] = True
+        with pytest.raises(AttributeError):
+            F.properties.clear()
+    assert len(Mul.properties) == 4 and dict(Pow.properties) == {}
+    assert Mul.identity_element == NumberKind(1)
+
+
+def test_properties_is_reserved():
+    with pytest.raises(ValueError, match="properties is already an attribute of functions"):
+        declare_property("properties")
+    with pytest.raises(TypeError, match="properties is not a property"):
+        declare_properties(Pow, properties={})
+
+
+def test_a_property_declared_after_functions_were_read():
+    assert Mul.identity_element == NumberKind(1) and Pow.is_associative is False
+    declare_property("is_cancellative")
+    declare_property("unit_count")
+    for F in (Add, Mul, Pow, NumberFunction("f")):
+        assert F.is_cancellative is False and F.unit_count is None
+        assert "is_cancellative" not in F.properties
+    assert Mul.identity_element == NumberKind(1) and len(Mul.properties) == 4
+
+
+def test_a_function_that_declares_after_it_was_read():
+    R = declare_function("R", Many(NumberKind), returns=NumberKind, domain=true)
+    assert R.is_commutative is False and R.identity_element is None
+    assert dict(R.properties) == {}
+    declare_properties(R, is_commutative=True, identity_element=0)
+    assert R.is_commutative is True and R.identity_element == NumberKind(0)
+    assert R.is_associative is False
+    assert dict(R.properties) == {"is_commutative": True, "identity_element": NumberKind(0)}
 
 
 def test_refusals_record_nothing():
