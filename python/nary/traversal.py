@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
-from typing import TypeVar
 
 from ._core import Expr
 from .functions import is_lambda
 
 __all__ = ["bottom_up"]
-
-Result = TypeVar("Result")
 
 
 def _never(head: Expr) -> bool:
@@ -16,9 +13,9 @@ def _never(head: Expr) -> bool:
 
 
 def bottom_up(
-    at_node: Callable[[Expr | Result, list[Expr | Result]], Result],
+    at_node: Callable[[Expr, list[Expr]], Expr],
     flat: Callable[[Expr], bool] = _never,
-) -> Callable[[Expr], Expr | Result]:
+) -> Callable[[Expr], Expr]:
     """Return a function walk(e).
 
     Args:
@@ -57,11 +54,11 @@ def bottom_up(
     >>> bottom_up(unwrap, flat=lambda head: head == Add)(x + Mul(1, y + z))
     Add(x, Add(y, z))
     """
-    done: dict[Expr, Result] = {}
+    done: dict[Expr, Expr] = {}
 
-    def walk(root: Expr) -> Expr | Result:
-        results: list[Expr | Result] = []
-        stack: list[tuple[Expr | None, Iterator[Expr], list[Expr | Result], Expr | None]] = [
+    def walk(root: Expr) -> Expr:
+        results: list[Expr] = []
+        stack: list[tuple[Expr | None, Iterator[Expr], list[Expr], Expr | None]] = [
             (None, iter([root]), results, None)
         ]
         while stack:
