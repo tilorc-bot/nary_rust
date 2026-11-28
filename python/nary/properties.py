@@ -25,7 +25,7 @@ from types import MappingProxyType
 from . import _core
 from .rules import _check_declared_function, flat, rule, unordered
 
-__all__ = ["declare_properties", "declare_property", "property_rules"]
+__all__ = ["declare_properties", "declare_property", "is_property", "property_rules"]
 
 _defaults = {}
 _elements = set()
@@ -67,6 +67,22 @@ declare_property("is_associative")
 declare_property("is_commutative")
 declare_property("identity_element", element=True)
 declare_property("absorbing_element", element=True)
+declare_property("is_idempotent")
+
+
+def is_property(name):
+    """Whether declare_property has declared name.
+
+    Args:
+        name: Any string.
+
+    Returns:
+        True or False.
+
+    >>> is_property("identity_element"), is_property("kind")
+    (True, False)
+    """
+    return name in _defaults
 
 
 def _bind(F, name, value):
@@ -123,4 +139,6 @@ def property_rules(F):
         rules.append(rule(F(a, unit), a, name=f"{prefix}_identity"))
     if zero is not None:
         rules.append(rule(F(a, zero), zero, name=f"{prefix}_absorbing"))
+    if F.is_idempotent:
+        rules.append(rule(F(a, a), a, name=f"{prefix}_idempotent"))
     return rules
