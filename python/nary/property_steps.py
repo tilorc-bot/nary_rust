@@ -94,7 +94,8 @@ def step(
 
     def register(function: Callable) -> Callable:
         commutative = commutative_only or merges
-        _step_of_property[name, on_the_value] = _Step(function, commutative, per_argument, merges, on_the_value)
+        registered = _Step(function, commutative, per_argument, merges, on_the_value)
+        _step_of_property[name, on_the_value] = registered
         return function
 
     return register
