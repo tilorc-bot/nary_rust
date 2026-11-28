@@ -6,7 +6,7 @@ from nary import (
     BoolKind, Many, Ne, NumberKind, declare_constant, declare_function, declare_kind,
 )
 from nary.arithmetic import Add, Mul
-from nary.argument_collections import step
+from nary.property_steps import step
 from nary.logic import true
 from nary.normalising import normalise
 from nary.properties import declare_properties, declare_property
@@ -115,7 +115,7 @@ def test_a_step_that_merges_arguments_into_a_new_sum():
     Ex = declare_function("Ex", NumberKind, returns=NumberKind, domain=true)
     declare_property("merges_exponents")
 
-    @step("merges_exponents", multiset_only=True)
+    @step("merges_exponents", commutative_only=True)
     def merge(head, args, exp):
         powers = [e for e in args if not e.is_atom and e.head == exp]
         if len(powers) < 2:
@@ -135,7 +135,7 @@ def test_a_step_that_collects_repeats_into_a_product():
     declare_properties(Times, is_associative=True, is_commutative=True, identity_element=1)
     declare_property("collects_into")
 
-    @step("collects_into", multiset_only=True)
+    @step("collects_into", commutative_only=True)
     def collect(head, args, times):
         counts = Counter(args)
         return [arg if n == 1 else times(n, arg) for arg, n in counts.items()]
@@ -172,7 +172,7 @@ def test_pairs_with_values_cancel_beside_a_pair_that_may_have_none():
     Halve = declare_function("Halve", t, returns=Turn, domain=Halvable(t))
     declare_property("cancelled_by")
 
-    @step("cancelled_by", multiset_only=True)
+    @step("cancelled_by", commutative_only=True)
     def cancel_opposites(head, args, opposite):
         counts = Counter(args)
         for e in list(counts):
@@ -207,7 +207,7 @@ def test_the_package_adds_and_multiplies_literals():
 def test_a_maximum_drops_an_argument_another_one_dominates():
     declare_property("is_maximum")
 
-    @step("is_maximum", multiset_only=True)
+    @step("is_maximum", commutative_only=True)
     def drop_dominated(head, args):
         return [
             a for a in args if not any(normalise(a < b) == true for b in args if b is not a)

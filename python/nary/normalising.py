@@ -18,7 +18,7 @@ from typing import Callable
 
 from . import arithmetic_rules, logic_rules  # noqa: F401
 from ._core import Expr
-from .argument_collections import normalise_collection
+from .property_steps import apply_property_steps
 from .logic import true
 from .rewriting import _has_a_value
 from .traversal import bottom_up
@@ -48,16 +48,16 @@ def normalise(e: Expr, known: Callable[[Expr], object] | None = None) -> Expr:
         raise TypeError(f"normalise expects an expression, got {e!r}")
     known = known or (lambda condition: False)
 
-    normal = bottom_up(
-        lambda head, args: normalise_collection(head, args, has_a_value),
+    walk = bottom_up(
+        lambda head, args: apply_property_steps(head, args, has_a_value),
         flat=lambda head: head.is_associative,
     )
 
     def holds(condition: Expr) -> bool:
-        condition = normal(condition)
+        condition = walk(condition)
         return condition == true or known(condition) is True
 
     def has_a_value(e: Expr) -> bool:
         return _has_a_value(e, holds)
 
-    return normal(e)
+    return walk(e)

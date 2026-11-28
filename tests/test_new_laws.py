@@ -10,7 +10,7 @@ from nary import (
     BoolKind, Many, Ne, NumberKind, declare_constant, declare_function, declare_kind, log,
 )
 from nary.arithmetic import Add
-from nary.argument_collections import per_argument, step
+from nary.property_steps import step
 from nary.logic import false, true
 from nary.normalising import normalise
 from nary.properties import declare_properties, declare_property
@@ -23,8 +23,7 @@ zero = NumberKind(0)
 def test_arguments_repeated_n_times_cancel():
     declare_property("cancel_after")
 
-    @step("cancel_after")
-    @per_argument
+    @step("cancel_after", per_argument=True)
     def cancel(arg, copies, n):
         return copies % n
 
@@ -57,8 +56,7 @@ def test_arguments_repeated_n_times_cancel():
 def test_arguments_repeated_more_than_k_times_are_capped():
     declare_property("saturate_at")
 
-    @step("saturate_at")
-    @per_argument
+    @step("saturate_at", per_argument=True)
     def cap(arg, copies, k):
         return min(copies, k)
 
@@ -78,8 +76,7 @@ def test_arguments_in_pairs_cancel_in_a_symmetric_difference_of_regions():
     Interior = declare_function("Interior", r, returns=Region, domain=Bounded(r))
     declare_property("is_cancelled_in_pairs")
 
-    @step("is_cancelled_in_pairs")
-    @per_argument
+    @step("is_cancelled_in_pairs", per_argument=True)
     def cancel(arg, copies):
         return copies % 2
 
@@ -108,7 +105,7 @@ def test_a_turn_and_its_undoing_cancel():
     Halve = declare_function("Halve", t, returns=Turn, domain=Halvable(t))
     declare_property("opposite")
 
-    @step("opposite", multiset_only=True)
+    @step("opposite", commutative_only=True)
     def cancel_opposites(head, args, opposite):
         counts = Counter(args)
         for e in list(counts):
@@ -137,7 +134,7 @@ def test_literal_flag_sets_are_combined_by_union():
     FlagSet = declare_kind("FlagSet", literals=frozenset)
     declare_property("fold")
 
-    @step("fold", multiset_only=True)
+    @step("fold", commutative_only=True)
     def fold_literals(head, args, combine):
         literals = [e for e in args if e.is_literal]
         if len(literals) < 2:
@@ -160,7 +157,7 @@ def test_two_new_laws_on_one_head():
     declare_property("negated_by")
     declare_property("cycle_length")
 
-    @step("negated_by", multiset_only=True)
+    @step("negated_by", commutative_only=True)
     def cancel_opposites(head, args, minus):
         counts = Counter(args)
         for e in list(counts):
@@ -170,8 +167,7 @@ def test_two_new_laws_on_one_head():
                 counts[e.args[0]] -= pairs
         return list(counts.elements())
 
-    @step("cycle_length")
-    @per_argument
+    @step("cycle_length", per_argument=True)
     def cancel(arg, copies, n):
         return copies % n
 
@@ -191,7 +187,7 @@ def test_two_new_laws_on_one_head():
 def test_a_new_law_with_the_built_in_ones():
     declare_property("fold_with")
 
-    @step("fold_with", multiset_only=True)
+    @step("fold_with", commutative_only=True)
     def fold_literals(head, args, combine):
         literals = [e for e in args if e.is_literal]
         if len(literals) < 2:
@@ -218,8 +214,7 @@ def test_one_law_on_two_new_kinds_in_one_expression():
     wire = declare_function("wire", Switch, returns=Light, domain=true)
     declare_property("is_toggle")
 
-    @step("is_toggle")
-    @per_argument
+    @step("is_toggle", per_argument=True)
     def toggle(arg, copies):
         return copies % 2
 
@@ -274,8 +269,7 @@ def test_a_count_law_on_a_sequence_acts_on_adjacent_runs():
     Guess = declare_function("Guess", s, returns=Swap, domain=Known(s))
     declare_property("cancel_runs_of")
 
-    @step("cancel_runs_of")
-    @per_argument
+    @step("cancel_runs_of", per_argument=True)
     def cancel(arg, copies, n):
         return copies % n
 
@@ -291,11 +285,11 @@ def test_a_count_law_on_a_sequence_acts_on_adjacent_runs():
     assert normalise(Shuffle(Guess(a), Guess(a))) == Shuffle(Guess(a), Guess(a))
 
 
-def test_a_multiset_step_does_not_run_on_a_sequence():
+def test_a_commutative_only_step_does_not_run_where_order_matters():
     declare_property("undone_by")
     declare_property("plait_cancel_after")
 
-    @step("undone_by", multiset_only=True)
+    @step("undone_by", commutative_only=True)
     def cancel_opposites(head, args, inv):
         counts = Counter(args)
         for e in list(counts):
@@ -305,8 +299,7 @@ def test_a_multiset_step_does_not_run_on_a_sequence():
                 counts[e.args[0]] -= pairs
         return list(counts.elements())
 
-    @step("plait_cancel_after")
-    @per_argument
+    @step("plait_cancel_after", per_argument=True)
     def cancel(arg, copies, n):
         return copies % n
 
@@ -330,8 +323,7 @@ def test_a_count_law_on_a_two_argument_commutative_head():
     Derive = declare_function("Derive", k, returns=Key, domain=Seeded(k))
     declare_property("duo_cancel_after")
 
-    @step("duo_cancel_after")
-    @per_argument
+    @step("duo_cancel_after", per_argument=True)
     def cancel(arg, copies, n):
         return copies % n
 
@@ -381,8 +373,7 @@ def test_a_step_cannot_erase_an_argument_that_may_have_no_value():
 def test_a_per_argument_step_is_held_back_only_for_arguments_that_may_have_no_value():
     declare_property("is_thinned_in_pairs")
 
-    @step("is_thinned_in_pairs")
-    @per_argument
+    @step("is_thinned_in_pairs", per_argument=True)
     def thin(arg, copies):
         return copies % 2
 
@@ -422,8 +413,7 @@ def test_a_step_may_add_an_argument():
 def test_a_step_does_not_reach_heads_without_its_property():
     declare_property("add_cancel_after")
 
-    @step("add_cancel_after")
-    @per_argument
+    @step("add_cancel_after", per_argument=True)
     def cancel(arg, copies, n):
         return copies % n
 
@@ -433,8 +423,7 @@ def test_a_step_does_not_reach_heads_without_its_property():
 def test_a_property_takes_one_step():
     declare_property("one_step_only")
 
-    @step("one_step_only")
-    @per_argument
+    @step("one_step_only", per_argument=True)
     def cancel(arg, copies, n):
         return copies % n
 
@@ -454,8 +443,7 @@ def test_a_step_needs_a_declared_property():
 def test_a_head_declared_after_it_was_normalised():
     declare_property("late_cancel_after")
 
-    @step("late_cancel_after")
-    @per_argument
+    @step("late_cancel_after", per_argument=True)
     def cancel(arg, copies, n):
         return copies % n
 
@@ -476,14 +464,14 @@ def test_a_step_registered_after_a_head_was_normalised():
     )
     assert normalise(Early(x, x, 0)) == normalise(Early(x, x))
 
-    step("is_late_step")(per_argument(lambda arg, copies: min(copies, 1)))
+    step("is_late_step", per_argument=True)(lambda arg, copies: min(copies, 1))
     assert normalise(Early(x, x, 0)) == x
 
 
 def test_the_order_of_the_keywords_does_not_change_the_result():
     declare_property("fold_in_any_order")
 
-    @step("fold_in_any_order", multiset_only=True)
+    @step("fold_in_any_order", commutative_only=True)
     def fold_literals(head, args, combine):
         literals = [e for e in args if e.is_literal]
         if len(literals) < 2:

@@ -193,7 +193,7 @@ def test_only_expressions_are_normalised():
         normalise(3)
 
 
-def test_a_kind_declared_here_with_a_plain_head_and_a_multiset_head():
+def test_a_kind_declared_here_with_a_plain_head_and_a_commutative_associative_head():
     Shape = nr.declare_kind("Shape")
     Rotate = declare_function("Rotate", Shape, returns=Shape, domain=true)
     Overlay = declare_function("Overlay", Many(Shape), returns=Shape, domain=true)
