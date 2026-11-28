@@ -54,6 +54,7 @@ to_lean_facts writes the facts recorded for a function.
 """
 
 import re as _re
+from fractions import Fraction
 
 from . import arithmetic, calculus, constants, elementary, logic, relational
 from ._core import Expr
@@ -236,9 +237,11 @@ class _Printer:
             return f"some {name}", False
 
         if e.is_literal:
-            if e.kind is not NumberKind or type(e.value) is not int:
-                raise _no_definition(e, ": only integer literals are printed")
+            if e.kind is not NumberKind:
+                raise _no_definition(e, ": only NumberKind literals are printed")
             value = e.value
+            if type(value) is Fraction:
+                return f"Nary.rat ({value})", False
             return (f"Nary.lit {value}" if value >= 0 else f"Nary.lit ({value})"), False
 
         if e.is_constant:

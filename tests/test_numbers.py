@@ -1,3 +1,5 @@
+from fractions import Fraction
+
 import nary as nr
 import pytest
 from nary import BoolKind, NumberKind, Symbol, declare_function, declare_kind
@@ -8,7 +10,7 @@ p = BoolKind("p")
 
 
 def test_a_kind_declares_its_literal_types():
-    assert NumberKind.literals == (int,) and BoolKind.literals == ()
+    assert NumberKind.literals == (int, Fraction) and BoolKind.literals == ()
     assert declare_kind("K", literals=(int, float)).literals == (int, float)
     assert nr.FunctionKind((NumberKind,), NumberKind).literals == ()
     assert nr.declare_kind_family("Box")(NumberKind).literals == ()
@@ -23,7 +25,7 @@ def test_calling_a_kind_with_a_value_makes_a_literal():
     assert three.is_literal and not three.is_symbol and not x.is_literal
     assert (three.value, three.kind, three.name, three.head, three.args) == (3, NumberKind, None, None, ())
     assert repr(three) == "3" and x.value is None and nr.sin(x).value is None
-    with pytest.raises(TypeError, match=r"^NumberKind takes a name \(a str\) or a literal of type int, got bool: True$"):
+    with pytest.raises(TypeError, match=r"^NumberKind takes a name \(a str\) or a literal of type int or Fraction, got bool: True$"):
         NumberKind(True)
     with pytest.raises(TypeError, match="^NumberKind takes .*, got float: 1.5$"):
         NumberKind(1.5)
