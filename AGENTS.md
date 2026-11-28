@@ -36,6 +36,53 @@ def domain_of(e):
     """
 ```
 
+## Parameters and result
+
+A public function may also say what each parameter is and what the function
+returns, in Google style, between the first line and the examples.
+
+- `Args:` has one entry for each parameter, in the order of the signature.
+- `Returns:` has one entry.
+- No types: the signature has them.
+- No other section and no other paragraph.
+- Use what a reader can type and check, such as `e.head` or `known(condition)`,
+  not a term that needs a definition.
+- Leave out what an example shows and what reading the code answers.
+
+Good:
+
+```python
+def rewrite(e, rules, known=None):
+    """Apply the rules to e until none applies.
+
+    Args:
+        e: The expression to rewrite.
+        rules: The rules to try, in order.
+        known: Called as known(condition). A rule with a condition applies
+            only where this returns True.
+
+    Returns:
+        The rewritten expression.
+
+    >>> rewrite(x / x, rules, known=lambda condition: True)
+    1
+    """
+```
+
+Bad:
+
+```python
+def rewrite(e, rules, known=None):
+    """Apply the rules to e until none applies.
+
+    The engine walks the expression bottom-up and restarts after each
+    rule that applies.
+
+    Args:
+        e (Expr): The expression to rewrite.
+    """
+```
+
 ## Comments
 
 None, in Python, Rust, Lean, TOML and YAML.
@@ -56,6 +103,8 @@ No README and no other Markdown file.
 them with `tests/prose_budget.txt`. A file that is not listed has a budget
 of 0.
 
+- The first line of a docstring is not counted, and neither are `Args:` and
+  `Returns:` on a public function when `Args:` has the parameters in order.
 - After removing prose, run `python tests/test_prose.py` and commit the
   lower budget.
 - Do not raise a number or add a file to the budget unless the owner asks.

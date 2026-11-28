@@ -1,6 +1,7 @@
 import ast
 import doctest
 import io
+import re
 import subprocess
 import sys
 import tokenize
@@ -11,7 +12,44 @@ BUDGET = ROOT / "tests" / "prose_budget.txt"
 EXEMPT = {"AGENTS.md"}
 
 
-def docstring_prose(doc):
+def entry_names(body):
+    """
+    >>> entry_names(["    a: One.", "    *rest: Others,", "        at length."])
+    ['a', 'rest']
+    >>> entry_names(["    Not an entry."]) is None
+    True
+    """
+    indent = len(body[0]) - len(body[0].lstrip())
+    names = []
+    for line in body:
+        if len(line) - len(line.lstrip()) == indent:
+            entry = re.match(r"\*{0,2}(\w+): \S", line.strip())
+            if entry is None:
+                return None
+            names.append(entry.group(1))
+    return names
+
+
+def without_sections(doc, parameters):
+    lines = doc.splitlines()
+    kept = []
+    i = 0
+    while i < len(lines):
+        end = i + 1
+        while end < len(lines) and lines[end].startswith(" "):
+            end += 1
+        body = lines[i + 1:end]
+        returns = lines[i] == "Returns:" and body
+        args = lines[i] == "Args:" and body and entry_names(body) == parameters
+        if returns or args:
+            i = end
+        else:
+            kept.append(lines[i])
+            i += 1
+    return "\n".join(kept)
+
+
+def docstring_prose(doc, parameters=None):
     """
     >>> docstring_prose("One caption.\\n\\n    >>> 1 + 1\\n    2\\n")
     0
@@ -23,7 +61,26 @@ def docstring_prose(doc):
     2
     >>> docstring_prose("    >>> 1 + 1\\n    2\\n\\nAfter the last example.")
     1
+
+    Args and Returns are free where parameters lists the names that Args has to explain.
+
+    >>> sections = "Args:\\n    a: One.\\n    b: Other,\\n        at length.\\n\\nReturns:\\n    Both.\\n"
+    >>> example = "\\n>>> 1 + 1\\n2\\n"
+    >>> docstring_prose("Add." + "\\n\\n" + sections + example, ["a", "b"])
+    0
+    >>> docstring_prose("Add." + "\\n\\n" + sections + example)
+    7
+    >>> docstring_prose("Add." + "\\n\\n" + sections + example, ["b", "a"])
+    5
+    >>> docstring_prose("Add." + "\\n\\n" + sections + example, ["a", "b", "c"])
+    5
+    >>> docstring_prose("Add." + "\\n\\n" + sections + "\\nMore to say." + example, ["a", "b"])
+    2
+    >>> docstring_prose("Add.\\n\\nRaises:\\n    Error: Sometimes.\\n" + example, [])
+    3
     """
+    if parameters is not None:
+        doc = without_sections(doc, parameters)
     pieces = doctest.DocTestParser().parse(doc)
     count = 0
     for i, piece in enumerate(pieces):
@@ -36,12 +93,33 @@ def docstring_prose(doc):
     return count
 
 
+def parameters_to_explain(node):
+    """
+    >>> parameters_to_explain(ast.parse("def f(self, a, /, b, *rest, c=1, **more): pass").body[0])
+    ['a', 'b', 'rest', 'c', 'more']
+    >>> parameters_to_explain(ast.parse("def _f(a): pass").body[0]) is None
+    True
+    >>> parameters_to_explain(ast.parse("class C: pass").body[0]) is None
+    True
+    """
+    if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) or node.name.startswith("_"):
+        return None
+    spec = node.args
+    found = [*spec.posonlyargs, *spec.args, spec.vararg, *spec.kwonlyargs, spec.kwarg]
+    names = [arg.arg for arg in found if arg is not None]
+    return names[1:] if names[:1] in (["self"], ["cls"]) else names
+
+
 def python_prose(source):
     """
     >>> python_prose("x = 1  # why\\n# why\\nfrom m import *  # noqa: F403\\n")
     2
     >>> python_prose('def f():\\n    "What f does,\\\\nat length."\\n')
     2
+    >>> python_prose('def f(a):\\n    "Add.\\\\n\\\\nArgs:\\\\n    a: One.\\\\n\\\\nReturns:\\\\n    Two."\\n')
+    0
+    >>> python_prose('def _f(a):\\n    "Add.\\\\n\\\\nArgs:\\\\n    a: One.\\\\n\\\\nReturns:\\\\n    Two."\\n')
+    5
     """
     count = 0
     for token in tokenize.generate_tokens(io.StringIO(source).readline):
@@ -51,7 +129,7 @@ def python_prose(source):
         if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
             doc = ast.get_docstring(node)
             if doc:
-                count += docstring_prose(doc)
+                count += docstring_prose(doc, parameters_to_explain(node))
     return count
 
 
