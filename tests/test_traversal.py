@@ -8,7 +8,7 @@ import pytest
 from nary import Add, FunctionKind, Lambda, Mul, NumberKind, sin, traversal
 from nary._core import Many
 from nary.functions import is_lambda
-from nary.traversal import bottom_up
+from nary.traversal import bottom_up, bottom_up_every_node
 
 x, y, z, u, v = (NumberKind(name) for name in "xyzuv")
 a = NumberKind("a")
@@ -284,6 +284,76 @@ def test_deeper_than_the_recursion_limit():
     assert len(calls) == 1 and len(calls[0][1]) == depth + 1
 
 
+def test_every_node_is_handled_including_one_with_the_head_of_the_node_around_it():
+    assert calls_of(bottom_up_every_node, Mul(Mul(x, y), z)) == [
+        (Mul, [x, y]),
+        (Mul, [x, y, z]),
+    ]
+
+
+def test_an_argument_with_the_associative_head_of_its_node_is_replaced_by_its_arguments():
+    assert calls_of(bottom_up_every_node, Add(Add(x, y), Add(z, Add(u, v)))) == [
+        (Add, [x, y]),
+        (Add, [u, v]),
+        (Add, [z, u, v]),
+        (Add, [x, y, z, u, v]),
+    ]
+
+
+def test_every_node_is_handled_head_first_then_arguments_in_written_order():
+    assert calls_of(bottom_up_every_node, h(f)(sin(x), Add(y, z))) == [
+        (h, [f]),
+        (sin, [x]),
+        (Add, [y, z]),
+        (h(f), [sin(x), Add(y, z)]),
+    ]
+
+
+def test_every_node_is_handled_again_each_time_it_is_repeated():
+    assert calls_of(bottom_up_every_node, sin(x) * sin(x)) == [
+        (sin, [x]),
+        (sin, [x]),
+        (Mul, [sin(x), sin(x)]),
+    ]
+
+
+def test_every_node_gets_what_the_handler_returned_for_its_head_and_arguments():
+    swap = bottom_up_every_node(lambda head, args: head(*reversed(args)))
+    assert swap(Add(Mul(x, y), sin(Add(z, u)))) == Add(sin(Add(u, z)), Mul(y, x))
+
+
+def test_every_node_walk_skips_a_lambda_whole():
+    assert calls_of(bottom_up_every_node, plus_one(x) + x) == [
+        (plus_one, [x]),
+        (Add, [plus_one(x), x]),
+    ]
+
+
+def test_every_node_walk_of_an_atom_returns_it_without_calling_the_handler():
+    assert calls_of(bottom_up_every_node, x) == []
+
+
+def test_every_node_walk_called_from_inside_the_handler():
+    def at_node(head, args):
+        calls.append((head, args))
+        if head == Mul:
+            assert walk(sin(z)) == sin(z)
+        return head(*args)
+
+    calls = []
+    walk = bottom_up_every_node(at_node)
+    assert walk(Add(Mul(x, y), u)) == Add(Mul(x, y), u)
+    assert calls == [(Mul, [x, y]), (sin, [z]), (Add, [Mul(x, y), u])]
+
+
+@pytest.mark.xfail(
+    strict=True, raises=RecursionError, reason="bottom_up_every_node calls itself once per level",
+)
+def test_every_node_walk_deeper_than_the_recursion_limit():
+    depth = 3 * sys.getrecursionlimit()
+    assert len(calls_of(bottom_up_every_node, chain(depth))) == depth
+
+
 DEEP = (
     "from nary import Add, NumberKind\n"
     "from nary.traversal import bottom_up\n"
@@ -319,7 +389,7 @@ def test_the_walker_imports_only_is_lambda():
     ]
     names = {name for name in vars(traversal) if not name.startswith("__")}
     assert names == {
-        "bottom_up", "is_lambda", "_never", "annotations", "Callable", "Iterator", "Expr"
+        "bottom_up", "bottom_up_every_node", "_args_if_headed_by", "is_lambda", "_never", "annotations", "Callable", "Iterator", "Expr"
     }
     assert traversal.is_lambda is is_lambda
 
