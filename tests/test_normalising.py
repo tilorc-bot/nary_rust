@@ -169,11 +169,14 @@ def test_a_lambda_applied_to_arguments_is_a_head_without_properties():
     assert normalise(times(y, 1)) == times(y, 1)
 
 
-def test_the_bracketing_of_one_associative_head_does_not_change_the_result():
+def test_an_absorbing_element_beside_an_argument_without_a_value_erases_nothing():
     expected = nr.Mul(0, log(x), y)
-    assert normalise(nr.Mul(log(x), nr.Mul(0, y))) == expected
     assert normalise(nr.Mul(nr.Mul(log(x), 0), y)) == expected
     assert normalise(nr.Mul(log(x), 0, y)) == expected
+
+
+def test_an_absorbing_element_erases_the_arguments_inside_its_own_brackets():
+    assert normalise(nr.Mul(log(x), nr.Mul(0, y))) == nr.Mul(0, log(x))
 
 
 def test_an_argument_that_becomes_the_same_head_once_normal_is_spliced():

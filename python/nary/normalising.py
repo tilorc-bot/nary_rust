@@ -24,7 +24,7 @@ from ._numbers import evaluate
 from .property_steps import apply_property_steps
 from .logic import true
 from .rewriting import _has_a_value
-from .traversal import bottom_up
+from .traversal import bottom_up_every_node
 
 __all__ = ["normalise"]
 
@@ -47,6 +47,20 @@ def normalise(e: Expr, known: Callable[[Expr], object] | None = None) -> Expr:
     >>> normalise(log(x) * 0), normalise(log(x) * 0, lambda condition: condition == Ne(x, 0))
     (Mul(0, log(x)), 0)
     """
+    return _normalise_with(bottom_up_every_node, e, known)
+
+
+def _normalise_with(
+    traversal: Callable, e: Expr, known: Callable[[Expr], object] | None = None,
+) -> Expr:
+    """
+    >>> from nary import NumberKind
+    >>> from nary.traversal import bottom_up
+    >>> x, y = NumberKind("x"), NumberKind("y")
+    >>> flattening_first = lambda at_node: bottom_up(at_node, flat=lambda head: head.is_associative)
+    >>> _normalise_with(flattening_first, (y + 0) + x)
+    Add(x, y)
+    """
     if not isinstance(e, Expr):
         raise TypeError(f"normalise expects an expression, got {e!r}")
     known = known or (lambda condition: False)
@@ -55,7 +69,7 @@ def normalise(e: Expr, known: Callable[[Expr], object] | None = None) -> Expr:
         literal = evaluate(head, args)
         return apply_property_steps(head, args, has_a_value) if literal is None else literal
 
-    walk = bottom_up(literal_or_property_steps, flat=lambda head: head.is_associative)
+    walk = traversal(literal_or_property_steps)
 
     def holds(condition: Expr) -> bool:
         condition = walk(condition)

@@ -5,7 +5,7 @@ from collections.abc import Callable, Iterator
 from ._core import Expr
 from .functions import is_lambda
 
-__all__ = ["bottom_up"]
+__all__ = ["bottom_up", "bottom_up_every_node"]
 
 
 def _never(head: Expr) -> bool:
@@ -81,6 +81,55 @@ def bottom_up(
                     head, *args = done_args
                     value = done[node] = at_node(head, args)
                     stack[-1][2].append(value)
+        return results[0]
+
+    return walk
+
+
+def bottom_up_every_node(at_node: Callable[[Expr, list[Expr]], Expr]) -> Callable[[Expr], Expr]:
+    """Return a function walk(e) that calls at_node wherever a constructor would run.
+
+    Args:
+        at_node: Called as at_node(head, args) for e and for everything inside it that
+            has a head, innermost first, skipping lambdas whole. head and args are what
+            walk returned for e.head and each of e.args.
+
+    Returns:
+        walk, where walk(e) is what at_node returned for e, or e itself if at_node
+        was not called for e.
+
+    >>> from nary import Add, NumberKind, sin
+    >>> x, y, z = NumberKind("x"), NumberKind("y"), NumberKind("z")
+    >>> def show(head, args):
+    ...     print(head, args)
+    ...     return head(*args)
+    >>> bottom_up_every_node(show)((x + y) + z)
+    Add [x, y]
+    Add [Add(x, y), z]
+    Add(Add(x, y), z)
+    >>> bottom_up(show, flat=lambda head: head == Add)((x + y) + z)
+    Add [x, y, z]
+    Add(x, y, z)
+    >>> bottom_up_every_node(show)(sin(x) * sin(x))
+    sin [x]
+    sin [x]
+    Mul [sin(x), sin(x)]
+    Mul(sin(x), sin(x))
+    """
+    def walk(root: Expr) -> Expr:
+        to_visit, results = [(root, False)], []
+        while to_visit:
+            e, head_and_args_are_done = to_visit.pop()
+            if e.is_atom or is_lambda(e):
+                results.append(e)
+            elif head_and_args_are_done:
+                first_arg = len(results) - len(e.args)
+                head, args = results[first_arg - 1], results[first_arg:]
+                del results[first_arg - 1:]
+                results.append(at_node(head, args))
+            else:
+                to_visit.append((e, True))
+                to_visit.extend((part, False) for part in reversed((e.head, *e.args)))
         return results[0]
 
     return walk
