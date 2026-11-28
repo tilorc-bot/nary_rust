@@ -4,7 +4,7 @@ from itertools import groupby, product
 import pytest
 
 from nary import Add, BoolKind, Lt, Many, Mul, NumberKind, Pow, declare_function, log, sin
-from nary.argument_collections import count_step
+from nary.property_steps import step
 from nary.logic import And, Not, Or, false, true
 from nary.normalising import normalise
 from nary.properties import declare_properties, declare_property
@@ -23,9 +23,9 @@ def head(name, kind=NumberKind):
 declare_property("fuzz_period")
 
 
-@count_step("fuzz_period")
-def _period(arg, count, k):
-    return count % k
+@step("fuzz_period", per_argument=True)
+def _period(arg, copies, k):
+    return copies % k
 
 
 Bag = head("FuzzBag")
@@ -137,9 +137,6 @@ def test_rebracketing_associative_arguments_keeps_the_normal_form(fuzz):
     fuzz.check(total, lambda e, rng: same_normal_form(e, rebracketed(shuffled(e, rng), rng)))
 
 
-@pytest.mark.xfail(
-    reason="test_an_absorbing_element_beside_an_argument_without_a_value_ignores_brackets fails",
-)
 def test_rebracketing_keeps_the_normal_form_with_arguments_without_a_value(fuzz):
     fuzz.check(anything, lambda e, rng: same_normal_form(e, rebracketed(e, rng)))
 

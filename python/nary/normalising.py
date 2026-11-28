@@ -18,7 +18,7 @@ from typing import Callable
 
 from . import arithmetic_rules, logic_rules  # noqa: F401
 from ._core import Expr
-from .argument_collections import normalise_collection
+from .property_steps import apply_property_steps
 from .logic import true
 from .rewriting import _has_a_value
 from .traversal import bottom_up
@@ -27,17 +27,37 @@ __all__ = ["normalise"]
 
 
 def normalise(e: Expr, known: Callable[[Expr], object] | None = None) -> Expr:
+    """Rewrite e using the properties of the functions in it, such as Add.identity_element.
+
+    Args:
+        e: The expression to rewrite.
+        known: Called as known(condition). Where it returns True, an argument that has a
+            value only if condition holds may be removed.
+
+    Returns:
+        The rewritten expression.
+
+    >>> from nary import Ne, NumberKind, log
+    >>> x, y = NumberKind("x"), NumberKind("y")
+    >>> normalise((y + 0) + (x + y) * 1)
+    Add(x, y, y)
+    >>> normalise(log(x) * 0), normalise(log(x) * 0, lambda condition: condition == Ne(x, 0))
+    (Mul(0, log(x)), 0)
+    """
     if not isinstance(e, Expr):
         raise TypeError(f"normalise expects an expression, got {e!r}")
     known = known or (lambda condition: False)
 
-    normal = bottom_up(lambda head, args: normalise_collection(head, args, has_a_value))
+    walk = bottom_up(
+        lambda head, args: apply_property_steps(head, args, has_a_value),
+        flat=lambda head: head.is_associative,
+    )
 
     def holds(condition: Expr) -> bool:
-        condition = normal(condition)
+        condition = walk(condition)
         return condition == true or known(condition) is True
 
     def has_a_value(e: Expr) -> bool:
         return _has_a_value(e, holds)
 
-    return normal(e)
+    return walk(e)

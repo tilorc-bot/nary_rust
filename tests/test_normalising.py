@@ -163,6 +163,55 @@ def test_lambdas_are_left_alone():
     assert normalise(f) == f
 
 
+def test_a_lambda_applied_to_arguments_is_a_head_without_properties():
+    square, times = nr.Lambda(x, x * x), nr.Lambda((x, y), x * y)
+    assert normalise(square(x + 0) + 0) == square(x)
+    assert normalise(times(y, 1)) == times(y, 1)
+
+
+def test_the_bracketing_of_one_associative_head_does_not_change_the_result():
+    expected = nr.Mul(0, log(x), y)
+    assert normalise(nr.Mul(log(x), nr.Mul(0, y))) == expected
+    assert normalise(nr.Mul(nr.Mul(log(x), 0), y)) == expected
+    assert normalise(nr.Mul(log(x), 0, y)) == expected
+
+
+def test_an_argument_that_becomes_the_same_head_once_normal_is_spliced():
+    assert normalise(nr.Add(x, nr.Mul(1, nr.Add(y, z)))) == nr.Add(x, y, z)
+
+
+def test_a_sum_built_term_by_term_in_a_loop():
+    terms = [NumberKind(f"t{i}") for i in range(3000)]
+    total = terms[0]
+    for term in terms[1:]:
+        total = total + term
+    assert normalise(total) == normalise(nr.Add(*terms))
+
+
 def test_only_expressions_are_normalised():
     with pytest.raises(TypeError):
         normalise(3)
+
+
+def test_a_kind_declared_here_with_a_plain_head_and_a_commutative_associative_head():
+    Shape = nr.declare_kind("Shape")
+    Rotate = declare_function("Rotate", Shape, returns=Shape, domain=true)
+    Overlay = declare_function("Overlay", Many(Shape), returns=Shape, domain=true)
+    declare_properties(Overlay, is_associative=True, is_commutative=True)
+    a, b, c = Shape("a"), Shape("b"), Shape("c")
+
+    assert normalise(Rotate(Rotate(a))) == Rotate(Rotate(a))
+    assert Counter(normalise(Overlay(b, Overlay(c, a))).args) == Counter([a, b, c])
+    assert normalise(Rotate(Overlay(c, Overlay(b, a)))) == Rotate(normalise(Overlay(a, b, c)))
+    assert normalise(Overlay(Overlay(a))) == a and normalise(Overlay(a)).kind is Shape
+
+
+def test_an_identity_element_is_dropped_from_either_side_of_a_two_argument_head():
+    After = declare_function("After", NumberKind, NumberKind, returns=NumberKind, domain=true)
+    declare_properties(After, identity_element=0)
+
+    assert normalise(After(x, 0)) == x
+    assert normalise(After(0, x)) == x
+    assert normalise(After(y, x)) == After(y, x)
+    assert normalise(After(log(x), 0)) == log(x)
+

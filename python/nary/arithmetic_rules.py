@@ -17,16 +17,11 @@ The rule a * 0 -> 0 erases a.
 from .arithmetic import Add, Mul, Pow
 from .elementary import exp, log
 from .kinds import NumberKind
-from .properties import declare_properties, property_rules
+from .properties import property_rules
 from .relational import Ne
 from .rules import rule
 
 a = NumberKind("a")
-
-declare_properties(Add, is_associative=True, is_commutative=True, identity_element=0)
-declare_properties(
-    Mul, is_associative=True, is_commutative=True, identity_element=1, absorbing_element=0
-)
 
 add = property_rules(Add) + [
     rule(a + a, 2 * a, name="add_self"),

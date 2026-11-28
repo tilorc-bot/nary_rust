@@ -6,7 +6,7 @@ from nary import (
     Add, BoolKind, Lambda, Many, Mul, Ne, NumberKind, Pow, declare_constant, declare_function,
     log, sin,
 )
-from nary.argument_collections import acting_properties, collection_step, count_step
+from nary.property_steps import step
 from nary.calculus import NumberFunction
 from nary.logic import And, Or, false, true
 from nary.normalising import normalise
@@ -45,33 +45,33 @@ declare_property("order_cancel_anywhere")
 declare_property("order_unwrap")
 
 
-@count_step("order_period")
-def _period(arg, count, k):
-    return count % k
+@step("order_period", per_argument=True)
+def _period(arg, copies, k):
+    return copies % k
 
 
 def _cancels(a, b, neg):
     return b == neg(a) or a == neg(b)
 
 
-@collection_step("order_cancel_neighbours")
-def _cancel_one_neighbouring_pair(head, args, has_a_value, neg):
+@step("order_cancel_neighbours")
+def _cancel_one_neighbouring_pair(head, args, neg):
     for i in range(len(args) - 1):
         if _cancels(args[i], args[i + 1], neg):
             return args[:i] + args[i + 2:]
     return args
 
 
-@collection_step("order_cancel_anywhere", multiset_only=True)
-def _cancel_one_pair_anywhere(head, args, has_a_value, neg):
+@step("order_cancel_anywhere", commutative_only=True)
+def _cancel_one_pair_anywhere(head, args, neg):
     for i, j in combinations(range(len(args)), 2):
         if _cancels(args[i], args[j], neg):
             return [a for k, a in enumerate(args) if k not in (i, j)]
     return args
 
 
-@collection_step("order_unwrap")
-def _unwrap(head, args, has_a_value, wrapper):
+@step("order_unwrap")
+def _unwrap(head, args, wrapper):
     return [a.args[0] if not a.is_atom and a.head == wrapper else a for a in args]
 
 
@@ -273,13 +273,14 @@ def test_a_head_with_nothing_declared_keeps_its_arguments_in_place():
     assert normalise(Plain(y, Add(y, x), 0)) == Plain(y, normalise(Add(x, y)), 0)
     assert normalise(Plain(x, Plain(y))) == Plain(x, Plain(y))
     assert normalise(Plain()) == Plain()
-    assert acting_properties(Plain) == []
 
 
-def test_a_head_neither_associative_nor_commutative_ignores_its_other_properties():
-    for e in [Inert(x, 0), Inert(0, x), Inert(x, x), Inert(9, log(x)), Inert(x), Inert(Inert(x, y), z)]:
+def test_a_head_neither_associative_nor_commutative_uses_its_properties_only_on_two_arguments():
+    assert normalise(Inert(x, 0)) == x and normalise(Inert(0, x)) == x
+    assert normalise(Inert(x, x)) == x
+    assert normalise(Inert(9, x)) == n(9) and normalise(Inert(x, 9)) == n(9)
+    for e in [Inert(9, log(x)), Inert(y, x), Inert(x), Inert(x, 0, y), Inert(x, x, x), Inert(Inert(x, y), z)]:
         assert normalise(e) == e
-    assert acting_properties(Inert) == []
 
 
 def test_a_head_that_is_not_a_declared_function():
@@ -333,18 +334,15 @@ def test_a_multiset_step_sees_every_argument_whatever_the_order():
     (Twice(x, 0, x), 0),
     (Twice(x, y, y, x), 0),
 ])
-def test_a_count_step_on_a_sequence_counts_only_neighbours(e, expected):
+def test_a_per_argument_step_on_a_sequence_counts_only_neighbours(e, expected):
     assert normalises_to(e, expected)
 
 
-def test_a_count_step_on_a_multiset_counts_across_brackets():
+def test_a_per_argument_step_on_a_multiset_counts_across_brackets():
     assert normal_forms(every_writing(Tri, [x, x, y, x])) == {y}
     assert normalise(Tri(x, Tri(x, Tri(x, y)))) == y
 
 
-@pytest.mark.xfail(
-    strict=True, reason="inside brackets the absorbing element erases arguments that the flat form keeps",
-)
 @pytest.mark.parametrize("bracketed, flat", [
     (Mul(log(x), Mul(0, y)), Mul(log(x), 0, y)),
     (Mul(log(y), Mul(0, log(z))), Mul(log(y), 0, log(z))),
@@ -356,10 +354,6 @@ def test_an_absorbing_element_beside_an_argument_without_a_value_ignores_bracket
     assert normalise(bracketed, known) == normalise(flat, known)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="steps repeat only while the arguments shrink, so a step that keeps their number leaves a duplicate",
-)
 def test_a_step_that_keeps_the_number_of_arguments():
     once = normalise(Unwrap(x, wrap(x)))
     assert normalise(once) == once
@@ -373,7 +367,7 @@ def test_two_constants_with_one_name_in_either_order():
     assert normalise(k1 + k2) == normalise(k2 + k1)
 
 
-def test_a_count_step_erases_only_arguments_with_a_value_whatever_the_order():
+def test_a_per_argument_step_erases_only_arguments_with_a_value_whatever_the_order():
     writings = list(every_writing(Tri, [log(x), y, log(x), log(x)]))
     assert {shape(e) for e in normal_forms(writings)} == {shape(Tri(y, log(x), log(x), log(x)))}
     assert normal_forms(writings, lambda c: c == Ne(x, 0)) == {y}
