@@ -284,17 +284,31 @@ def test_deeper_than_the_recursion_limit():
     assert len(calls) == 1 and len(calls[0][1]) == depth + 1
 
 
-@pytest.mark.xfail(strict=True, reason="Expr.__hash__ recurses in the core")
-def test_a_chain_100000_deep():
-    program = (
-        "from nary import Add, NumberKind\n"
-        "from nary.traversal import bottom_up\n"
-        "e = NumberKind('x')\n"
-        "for _ in range(100000): e = Add(e, NumberKind('y'))\n"
-        "assert bottom_up(lambda h, a: h(*a), flat=lambda h: h == Add)(e) is not None\n"
-        "assert bottom_up(lambda h, a: h(*a))(e) is not None\n"
-    )
-    run = subprocess.run([sys.executable, "-c", program], check=False, timeout=600)
+DEEP = (
+    "from nary import Add, NumberKind\n"
+    "from nary.traversal import bottom_up\n"
+    "def chain(leaf='x'):\n"
+    "    e = NumberKind(leaf)\n"
+    "    for i in range(100000):\n"
+    "        e = Add(e, NumberKind('y')) if i % 2 else Add(NumberKind('z'), e)\n"
+    "    return e\n"
+    "e = chain()\n"
+)
+
+
+@pytest.mark.parametrize(
+    "check",
+    [
+        "assert len(bottom_up(lambda h, a: h(*a), flat=lambda h: h == Add)(e).args) == 100001",
+        "assert bottom_up(lambda h, a: h(*a))(e) == e",
+        "assert hash(e) == hash(chain()) and e in {chain()}",
+        "assert e == chain() and e != chain('w')",
+        "assert len(repr(e)) == 1 + 8 * 100000",
+        "del e",
+    ],
+)
+def test_a_chain_100000_deep(check):
+    run = subprocess.run([sys.executable, "-c", DEEP + check], check=False, timeout=600)
     assert run.returncode == 0
 
 
