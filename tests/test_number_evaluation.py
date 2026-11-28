@@ -15,10 +15,10 @@ from nary.normalising import normalise
 Max = declare_function("EvalMax", Many(NumberKind), returns=NumberKind, domain=true)
 declare_properties(
     Max, is_associative=True, is_commutative=True,
-    value_of_literals=lambda *values: NumberKind(max(values)),
+    evaluate_literals=lambda *values: NumberKind(max(values)),
 )
 First = declare_function("EvalFirst", Many(NumberKind), returns=NumberKind, domain=true)
-declare_properties(First, is_associative=True, value_of_literals=lambda first, *rest: NumberKind(first))
+declare_properties(First, is_associative=True, evaluate_literals=lambda first, *rest: NumberKind(first))
 
 
 def test_a_sum_of_integers():
@@ -188,7 +188,7 @@ def test_an_argument_that_becomes_a_literal_is_evaluated_first():
     assert normalise(Add(1, Mul(2, 3))) == NumberKind(7)
 
 
-def test_literals_of_a_head_without_value_of_literals_are_left_alone():
+def test_literals_of_a_head_without_evaluate_literals_are_left_alone():
     Float = declare_kind("FloatForEvaluation", literals=float)
     Total = declare_function("FloatTotal", Many(Float), returns=Float, domain=true)
     declare_properties(Total, is_associative=True, is_commutative=True)
@@ -294,15 +294,15 @@ def test_zero_absorbs_a_square():
 
 
 def test_add_and_mul_declare_how_their_literals_compute():
-    assert (Add.value_of_literals(2, 3), Mul.value_of_literals(2, 3)) == (NumberKind(5), NumberKind(6))
+    assert (Add.evaluate_literals(2, 3), Mul.evaluate_literals(2, 3)) == (NumberKind(5), NumberKind(6))
 
 
 def test_a_comparison_gives_true_or_false_for_numbers():
-    assert Lt.value_of_literals(1, 2) == true
+    assert Lt.evaluate_literals(1, 2) == true
 
 
 def test_sin_does_not_declare_how_its_literals_compute():
-    assert sin.value_of_literals is None
+    assert sin.evaluate_literals is None
 
 
 def test_a_freshly_declared_maximum_of_two_numbers_is_the_larger():
@@ -315,17 +315,17 @@ def test_a_freshly_declared_maximum_combines_its_numbers_beside_a_symbol():
 
 def test_a_freshly_declared_head_of_one_argument_is_evaluated():
     Negate = declare_function("EvalNegate", NumberKind, returns=NumberKind, domain=true)
-    declare_properties(Negate, value_of_literals=lambda value: NumberKind(-value))
+    declare_properties(Negate, evaluate_literals=lambda value: NumberKind(-value))
     assert normalise(Negate(Rational(1, 2))) == Rational(-1, 2)
 
 
 def test_a_freshly_declared_head_of_one_argument_is_left_alone_on_a_symbol():
     Opposite = declare_function("EvalOpposite", NumberKind, returns=NumberKind, domain=true)
-    declare_properties(Opposite, value_of_literals=lambda value: NumberKind(-value))
+    declare_properties(Opposite, evaluate_literals=lambda value: NumberKind(-value))
     assert normalise(Opposite(NumberKind("x"))) == Opposite(NumberKind("x"))
 
 
-def test_a_head_of_one_argument_without_value_of_literals_keeps_its_argument():
+def test_a_head_of_one_argument_without_evaluate_literals_keeps_its_argument():
     Wrap = declare_function("EvalWrap", NumberKind, returns=NumberKind, domain=true)
     assert normalise(Wrap(2)) == Wrap(2)
 
@@ -342,13 +342,13 @@ def test_numbers_of_a_head_that_is_not_commutative_are_not_combined_across_a_sym
 
 def test_a_freshly_declared_head_may_give_none_to_leave_its_literals():
     Ratio = declare_function("EvalRatio", NumberKind, NumberKind, returns=NumberKind, domain=true)
-    declare_properties(Ratio, value_of_literals=lambda a, b: NumberKind(Fraction(a) / b) if b else None)
+    declare_properties(Ratio, evaluate_literals=lambda a, b: NumberKind(Fraction(a) / b) if b else None)
     assert (normalise(Ratio(1, 2)), normalise(Ratio(1, 0))) == (Rational(1, 2), Ratio(1, 0))
 
 
 def test_a_freshly_declared_comparison_gives_a_result_of_another_kind():
     Divides = declare_function("EvalDivides", NumberKind, NumberKind, returns=BoolKind, domain=true)
-    declare_properties(Divides, value_of_literals=lambda a, b: true if b % a == 0 else false)
+    declare_properties(Divides, evaluate_literals=lambda a, b: true if b % a == 0 else false)
     assert (normalise(Divides(3, 6)), normalise(Divides(4, 6))) == (true, false)
 
 
