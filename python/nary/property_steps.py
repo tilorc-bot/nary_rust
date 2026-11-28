@@ -4,6 +4,7 @@ from itertools import groupby
 from typing import Callable, NamedTuple
 
 from ._core import Expr
+from .literal_evaluation import with_literals_combined
 from .properties import is_property
 
 __all__ = ["apply_property_steps", "step"]
@@ -147,6 +148,8 @@ def _apply_steps_until_unchanged(
             args_after_steps = _apply_step_keeping_arguments_without_a_value(
                 registered, head, args_after_steps, declared_value, has_a_value,
             )
+        if head.is_associative:
+            args_after_steps = with_literals_combined(head, args_after_steps)
         if args_after_steps == args:
             return args
         args = args_after_steps

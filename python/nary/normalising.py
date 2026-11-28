@@ -11,7 +11,7 @@
     >>> normalise(sin(x) * 0), normalise(log(x) * 0)
     (0, Mul(0, log(x)))
     >>> normalise(NumberKind(3) / 2 + 1), normalise(Pow(2, 3) < 9), normalise(x + 1 + 2)
-    (Rational(5, 2), true, Add(1, 2, x))
+    (Rational(5, 2), true, Add(3, x))
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from typing import Callable
 
 from . import arithmetic_rules, logic_rules  # noqa: F401
 from ._core import Expr
-from ._numbers import evaluate
+from .literal_evaluation import literal_of
 from .property_steps import apply_property_steps
 from .logic import true
 from .rewriting import _has_a_value
@@ -66,7 +66,7 @@ def _normalise_with(
     known = known or (lambda condition: False)
 
     def literal_or_property_steps(head: Expr, args: list[Expr]) -> Expr:
-        literal = evaluate(head, args)
+        literal = None if head.is_associative else literal_of(head, args)
         return apply_property_steps(head, args, has_a_value) if literal is None else literal
 
     walk = traversal(literal_or_property_steps)

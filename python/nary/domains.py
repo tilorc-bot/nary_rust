@@ -40,7 +40,7 @@ _AWAITING_A_DECISION = {
 }
 
 
-def declare_function(name, *parameters, returns, domain):
+def declare_function(name, *parameters, returns, domain, evaluate_literals=None):
     symbols = [p for p in parameters if isinstance(p, Expr) and p.is_symbol]
     if symbols and len(symbols) != len(parameters):
         raise TypeError(
@@ -62,10 +62,16 @@ def declare_function(name, *parameters, returns, domain):
                     f"the domain of {name} mentions {e!r}, which is not one of its parameters"
                 )
 
+    if evaluate_literals is not None and not callable(evaluate_literals):
+        raise TypeError(
+            f"evaluate_literals of {name} must be a function, got {evaluate_literals!r}"
+        )
+
     if symbols:
         parameters = [symbol.kind for symbol in symbols]
     function = _core.declare_function(
-        name, *parameters, returns=returns, names=tuple(names)
+        name, *parameters, returns=returns, names=tuple(names),
+        evaluate_literals=evaluate_literals,
     )
     if domain is not None:
         _domains[function] = domain

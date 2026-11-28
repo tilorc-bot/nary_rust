@@ -7,6 +7,7 @@ from nary.arithmetic_rules import rules
 from nary.lean import to_lean
 from nary.logic import true
 from nary.normalising import normalise
+from nary.properties import declare_properties
 from nary.rewriting import _has_a_value, rewrite
 from nary.rules import rule
 
@@ -230,9 +231,11 @@ def test_normalise_adds_rational_literals():
 
 
 def test_normalise_orders_rational_literals_by_repr():
+    Bag = declare_function("RationalBag", Many(NumberKind), returns=NumberKind, domain=true)
+    declare_properties(Bag, is_associative=True, is_commutative=True)
     x = NumberKind("x")
-    e = normalise(Add(x, Fraction(1, 3), 2, Fraction(1, 2)))
-    assert repr(e) == "Add(2, Rational(1, 2), Rational(1, 3), x)"
+    e = normalise(Bag(x, Fraction(1, 3), 2, Fraction(1, 2)))
+    assert repr(e) == "RationalBag(2, Rational(1, 2), Rational(1, 3), x)"
 
 
 def test_normalise_gives_the_same_result_for_any_order_of_arguments():
