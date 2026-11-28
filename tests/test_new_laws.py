@@ -10,7 +10,7 @@ from nary import (
     BoolKind, Many, Ne, NumberKind, declare_constant, declare_function, declare_kind, log,
 )
 from nary.arithmetic import Add
-from nary.argument_collections import acting_properties, per_argument, step
+from nary.argument_collections import per_argument, step
 from nary.logic import false, true
 from nary.normalising import normalise
 from nary.properties import declare_properties, declare_property
@@ -182,9 +182,6 @@ def test_two_new_laws_on_one_head():
         negated_by=minus, cycle_length=4, identity_element=0,
     )
 
-    assert Counter(acting_properties(Cyc)) == Counter(
-        ["negated_by", "cycle_length", "identity_element"]
-    )
     assert normalise(Cyc(x, minus(x), y, y, y, y)) == zero
     assert normalise(Cyc(minus(x), x, x, z, z, z, z, z)) == normalise(Cyc(x, z))
     e = Cyc(minus(y), x, y, minus(x), z, log(x), minus(log(x)))
@@ -208,9 +205,6 @@ def test_a_new_law_with_the_built_in_ones():
         fold_with=gcd, identity_element=0, absorbing_element=1, is_idempotent=True,
     )
 
-    assert Counter(acting_properties(Gcf)) == Counter(
-        ["fold_with", "identity_element", "absorbing_element", "is_idempotent"]
-    )
     assert normalise(Gcf(4, x, 6, 3)) == NumberKind(1)
     assert normalise(Gcf(x, 0, x)) == x
     e = Gcf(Gcf(x, 8), 12, y, x)
@@ -322,7 +316,7 @@ def test_a_multiset_step_does_not_run_on_a_sequence():
         Plait, is_associative=True, undone_by=inv, plait_cancel_after=2, identity_element=0,
     )
 
-    assert Counter(acting_properties(Plait)) == Counter(["plait_cancel_after", "identity_element"])
+    assert normalise(Plait(y, x, x, 0)) == y
     assert normalise(Plait(inv(x), x)) == Plait(inv(x), x)
     e = Plait(x, Plait(y, x, x), inv(y), y)
     assert normalise(normalise(e)) == normalise(e)
@@ -357,8 +351,7 @@ def test_a_property_without_a_step_only_gets_the_structure():
     Mystery = declare_function("Mystery", Many(NumberKind), returns=NumberKind, domain=true)
     declare_properties(Mystery, is_associative=True, is_commutative=True, is_mysterious=True)
 
-    assert acting_properties(Mystery) == []
-    assert normalise(Mystery(y, Mystery(x, x))) == normalise(Mystery(x, y, x))
+    assert normalise(Mystery(y, Mystery(x, x))) == Mystery(x, x, y)
     e = Mystery(y, Mystery(x, y))
     assert normalise(normalise(e)) == normalise(e)
 
@@ -367,7 +360,6 @@ def test_a_property_declared_false_takes_no_step():
     Even = declare_function("Even", Many(NumberKind), returns=NumberKind, domain=true)
     declare_properties(Even, is_associative=True, is_commutative=False, is_idempotent=False)
 
-    assert acting_properties(Even) == []
     assert normalise(Even(y, Even(x, x))) == Even(y, x, x)
 
 
@@ -435,8 +427,7 @@ def test_a_step_does_not_reach_heads_without_its_property():
     def cancel(arg, copies, n):
         return copies % n
 
-    assert normalise(x + x + x) == normalise(Add(x, x, x))
-    assert acting_properties(Add) == ["identity_element"]
+    assert normalise(x + x + x) == Add(x, x, x)
 
 
 def test_a_property_takes_one_step():
@@ -470,13 +461,11 @@ def test_a_head_declared_after_it_was_normalised():
 
     Late = declare_function("Late", Many(NumberKind), returns=NumberKind, domain=true)
     assert normalise(Late(x, 0, x)) == Late(x, 0, x)
-    assert acting_properties(Late) == []
 
     declare_properties(
         Late, is_associative=True, is_commutative=True, identity_element=0, late_cancel_after=2,
     )
     assert normalise(Late(x, 0, x)) == zero
-    assert Counter(acting_properties(Late)) == Counter(["identity_element", "late_cancel_after"])
 
 
 def test_a_step_registered_after_a_head_was_normalised():

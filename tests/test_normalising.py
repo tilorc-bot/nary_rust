@@ -5,7 +5,6 @@ import pytest
 
 import nary as nr
 from nary import Many, Ne, NumberKind, Pow, declare_function, exp, log, sin, tan
-from nary.argument_collections import acting_properties
 from nary.calculus import NumberFunction
 from nary.logic import And, Not, Or, false, true
 from nary.normalising import normalise
@@ -165,9 +164,9 @@ def test_lambdas_are_left_alone():
 
 
 def test_a_lambda_applied_to_arguments_is_a_head_without_properties():
-    square = nr.Lambda(x, x * x)
-    assert acting_properties(square) == []
+    square, times = nr.Lambda(x, x * x), nr.Lambda((x, y), x * y)
     assert normalise(square(x + 0) + 0) == square(x)
+    assert normalise(times(y, 1)) == times(y, 1)
 
 
 def test_the_bracketing_of_one_associative_head_does_not_change_the_result():

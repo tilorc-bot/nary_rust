@@ -4,9 +4,9 @@ from itertools import groupby
 from typing import Callable
 
 from ._core import Expr
-from .properties import declared_properties, is_property
+from .properties import is_property
 
-__all__ = ["acting_properties", "normalise_collection", "per_argument", "step"]
+__all__ = ["normalise_collection", "per_argument", "step"]
 
 _steps = {}
 
@@ -52,7 +52,7 @@ def step(name: str, multiset_only: bool = False) -> Callable:
         raise ValueError(f"{name} already has a step")
 
     def register(fn: Callable) -> Callable:
-        _steps[name] = (len(_steps), fn, multiset_only)
+        _steps[name] = (fn, multiset_only)
         return fn
 
     return register
@@ -98,32 +98,6 @@ def per_argument(fn: Callable) -> Callable:
     return keep
 
 
-def _acting(head: Expr, unordered: bool) -> dict[str, object]:
-    declared = declared_properties(head)
-    return {
-        name: declared[name]
-        for name in sorted(declared.keys() & _steps.keys(), key=lambda name: _steps[name][0])
-        if declared[name] is not None and declared[name] is not False
-        and (unordered or not _steps[name][2])
-    }
-
-
-def acting_properties(head: Expr) -> list[str]:
-    """The properties of head that have a function registered with step.
-
-    Args:
-        head: A function, such as e.head.
-
-    Returns:
-        Their names, in the order normalise uses their functions.
-
-    >>> from nary import Mul, Pow
-    >>> acting_properties(Mul), acting_properties(Pow)
-    (['identity_element', 'absorbing_element'], [])
-    """
-    return list(_acting(head, head.is_commutative))
-
-
 def _arrange(unordered: bool, args: list[Expr]) -> list[Expr]:
     return sorted(args, key=repr) if unordered else args
 
@@ -137,14 +111,17 @@ def _guarded(fn: Callable, head: Expr, args: list, has_a_value: Callable, *value
     return kept
 
 
-def _settle(head: Expr, unordered: bool, args: list[Expr], has_a_value: Callable) -> list[Expr]:
-    acting = _acting(head, unordered).items()
+def _settle(head: Expr, args: list[Expr], has_a_value: Callable) -> list[Expr]:
+    unordered, properties = head.is_commutative, head.properties
     while True:
         args = _arrange(unordered, args)
         stepped = args
-        for name, value in acting:
-            given = () if name.startswith("is_") else (value,)
-            stepped = _guarded(_steps[name][1], head, stepped, has_a_value, *given)
+        for name, value in properties.items():
+            if name in _steps:
+                fn, multiset_only = _steps[name]
+                if unordered or not multiset_only:
+                    given = () if name.startswith("is_") else (value,)
+                    stepped = _guarded(fn, head, stepped, has_a_value, *given)
         if stepped == args:
             return args
         args = stepped
@@ -185,7 +162,7 @@ def normalise_collection(head: Expr, args: list[Expr], has_a_value: Callable) ->
     if associative:
         args = [inner for arg in args for inner in _spliced(head, arg)]
     if associative or len(args) == 2:
-        args = _settle(head, unordered, args, has_a_value)
+        args = _settle(head, args, has_a_value)
         if len(args) == 1:
             return args[0]
         if not args and head.identity_element is not None:
