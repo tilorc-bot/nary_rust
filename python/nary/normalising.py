@@ -27,11 +27,29 @@ __all__ = ["normalise"]
 
 
 def normalise(e: Expr, known: Callable[[Expr], object] | None = None) -> Expr:
+    """Normalise e and everything inside it.
+
+    Args:
+        e: The expression to normalise.
+        known: Called as known(condition) with condition normalised. Returning True
+            lets normalise erase an argument that has a value only under condition.
+
+    Returns:
+        The normal form of e.
+
+    >>> from nary import Ne, NumberKind, log
+    >>> x = NumberKind("x")
+    >>> normalise(log(x) * 0), normalise(log(x) * 0, lambda condition: condition == Ne(x, 0))
+    (Mul(0, log(x)), 0)
+    """
     if not isinstance(e, Expr):
         raise TypeError(f"normalise expects an expression, got {e!r}")
     known = known or (lambda condition: False)
 
-    normal = bottom_up(lambda head, args: normalise_collection(head, args, has_a_value))
+    normal = bottom_up(
+        lambda head, args: normalise_collection(head, args, has_a_value),
+        flat=lambda head: head.is_associative,
+    )
 
     def holds(condition: Expr) -> bool:
         condition = normal(condition)

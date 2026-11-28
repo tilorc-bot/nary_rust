@@ -63,7 +63,14 @@ declare_property("is_idempotent")
 
 
 def is_property(name):
-    """
+    """Whether declare_property has declared name.
+
+    Args:
+        name: Any string.
+
+    Returns:
+        True or False.
+
     >>> is_property("identity_element"), is_property("kind")
     (True, False)
     """

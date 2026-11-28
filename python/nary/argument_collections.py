@@ -1,19 +1,3 @@
-"""
-    >>> from nary import Add, Mul, NumberKind, log, sin
-    >>> from nary.rewriting import _has_a_value
-    >>> x, y = NumberKind("x"), NumberKind("y")
-    >>> has_a_value = lambda e: _has_a_value(e, lambda condition: False)
-    >>> normalise_collection(Mul, [y, Mul(x, 2), NumberKind(1)], has_a_value)
-    Mul(2, x, y)
-    >>> zero = NumberKind(0)
-    >>> normalise_collection(Mul, [sin(x), zero], has_a_value)
-    0
-    >>> normalise_collection(Mul, [log(x), zero], has_a_value)
-    Mul(0, log(x))
-    >>> normalise_collection(Add, [], has_a_value), normalise_collection(sin, [x], has_a_value)
-    (0, sin(x))
-"""
-
 from __future__ import annotations
 
 from itertools import groupby
@@ -28,7 +12,18 @@ _steps = {}
 
 
 def step(name: str, multiset_only: bool = False) -> Callable:
-    """
+    """Register the step of the property name.
+
+    Args:
+        name: A name declare_property has declared.
+        multiset_only: If True, the step acts only on heads whose is_commutative is True.
+
+    Returns:
+        A decorator for fn. fn is called as fn(head, args) for an is_ name and as
+        fn(head, args, value) otherwise, with value = getattr(head, name), and returns
+        the new list of arguments. If an argument that may have no value is missing
+        from that list, the list is not used.
+
     >>> step("kind")
     Traceback (most recent call last):
         ...
@@ -46,19 +41,28 @@ def step(name: str, multiset_only: bool = False) -> Callable:
     return register
 
 
-def per_argument(copies_to_keep: Callable) -> Callable:
-    """
+def per_argument(fn: Callable) -> Callable:
+    """Turn a law about one argument and its copies into a function for step(name).
+
+    Args:
+        fn: Called as fn(arg, copies) or fn(arg, copies, value) once for each run of
+            equal neighbouring arguments, with copies the length of the run. Returns
+            how many copies to keep.
+
+    Returns:
+        A function to decorate with step(name).
+
     >>> from nary import NumberKind
     >>> x = NumberKind("x")
     >>> keep_an_odd_number = per_argument(lambda arg, copies: copies % 2)
     >>> keep_an_odd_number(None, [x, x, x]), keep_an_odd_number(None, [x, x])
     ([x], [])
     """
-    def fn(head, copies, *value):
-        return copies[:1] * copies_to_keep(copies[0], len(copies), *value)
+    def keep(head, copies, *value):
+        return copies[:1] * fn(copies[0], len(copies), *value)
 
-    fn.copies_to_keep = copies_to_keep
-    return fn
+    keep.copies_to_keep = fn
+    return keep
 
 
 def _acting(head: Expr, unordered: bool) -> dict[str, object]:
@@ -72,7 +76,14 @@ def _acting(head: Expr, unordered: bool) -> dict[str, object]:
 
 
 def acting_properties(head: Expr) -> list[str]:
-    """
+    """The properties of head whose steps act on its arguments.
+
+    Args:
+        head: A function, such as e.head.
+
+    Returns:
+        Their names, in the order their steps were registered.
+
     >>> from nary import Mul, Pow
     >>> acting_properties(Mul), acting_properties(Pow)
     (['identity_element', 'absorbing_element'], [])
@@ -111,6 +122,31 @@ def _spliced(head: Expr, arg: Expr) -> tuple[Expr, ...]:
 
 
 def normalise_collection(head: Expr, args: list[Expr], has_a_value: Callable) -> Expr:
+    """Build head(*args), applying the steps that act on head.
+
+    Args:
+        head: What e.head normalised to.
+        args: What each of e.args normalised to.
+        has_a_value: Called as has_a_value(arg). An argument is erased only where this
+            returns True.
+
+    Returns:
+        head(*args) after the steps, or the one argument or the identity element left.
+
+    >>> from nary import Add, Mul, NumberKind, log, sin
+    >>> from nary.rewriting import _has_a_value
+    >>> x, y = NumberKind("x"), NumberKind("y")
+    >>> has_a_value = lambda e: _has_a_value(e, lambda condition: False)
+    >>> normalise_collection(Mul, [y, Mul(x, 2), NumberKind(1)], has_a_value)
+    Mul(2, x, y)
+    >>> zero = NumberKind(0)
+    >>> normalise_collection(Mul, [sin(x), zero], has_a_value)
+    0
+    >>> normalise_collection(Mul, [log(x), zero], has_a_value)
+    Mul(0, log(x))
+    >>> normalise_collection(Add, [], has_a_value), normalise_collection(sin, [x], has_a_value)
+    (0, sin(x))
+    """
     associative, unordered = head.is_associative, head.is_commutative
     if associative:
         args = [inner for arg in args for inner in _spliced(head, arg)]

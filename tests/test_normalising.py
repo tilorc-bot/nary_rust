@@ -170,6 +170,25 @@ def test_a_lambda_applied_to_arguments_is_a_head_without_properties():
     assert normalise(square(x + 0) + 0) == square(x)
 
 
+def test_the_bracketing_of_one_associative_head_does_not_change_the_result():
+    expected = nr.Mul(0, log(x), y)
+    assert normalise(nr.Mul(log(x), nr.Mul(0, y))) == expected
+    assert normalise(nr.Mul(nr.Mul(log(x), 0), y)) == expected
+    assert normalise(nr.Mul(log(x), 0, y)) == expected
+
+
+def test_an_argument_that_becomes_the_same_head_once_normal_is_spliced():
+    assert normalise(nr.Add(x, nr.Mul(1, nr.Add(y, z)))) == nr.Add(x, y, z)
+
+
+def test_a_sum_built_term_by_term_in_a_loop():
+    terms = [NumberKind(f"t{i}") for i in range(3000)]
+    total = terms[0]
+    for term in terms[1:]:
+        total = total + term
+    assert normalise(total) == normalise(nr.Add(*terms))
+
+
 def test_only_expressions_are_normalised():
     with pytest.raises(TypeError):
         normalise(3)
