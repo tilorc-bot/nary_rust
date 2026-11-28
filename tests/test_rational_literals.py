@@ -7,6 +7,7 @@ from nary.arithmetic_rules import rules
 from nary.lean import to_lean
 from nary.logic import true
 from nary.normalising import normalise
+from nary.properties import declare_properties
 from nary.rewriting import _has_a_value, rewrite
 from nary.rules import rule
 
@@ -229,10 +230,36 @@ def test_normalise_does_not_add_rational_literals():
     assert repr(normalise(Add(Fraction(1, 2), Fraction(1, 2)))) == "Add(Rational(1, 2), Rational(1, 2))"
 
 
-def test_normalise_orders_rational_literals_by_repr():
+def test_normalise_orders_integers_and_rational_literals_together_by_value():
     x = NumberKind("x")
-    e = normalise(Add(x, Fraction(1, 3), 2, Fraction(1, 2)))
-    assert repr(e) == "Add(2, Rational(1, 2), Rational(1, 3), x)"
+    e = normalise(Add(x, Rational(1, 3), 2, Rational(1, 2)))
+    assert repr(e) == "Add(Rational(1, 3), Rational(1, 2), 2, x)"
+
+
+def test_normalise_orders_integers_by_value_not_by_their_digits():
+    assert repr(normalise(Add(10, 9, NumberKind("x")))) == "Add(9, 10, x)"
+
+
+def test_normalise_orders_negative_numbers_by_value():
+    e = normalise(Add(Rational(-1, 2), -1, NumberKind("x"), -2, Rational(-3, 2)))
+    assert repr(e) == "Add(-2, Rational(-3, 2), -1, Rational(-1, 2), x)"
+
+
+def test_normalise_puts_a_number_before_a_capitalised_name():
+    X = NumberKind("X")
+    assert repr(normalise(Mul(X, Rational(1, 2), E, 7))) == "Mul(Rational(1, 2), 7, E, X)"
+
+
+def test_normalise_orders_what_is_not_a_number_by_repr():
+    x, Y = NumberKind("x"), NumberKind("Y")
+    assert repr(normalise(Add(x, sin(x), Y, E))) == "Add(E, Y, sin(x), x)"
+
+
+def test_normalise_orders_literals_of_another_kind_by_repr_without_comparing_their_values():
+    Complex = declare_kind("ComplexForSorting", literals=complex)
+    Total = declare_function("TotalForSorting", Many(Complex), returns=Complex, domain=true)
+    declare_properties(Total, is_associative=True, is_commutative=True)
+    assert repr(normalise(Total(2j, Complex("z"), 1j))) == "TotalForSorting(1j, 2j, z)"
 
 
 def test_normalise_gives_the_same_result_for_any_order_of_arguments():
@@ -255,6 +282,5 @@ def test_rewrite_does_not_cancel_against_a_power_with_a_rational_exponent():
     assert rewrite(e, rules, known=lambda condition: True) == e
 
 
-@pytest.mark.xfail(strict=True, reason="arguments are sorted by repr, and 'E' comes before 'Rational(1, 2)'")
 def test_normalise_puts_a_rational_literal_before_a_constant_as_it_does_an_integer():
     assert normalise(Mul(E, Fraction(1, 2))).args[0] == NumberKind(Fraction(1, 2))
