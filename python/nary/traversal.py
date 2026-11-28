@@ -19,35 +19,15 @@ def bottom_up(
     at_node: Callable[[Expr | Result, list[Expr | Result]], Result],
     flat: Callable[[Expr], bool] = _never,
 ) -> Callable[[Expr], Expr | Result]:
-    """Return a function walk(e).
+    """Return walk, where walk(e) calls at_node(head, args) for e and for each expression
+    inside it that has a head, innermost first, and returns what at_node returned for e.
+    head and args are what walk returned for e.head and each of e.args.
 
-    walk(e) calls at_node for e and for the expressions inside it, each before
-    any expression that contains it, and returns what at_node returned for e.
+    at_node must depend only on head and args: results are remembered, so a
+    subexpression that occurs twice is passed to at_node once. Lambdas are returned as they are.
 
-    If e.is_atom or is_lambda(e) is true, walk(e) returns e itself: at_node is
-    not called, and nothing inside a lambda is visited.
-
-    Otherwise walk(e) is at_node(head, args), with head = walk(e.head), so the
-    head is included, and args = [walk(a) for a in e.args].
-
-    at_node must depend only on head and args. walk remembers what at_node
-    returned for each e, so when the same e occurs again at_node is not called
-    a second time. The values are kept as long as walk exists, also across
-    calls, and walk may be called from inside at_node.
-
-    flat is optional; by default nothing is merged. It is called as
-    flat(e.head), with the head as written in e. When it is true, each a in
-    e.args with a.head == e.head is replaced by a.args, and so on inside those,
-    so at_node is called once for e, with all the arguments in order, and not
-    for the replaced a. A replaced a gets no remembered value: if it also
-    occurs where it is not replaced, at_node is called for it there.
-
-    Only what is written in e is replaced. In Add(x, Mul(1, Add(y, z))) the
-    inner Add is an argument of Mul, so it is not merged, even if at_node turns
-    the Mul into Add(y, z).
-
-    walk keeps its own stack, so e can be nested as deeply as memory allows,
-    whatever Python's recursion limit.
+    If flat(e.head) is true, arguments of e with that same head are replaced by their own
+    arguments first, and so on.
 
     >>> from nary import Add, Mul, NumberKind, sin
     >>> x, y, z = NumberKind("x"), NumberKind("y"), NumberKind("z")
@@ -59,36 +39,19 @@ def bottom_up(
     sin [Add(x, y)]
     Add [sin(Add(x, y)), z]
     Add(sin(Add(x, y)), z)
+    >>> bottom_up(show)(sin(x) * sin(x))
+    sin [x]
+    Mul [sin(x), sin(x)]
+    Mul(sin(x), sin(x))
+    >>> bottom_up(show, flat=lambda head: head == Add)((x + y) + (y + z))
+    Add [x, y, y, z]
+    Add(x, y, y, z)
 
-    A repeated subexpression is processed once, also across calls of walk.
+    An Add that appears only once at_node has handled the Mul around it is not merged.
 
-    >>> walk = bottom_up(show)
-    >>> walk(sin(x + y) * sin(x + y))
-    Add [x, y]
-    sin [Add(x, y)]
-    Mul [sin(Add(x, y)), sin(Add(x, y))]
-    Mul(sin(Add(x, y)), sin(Add(x, y)))
-    >>> walk(sin(x + y))
-    sin(Add(x, y))
-
-    With flat, nested applications of a flat head become one call, in written order.
-
-    >>> bottom_up(show, flat=lambda head: head == Add)(x + (y + z) + sin(x + y))
-    Add [x, y]
-    sin [Add(x, y)]
-    Add [x, y, z, sin(Add(x, y))]
-    Add(x, y, z, sin(Add(x, y)))
-
-    An Add that only appears once at_node has handled the Mul around it is not merged.
-
-    >>> def drop_ones(head, args):
-    ...     print(head, args)
-    ...     args = [a for a in args if a != NumberKind(1)]
-    ...     return args[0] if len(args) == 1 else head(*args)
-    >>> bottom_up(drop_ones, flat=lambda head: head == Add)(Add(x, Mul(1, Add(y, z))))
-    Add [y, z]
-    Mul [1, Add(y, z)]
-    Add [x, Add(y, z)]
+    >>> def unwrap(head, args):
+    ...     return args[1] if head == Mul and args[0] == NumberKind(1) else head(*args)
+    >>> bottom_up(unwrap, flat=lambda head: head == Add)(x + Mul(1, y + z))
     Add(x, Add(y, z))
     """
     done: dict[Expr, Result] = {}

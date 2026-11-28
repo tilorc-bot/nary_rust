@@ -1,3 +1,3 @@
 5 python/nary/lean.py
-22 python/nary/traversal.py
+7 python/nary/traversal.py
 7 src/lib.rs
