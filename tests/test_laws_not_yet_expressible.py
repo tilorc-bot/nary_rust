@@ -200,7 +200,7 @@ def test_de_morgan():
     assert normalise(Compl(Both(p, q))) == normalise(Either(Compl(p), Compl(q)))
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="no law relates two different heads without a hand-written match")
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason="normalise collects and never expands; expand does")
 def test_distribution():
     assert normalise(x * (y + z)) == normalise(x * y + x * z)
 
