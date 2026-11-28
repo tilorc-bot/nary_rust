@@ -18,6 +18,7 @@ struct KindData {
     params: Box<[KindRef]>,
     signature: Option<Signature>,
     literals: Box<[Py<PyType>]>,
+    exprs_for_values: Mutex<Vec<(Py<PyAny>, Py<Expr>)>>,
 }
 
 struct Signature {
@@ -68,6 +69,7 @@ fn new_kind_data(
         params,
         signature,
         literals,
+        exprs_for_values: Mutex::new(Vec::new()),
     }))
 }
 
@@ -75,6 +77,11 @@ impl KindData {
     fn accepts(&self, value: &Bound<'_, PyAny>) -> bool {
         let value_type = value.get_type();
         self.literals.iter().any(|t| value_type.is(t.bind(value.py())))
+    }
+
+    fn exprs_for_values(&self, py: Python<'_>) -> Vec<(Py<PyAny>, Py<Expr>)> {
+        let pairs = self.exprs_for_values.lock_py_attached(py).unwrap_or_else(PoisonError::into_inner);
+        pairs.iter().map(|(value, expr)| (value.clone_ref(py), expr.clone_ref(py))).collect()
     }
 }
 
@@ -140,16 +147,21 @@ impl Kind {
         if self.data.accepts(head) {
             return literal(self.data, head);
         }
+        let exprs_for_values = self.data.exprs_for_values(py);
+        if let Some((_, expr)) = exprs_for_values.iter().find(|(value, _)| value.is(head)) {
+            return Ok(expr.bind(py).clone());
+        }
         let types = literal_type_names(py, &self.data.literals)?;
-        let (expected, note) = if types.is_empty() {
-            ("a name (a str)".to_string(), "; it accepts no literals")
-        } else {
-            (format!("a name (a str) or a literal of type {}", types.join(" or ")), "")
-        };
+        let mut accepted = vec!["a name (a str)".to_string()];
+        if !types.is_empty() {
+            accepted.push(format!("a literal of type {}", types.join(" or ")));
+        }
+        accepted.extend(exprs_for_values.iter().map(|(value, _)| describe(value.bind(py))));
+        let note = if accepted.len() == 1 { "; it accepts no literals" } else { "" };
         Err(PyTypeError::new_err(format!(
             "{} takes {}, got {}: {}{}",
             self.data.name,
-            expected,
+            accepted.join(" or "),
             head.get_type().name()?,
             describe(head),
             note
@@ -219,6 +231,17 @@ fn literal_types(name: &str, literals: Option<&Bound<'_, PyAny>>) -> PyResult<Bo
         types.push(t.clone().unbind());
     }
     Ok(types.into_boxed_slice())
+}
+
+#[pyfunction(name = "_calling_with_returns")]
+fn calling_with_returns(kind: &Bound<'_, Kind>, value: Py<PyAny>, expr: &Bound<'_, Expr>) -> PyResult<()> {
+    let kind = kind.get().data;
+    if !same_kind(expr.get().kind, kind) {
+        return Err(PyTypeError::new_err(format!("expected {}, got {}", kind.name, describe(expr))));
+    }
+    let mut pairs = kind.exprs_for_values.lock_py_attached(expr.py()).unwrap_or_else(PoisonError::into_inner);
+    pairs.push((value, expr.clone().unbind()));
+    Ok(())
 }
 
 #[pyfunction]
@@ -1180,6 +1203,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(declare_constant, m)?)?;
     m.add_function(wrap_pyfunction!(set_operator, m)?)?;
     m.add_function(wrap_pyfunction!(print_fractions_as_rational, m)?)?;
+    m.add_function(wrap_pyfunction!(calling_with_returns, m)?)?;
     m.add_function(wrap_pyfunction!(set_properties, m)?)?;
     Ok(())
 }
