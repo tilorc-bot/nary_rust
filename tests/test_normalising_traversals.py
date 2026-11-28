@@ -78,7 +78,6 @@ def generated_boolean(rng, depth):
 
 
 @pytest.mark.xfail(strict=True, reason=(
-    "test_number_literals_inside_brackets_are_combined_only_when_every_node_is_handled, "
     "test_an_absorbing_element_inside_brackets_erases_more_when_every_node_is_handled and "
     "test_an_argument_that_becomes_the_same_head_once_normal_is_merged_only_when_every_node_is_handled "
     "fail"
@@ -94,17 +93,9 @@ def test_number_literals_inside_brackets_are_combined():
     assert normalise(Mul(Mul(-1, 2), x)) == Mul(-2, x)
 
 
-def test_number_literals_are_not_combined_once_flattening_has_put_a_symbol_beside_them():
-    assert normalise_flattening_first(Mul(Mul(-1, 2), x)) == Mul(-1, 2, x)
-
-
-@pytest.mark.xfail(strict=True, reason=(
-    "normalise evaluates a node only if every argument is a literal: Mul(-1, 2) is one, "
-    "Mul(-1, 2, x) is not"
-))
-def test_number_literals_inside_brackets_are_combined_only_when_every_node_is_handled():
+def test_both_traversals_combine_number_literals_once_flattening_has_put_a_symbol_beside_them():
     e = Mul(Mul(-1, 2), x)
-    assert normalise(e) == normalise_flattening_first(e)
+    assert normalise(e) == normalise_flattening_first(e) == Mul(-2, x)
 
 
 def test_an_absorbing_element_erases_the_arguments_inside_its_own_brackets():
