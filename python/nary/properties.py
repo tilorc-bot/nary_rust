@@ -14,8 +14,10 @@
     Traceback (most recent call last):
         ...
     AttributeError: 'Expr' object has no attribute 'is_commutative'
-    >>> list(Mul.properties)[-2:], Mul.value_of_literals(2, 3), Mul.distributes_over
-    (['value_of_literals', 'distributes_over'], 6, Add)
+    >>> list(Mul.properties)[-3:]
+    ['value_of_literals', 'distributes_over', 'power_function']
+    >>> Mul.value_of_literals(2, 3), Mul.distributes_over, Mul.power_function
+    (6, Add, Pow)
     >>> list(Pow.properties), f.properties
     (['value_of_literals'], mappingproxy({}))
 """
@@ -72,6 +74,7 @@ declare_property("absorbing_element", element=True)
 declare_property("is_idempotent")
 declare_property("value_of_literals")
 declare_property("distributes_over")
+declare_property("power_function")
 
 
 def is_property(name):

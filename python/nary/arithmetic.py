@@ -25,17 +25,16 @@ Add = declare_function("Add", terms, returns=NumberKind, domain=true)
 declare_properties(
     Add, is_associative=True, is_commutative=True, identity_element=0, value_of_literals=exact_sum,
 )
-Mul = declare_function("Mul", factors, returns=NumberKind, domain=true)
-declare_properties(
-    Mul, is_associative=True, is_commutative=True, identity_element=1, absorbing_element=0,
-    value_of_literals=exact_product,
-    distributes_over=Add,
-)
 Pow = declare_function(
     "Pow", base, exponent, returns=NumberKind,
     domain=Or(Ne(base, 0), Gt(re(exponent), 0)),
 )
 declare_properties(Pow, value_of_literals=exact_power)
+Mul = declare_function("Mul", factors, returns=NumberKind, domain=true)
+declare_properties(
+    Mul, is_associative=True, is_commutative=True, identity_element=1, absorbing_element=0,
+    value_of_literals=exact_product, distributes_over=Add, power_function=Pow,
+)
 
 NegativeOne = NumberKind(-1)
 
