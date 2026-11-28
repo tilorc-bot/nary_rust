@@ -80,8 +80,8 @@ def test_a_merged_argument_is_normalised():
 
 
 def test_groups_with_different_bases_are_merged_separately():
-    assert normalise(Product(Pow(x, 2), Pow(y, 1), Pow(x, 3), Pow(y, 2))) == Product(
-        Pow(x, 5), Pow(y, 3)
+    assert normalise(Product(Pow(x, 2), Pow(y, 4), Pow(x, 3), Pow(y, 2))) == Product(
+        Pow(x, 5), Pow(y, 6)
     )
 
 
@@ -100,7 +100,7 @@ def test_a_group_whose_merge_has_a_value_only_where_the_group_has_one_is_merged(
 
 
 def test_a_group_whose_merge_could_give_a_value_is_merged_where_known_says_it_has_one():
-    assert normalise(Product(Pow(y, -1), Pow(y, 2)), lambda c: c == Ne(y, 0)) == Pow(y, 1)
+    assert normalise(Product(Pow(y, -1), Pow(y, 2)), lambda c: c == Ne(y, 0)) == y
 
 
 def test_a_merged_argument_with_the_same_head_is_spread_into_the_arguments():

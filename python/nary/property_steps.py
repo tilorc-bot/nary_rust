@@ -5,6 +5,8 @@ from itertools import groupby
 from typing import NamedTuple
 
 from ._core import Expr
+from .arithmetic import Add
+from .kinds import NumberKind
 from .properties import heads_declaring, is_property
 
 __all__ = ["apply_property_steps", "step"]
@@ -18,7 +20,7 @@ class _Step(NamedTuple):
     on_the_value: bool
 
 
-_step_of_property: dict[str, _Step] = {}
+_step_of_property: dict[tuple[str, bool], _Step] = {}
 
 
 def step(
@@ -87,12 +89,12 @@ def step(
     """
     if not is_property(name):
         raise ValueError(f"{name} is not a property")
-    if name in _step_of_property:
+    if (name, on_the_value) in _step_of_property:
         raise ValueError(f"{name} already has a step")
 
     def register(function: Callable) -> Callable:
         commutative = commutative_only or merges
-        _step_of_property[name] = _Step(function, commutative, per_argument, merges, on_the_value)
+        _step_of_property[name, on_the_value] = _Step(function, commutative, per_argument, merges, on_the_value)
         return function
 
     return register
@@ -166,11 +168,11 @@ def _apply_first_changing_step(
 
 def _steps_and_values(head: Expr) -> Iterator[tuple[_Step, tuple]]:
     for name, value in head.properties.items():
-        registered = _step_of_property.get(name)
-        if registered is not None and not registered.on_the_value:
+        registered = _step_of_property.get((name, False))
+        if registered is not None:
             yield registered, () if name.startswith("is_") else (value,)
-    for name, registered in _step_of_property.items():
-        if registered.on_the_value:
+    for (name, on_the_value), registered in _step_of_property.items():
+        if on_the_value:
             for declaring in heads_declaring(name, head):
                 yield registered, (declaring,)
 
@@ -275,3 +277,27 @@ def _coefficient_and_the_rest(
     if identity is None or identity.kind != kind:
         return None
     return identity, ((), args if args is not None and product.is_associative else (term,))
+
+
+@step("power_function", merges=True)
+def _powers_of_one_base_multiplied(
+    head: Expr, args: list[Expr], power: Expr,
+) -> list[tuple[list[Expr], Expr]]:
+    factors_and_exponents = {}
+    for arg in args:
+        if not arg.is_atom and arg.head == power:
+            base, exponent = arg.args
+        elif not arg.is_literal:
+            base, exponent = arg, NumberKind(1)
+        else:
+            continue
+        factors_and_exponents.setdefault(base, []).append((arg, exponent))
+    return [
+        ([factor for factor, _ in group], power(base, Add(*(e for _, e in group))))
+        for base, group in factors_and_exponents.items() if len(group) > 1
+    ]
+
+
+@step("power_function", on_the_value=True)
+def _power_one_is_the_base(head: Expr, args: list[Expr], product: Expr) -> list[Expr]:
+    return [args[0]] if len(args) == 2 and args[1] == NumberKind(1) else args

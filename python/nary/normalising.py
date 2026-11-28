@@ -4,8 +4,8 @@
     >>> from nary.logic import And, Not, Or, false, true
     >>> from nary.normalising import normalise
     >>> x, y, p, q = NumberKind("x"), NumberKind("y"), BoolKind("p"), BoolKind("q")
-    >>> normalise(y + (x + 0) + x * 1), normalise(Pow(y * (2 * x) * 1, 1))
-    (Add(Mul(2, x), y), Pow(Mul(2, x, y), 1))
+    >>> normalise(y + (x + 0) + x * 1), normalise(Pow(y * (2 * x) * 1, 1)), normalise(x * y * x)
+    (Add(Mul(2, x), y), Mul(2, x, y), Mul(Pow(x, 2), y))
     >>> normalise(And(q, Or(p, false), q, true)), normalise(Not(Not(p)))
     (And(p, q), Not(Not(p)))
     >>> normalise(sin(x) * 0), normalise(log(x) * 0)
