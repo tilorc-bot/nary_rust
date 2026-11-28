@@ -144,7 +144,7 @@ def test_an_idempotent_head_over_which_a_head_with_an_identity_distributes():
 def test_coefficients_are_evaluated_where_the_head_distributed_over_declares_evaluate_literals():
     Max = number_head(
         "DistMax", is_associative=True, is_commutative=True, is_idempotent=True,
-        evaluate_literals=lambda *values: NumberKind(max(values)),
+        evaluate_literals=max,
     )
     Plus = number_head(
         "DistPlus", is_associative=True, is_commutative=True, identity_element=0, distributes_over=Max,
