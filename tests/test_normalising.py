@@ -5,6 +5,7 @@ import pytest
 
 import nary as nr
 from nary import Many, Ne, NumberKind, Pow, declare_function, exp, log, sin, tan
+from nary.argument_collections import acting_properties
 from nary.calculus import NumberFunction
 from nary.logic import And, Not, Or, false, true
 from nary.normalising import normalise
@@ -161,6 +162,12 @@ def test_a_head_that_is_not_a_declared_function_has_no_properties():
 def test_lambdas_are_left_alone():
     f = nr.Lambda(x, x + 0)
     assert normalise(f) == f
+
+
+def test_a_lambda_applied_to_arguments_is_a_head_without_properties():
+    square = nr.Lambda(x, x * x)
+    assert acting_properties(square) == []
+    assert normalise(square(x + 0) + 0) == square(x)
 
 
 def test_only_expressions_are_normalised():

@@ -1,5 +1,4 @@
 """
-    >>> import nary.arithmetic_rules
     >>> from nary import Add, Mul, NumberKind, log, sin
     >>> from nary.rewriting import _has_a_value
     >>> x, y = NumberKind("x"), NumberKind("y")
@@ -21,16 +20,11 @@ from itertools import groupby
 from typing import Callable
 
 from ._core import Expr
-from .properties import is_property
+from .properties import declared_properties, is_property
 
 __all__ = ["acting_properties", "collection_step", "count_step", "normalise_collection"]
 
 _steps = {}
-
-
-def _has(head: Expr, name: str) -> bool:
-    value = getattr(head, name, None)
-    return value is not None and value is not False
 
 
 def collection_step(name: str, multiset_only: bool = False) -> Callable:
@@ -40,7 +34,7 @@ def collection_step(name: str, multiset_only: bool = False) -> Callable:
         raise ValueError(f"{name} already has a step")
 
     def register(step: Callable) -> Callable:
-        _steps[name] = (step, multiset_only)
+        _steps[name] = (len(_steps), step, multiset_only)
         return step
 
     return register
@@ -64,33 +58,37 @@ def count_step(name: str) -> Callable:
     return register_counts
 
 
+def _acting(head: Expr, unordered: bool) -> dict[str, object]:
+    declared = declared_properties(head)
+    return {
+        name: declared[name]
+        for name in sorted(declared.keys() & _steps.keys(), key=lambda name: _steps[name][0])
+        if declared[name] is not None and declared[name] is not False
+        and (unordered or not _steps[name][2])
+    }
+
+
 def acting_properties(head: Expr) -> list[str]:
     """
-    >>> import nary.arithmetic_rules
     >>> from nary import Mul, Pow
     >>> acting_properties(Mul), acting_properties(Pow)
     (['identity_element', 'absorbing_element'], [])
     """
-    unordered = _has(head, "is_commutative")
-    return [
-        name
-        for name, (_, multiset_only) in _steps.items()
-        if _has(head, name) and (unordered or not multiset_only)
-    ]
+    return list(_acting(head, head.is_commutative))
 
 
-def _arrange(head: Expr, args: list[Expr]) -> list[Expr]:
-    return sorted(args, key=repr) if _has(head, "is_commutative") else args
+def _arrange(unordered: bool, args: list[Expr]) -> list[Expr]:
+    return sorted(args, key=repr) if unordered else args
 
 
-def _settle(head: Expr, args: list[Expr], has_a_value: Callable[[Expr], bool]) -> list[Expr]:
-    names = acting_properties(head)
+def _settle(head: Expr, unordered: bool, args: list[Expr], has_a_value: Callable) -> list[Expr]:
+    acting = _acting(head, unordered).items()
     while True:
-        args = _arrange(head, args)
+        args = _arrange(unordered, args)
         stepped = args
-        for name in names:
-            value = () if name.startswith("is_") else (getattr(head, name),)
-            stepped = _steps[name][0](head, stepped, has_a_value, *value)
+        for name, value in acting:
+            given = () if name.startswith("is_") else (value,)
+            stepped = _steps[name][1](head, stepped, has_a_value, *given)
         if stepped == args:
             return args
         args = stepped
@@ -103,16 +101,16 @@ def _spliced(head: Expr, arg: Expr) -> tuple[Expr, ...]:
 def normalise_collection(
     head: Expr, args: list[Expr], has_a_value: Callable[[Expr], bool]
 ) -> Expr:
-    associative = _has(head, "is_associative")
+    associative, unordered = head.is_associative, head.is_commutative
     if associative:
         args = [inner for arg in args for inner in _spliced(head, arg)]
     if associative or len(args) == 2:
-        args = _settle(head, args, has_a_value)
+        args = _settle(head, unordered, args, has_a_value)
         if len(args) == 1:
             return args[0]
-        if not args and _has(head, "identity_element"):
+        if not args and head.identity_element is not None:
             return head.identity_element
-    return head(*_arrange(head, args))
+    return head(*_arrange(unordered, args))
 
 
 @count_step("identity_element")

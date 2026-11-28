@@ -355,6 +355,14 @@ def test_a_property_without_a_step_only_gets_the_structure():
     assert normalise(normalise(e)) == normalise(e)
 
 
+def test_a_property_declared_false_takes_no_step():
+    Even = declare_function("Even", Many(NumberKind), returns=NumberKind, domain=true)
+    declare_properties(Even, is_associative=True, is_commutative=False, is_idempotent=False)
+
+    assert acting_properties(Even) == []
+    assert normalise(Even(y, Even(x, x))) == Even(y, x, x)
+
+
 def test_a_step_does_not_reach_heads_without_its_property():
     declare_property("add_cancel_after")
 
