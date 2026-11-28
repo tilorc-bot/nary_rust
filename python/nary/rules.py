@@ -47,7 +47,7 @@ def _subexpressions(e):
     while stack:
         e = stack.pop()
         yield e
-        if e.head is not None:
+        if not e.is_atom:
             stack.extend(reversed((e.head, *e.args)))
 
 

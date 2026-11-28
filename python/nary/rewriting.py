@@ -39,7 +39,7 @@ def rewrite(e, rules, known=None):
 
 
 def _rewrite(e, rules, known):
-    if e.head is None or is_lambda(e):
+    if e.is_atom or is_lambda(e):
         return e
     head = _rewrite(e.head, rules, known)
     args = tuple(_rewrite(arg, rules, known) for arg in e.args)
@@ -75,6 +75,32 @@ def _holds(condition, known):
 
 
 def _has_a_value(e, known):
+    """Whether e is known to have a value, given the conditions that known says hold.
+
+    >>> from nary import Lambda, Ne, NumberKind, log, pi, sin
+    >>> from nary.calculus import Integral
+    >>> x, y = NumberKind("x"), NumberKind("y")
+    >>> nothing = lambda condition: False
+    >>> _has_a_value(x, nothing), _has_a_value(NumberKind(2), nothing), _has_a_value(pi, nothing)
+    (True, True, True)
+
+    An application has a value when its arguments do and its domain holds.
+
+    >>> _has_a_value(sin(x), nothing), _has_a_value(log(x), nothing), _has_a_value(sin(log(x)), nothing)
+    (True, False, False)
+    >>> _has_a_value(log(x), lambda condition: condition == Ne(x, 0))
+    True
+
+    It is not known to have one when its head is not declared or has no domain.
+
+    >>> _has_a_value(Lambda(y, y)(x), nothing), _has_a_value(Integral(sin, 0, x), nothing)
+    (False, False)
+
+    A lambda has a value when its body does.
+
+    >>> _has_a_value(Lambda(y, sin(y)), nothing), _has_a_value(Lambda(y, log(y)), nothing)
+    (True, False)
+    """
     if e.is_symbol or e.is_literal or e.is_constant:
         return True
     if not _is_declared(e.head):
@@ -123,10 +149,10 @@ def _match(pattern, e, bindings):
             yield {**bindings, pattern: e}
         elif bindings[pattern] == e:
             yield bindings
-    elif pattern.head is None:
+    elif pattern.is_atom:
         if pattern == e:
             yield bindings
-    elif e.head is not None:
+    elif not e.is_atom:
         for with_head in _match(pattern.head, e.head, bindings):
             if _is_declared(pattern.head) and is_unordered(pattern.head):
                 for new, used in _match_unordered(pattern.args, e.args, with_head, ()):
@@ -157,6 +183,6 @@ def _match_unordered(patterns, args, bindings, used):
 def _substitute(e, bindings):
     if e.is_symbol:
         return bindings.get(e, e)
-    if e.head is None:
+    if e.is_atom:
         return e
     return _substitute(e.head, bindings)(*(_substitute(arg, bindings) for arg in e.args))

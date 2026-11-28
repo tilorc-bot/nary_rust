@@ -1,3 +1,4 @@
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{LazyLock, Mutex, PoisonError};
@@ -6,7 +7,7 @@ use pyo3::exceptions::{PyAttributeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::pyclass::CompareOp;
 use pyo3::sync::{MutexExt, PyOnceLock};
-use pyo3::types::{PyString, PyTuple, PyType};
+use pyo3::types::{PyDict, PyString, PyTuple, PyType};
 
 struct KindData {
     id: usize,
@@ -32,6 +33,7 @@ impl Signature {
 }
 
 static MANY: PyOnceLock<Py<KindFamily>> = PyOnceLock::new();
+static PROPERTIES: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
 
 fn run_element(py: Python<'_>, kind: KindRef) -> Option<KindRef> {
     let many = MANY.get(py)?;
@@ -77,7 +79,7 @@ impl KindData {
 }
 
 fn literal<'py>(kind: KindRef, value: &Bound<'py, PyAny>) -> PyResult<Bound<'py, Expr>> {
-    Bound::new(value.py(), Expr { kind, form: Form::Literal { value: value.clone().unbind() } })
+    new_expr(value.py(), kind, Form::Literal { value: value.clone().unbind() })
 }
 
 fn kind_object(py: Python<'_>, data: KindRef) -> PyResult<Py<Kind>> {
@@ -116,10 +118,7 @@ impl Kind {
             )));
         }
         if let Ok(name) = head.cast::<PyString>() {
-            return Bound::new(
-                py,
-                Expr { kind: self.data, form: Form::Symbol { name: name.clone().unbind() } },
-            );
+            return new_expr(py, self.data, Form::Symbol { name: name.clone().unbind() });
         }
         if self.data.accepts(head) {
             return literal(self.data, head);
@@ -433,6 +432,7 @@ impl SymbolMarker {
 #[pyclass(frozen, module = "nary")]
 struct Expr {
     kind: KindRef,
+    hash: Option<isize>,
     form: Form,
 }
 
@@ -447,6 +447,32 @@ enum Form {
     Apply { head: Py<Expr>, args: Py<PyTuple> },
 }
 
+thread_local! {
+    static DROPPING: Cell<bool> = const { Cell::new(false) };
+    static DEFERRED: RefCell<Vec<Form>> = const { RefCell::new(Vec::new()) };
+}
+
+impl Drop for Expr {
+    fn drop(&mut self) {
+        if !matches!(self.form, Form::Apply { .. }) {
+            return;
+        }
+        let form = Python::attach(|py| {
+            std::mem::replace(&mut self.form, Form::Literal { value: py.None() })
+        });
+        if DROPPING.get() {
+            DEFERRED.with_borrow_mut(|deferred| deferred.push(form));
+            return;
+        }
+        DROPPING.set(true);
+        drop(form);
+        while let Some(form) = DEFERRED.with_borrow_mut(Vec::pop) {
+            drop(form);
+        }
+        DROPPING.set(false);
+    }
+}
+
 impl Expr {
     fn plain_name(&self) -> Option<&Py<PyString>> {
         match &self.form {
@@ -458,37 +484,54 @@ impl Expr {
     fn label(&self, py: Python<'_>) -> PyResult<String> {
         match self.plain_name() {
             Some(name) => Ok(name.bind(py).to_string()),
-            None => self.__repr__(py),
+            None => expr_repr(py, self),
         }
     }
 }
 
-fn structural_eq(py: Python<'_>, a: &Expr, b: &Expr) -> PyResult<bool> {
-    if std::ptr::eq(a, b) {
-        return Ok(true);
+fn structural_eq<'py>(a: &Bound<'py, Expr>, b: &Bound<'py, Expr>) -> PyResult<bool> {
+    let py = a.py();
+    let mut pending = vec![(a.clone(), b.clone())];
+    while let Some((a, b)) = pending.pop() {
+        if a.is(&b) {
+            continue;
+        }
+        let (a, b) = (a.get(), b.get());
+        if !same_kind(a.kind, b.kind) || matches!((a.hash, b.hash), (Some(x), Some(y)) if x != y) {
+            return Ok(false);
+        }
+        let equal = match (&a.form, &b.form) {
+            (Form::Symbol { name: x }, Form::Symbol { name: y }) => {
+                x.bind(py).as_any().eq(y.bind(py))?
+            }
+            (Form::Literal { value: x }, Form::Literal { value: y }) => {
+                let (x, y) = (x.bind(py), y.bind(py));
+                x.get_type().is(&y.get_type()) && x.eq(y)?
+            }
+            (Form::Apply { head: h1, args: a1 }, Form::Apply { head: h2, args: a2 }) => {
+                let (a1, a2) = (a1.bind(py), a2.bind(py));
+                if a1.len() != a2.len() {
+                    return Ok(false);
+                }
+                for (x, y) in a1.iter().zip(a2.iter()).rev() {
+                    pending.push((x.cast_into()?, y.cast_into()?));
+                }
+                pending.push((h1.bind(py).clone(), h2.bind(py).clone()));
+                true
+            }
+            _ => false,
+        };
+        if !equal {
+            return Ok(false);
+        }
     }
-    if !same_kind(a.kind, b.kind) {
-        return Ok(false);
-    }
-    Ok(match (&a.form, &b.form) {
-        (Form::Symbol { name: x }, Form::Symbol { name: y }) => {
-            x.bind(py).as_any().eq(y.bind(py))?
-        }
-        (Form::Literal { value: x }, Form::Literal { value: y }) => {
-            let (x, y) = (x.bind(py), y.bind(py));
-            x.get_type().is(&y.get_type()) && x.eq(y)?
-        }
-        (Form::Apply { head: h1, args: a1 }, Form::Apply { head: h2, args: a2 }) => {
-            structural_eq(py, h1.get(), h2.get())? && a1.bind(py).as_any().eq(a2.bind(py))?
-        }
-        _ => false,
-    })
+    Ok(true)
 }
 
-fn compare(slf: &Expr, other: &Bound<'_, PyAny>, op: CompareOp) -> PyResult<Py<PyAny>> {
+fn compare(slf: &Bound<'_, Expr>, other: &Bound<'_, PyAny>, op: CompareOp) -> PyResult<Py<PyAny>> {
     let py = other.py();
     let equal = match other.cast_exact::<Expr>() {
-        Ok(other) => structural_eq(py, slf, other.get())?,
+        Ok(other) => structural_eq(slf, other)?,
         Err(_) => return Ok(py.NotImplemented()),
     };
     Ok(match op {
@@ -498,26 +541,71 @@ fn compare(slf: &Expr, other: &Bound<'_, PyAny>, op: CompareOp) -> PyResult<Py<P
     })
 }
 
-fn combine_hashes(parts: [usize; 3]) -> isize {
+fn mix(hash: u64, part: usize) -> u64 {
     const MULTIPLIER: u64 = 0x9E37_79B9_7F4A_7C15;
-    let mut hash = MULTIPLIER;
-    for part in parts {
-        hash = (hash ^ part as u64).wrapping_mul(MULTIPLIER);
-        hash ^= hash >> 32;
-    }
-    hash as isize
+    let hash = (hash ^ part as u64).wrapping_mul(MULTIPLIER);
+    hash ^ (hash >> 32)
 }
 
-fn expr_hash(py: Python<'_>, e: &Expr) -> PyResult<isize> {
-    let parts = match &e.form {
-        Form::Symbol { name } => [0, e.kind.id, name.bind(py).hash()? as usize],
-        Form::Declared { .. } => [1, e.kind.id, e as *const Expr as usize],
-        Form::Apply { head, args } => {
-            [2, expr_hash(py, head.get())? as usize, args.bind(py).hash()? as usize]
-        }
-        Form::Literal { value } => [3, e.kind.id, value.bind(py).hash()? as usize],
+static DECLARED_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+fn form_hash(py: Python<'_>, kind: KindRef, form: &Form) -> Option<isize> {
+    let parts = match form {
+        Form::Symbol { name } => [0, kind.id, name.bind(py).hash().ok()? as usize],
+        Form::Declared { .. } => [1, kind.id, DECLARED_COUNT.fetch_add(1, Ordering::Relaxed)],
+        Form::Literal { value } => [3, kind.id, value.bind(py).hash().ok()? as usize],
+        Form::Apply { .. } => unreachable!("apply computes the hash of an application"),
     };
-    Ok(combine_hashes(parts))
+    Some(parts.into_iter().fold(0, mix) as isize)
+}
+
+fn new_expr(py: Python<'_>, kind: KindRef, form: Form) -> PyResult<Bound<'_, Expr>> {
+    let hash = form_hash(py, kind, &form);
+    Bound::new(py, Expr { kind, hash, form })
+}
+
+enum Piece<'py> {
+    Text(&'static str),
+    Expr(Bound<'py, Expr>),
+}
+
+fn expr_repr(py: Python<'_>, root: &Expr) -> PyResult<String> {
+    let mut text = String::new();
+    let mut pending = Vec::new();
+    let mut next = Some(root);
+    let mut held;
+    loop {
+        if let Some(e) = next.take() {
+            match &e.form {
+                Form::Symbol { name } | Form::Declared { name, .. } => {
+                    text.push_str(&name.bind(py).to_cow()?)
+                }
+                Form::Literal { value } => text.push_str(&value.bind(py).repr()?.to_cow()?),
+                Form::Apply { head, args } => {
+                    let args = args.bind(py);
+                    if !(args.is_empty() && head.get().plain_name().is_some()) {
+                        pending.push(Piece::Text(")"));
+                        for (position, arg) in args.iter().enumerate().rev() {
+                            pending.push(Piece::Expr(arg.cast_into()?));
+                            if position > 0 {
+                                pending.push(Piece::Text(", "));
+                            }
+                        }
+                        pending.push(Piece::Text("("));
+                    }
+                    pending.push(Piece::Expr(head.bind(py).clone()));
+                }
+            }
+        }
+        match pending.pop() {
+            Some(Piece::Text(piece)) => text.push_str(piece),
+            Some(Piece::Expr(e)) => {
+                held = e;
+                next = Some(held.get());
+            }
+            None => return Ok(text),
+        }
+    }
 }
 
 fn wrong_kind(py: Python<'_>, head: &Expr, expected: KindRef, arg: &Bound<'_, PyAny>) -> PyErr {
@@ -592,6 +680,7 @@ fn apply<'py>(head: &Bound<'py, Expr>, args: &Bound<'py, PyTuple>) -> PyResult<B
         )));
     }
     let mut converted: Option<Vec<Bound<'py, PyAny>>> = None;
+    let mut hash = expr.hash.map(|head_hash| mix(mix(0, 2), head_hash as usize));
     for (position, arg) in args.iter_borrowed().enumerate() {
         let expected = match sig.run_element {
             Some(element) if position >= fixed => element,
@@ -599,15 +688,17 @@ fn apply<'py>(head: &Bound<'py, Expr>, args: &Bound<'py, PyTuple>) -> PyResult<B
         };
         match arg.cast_exact::<Expr>() {
             Ok(expr_arg) if same_kind(expr_arg.get().kind, expected) => {
+                hash = hash.zip(expr_arg.get().hash).map(|(h, a)| mix(h, a as usize));
                 if let Some(converted) = converted.as_mut() {
                     converted.push(arg.to_owned());
                 }
             }
             Err(_) if expected.accepts(&arg) => {
-                let node = literal(expected, &arg)?.into_any();
+                let node = literal(expected, &arg)?;
+                hash = hash.zip(node.get().hash).map(|(h, a)| mix(h, a as usize));
                 converted
                     .get_or_insert_with(|| args.iter().take(position).collect())
-                    .push(node);
+                    .push(node.into_any());
             }
             _ => return Err(wrong_kind(py, expr, expected, &arg)),
         }
@@ -623,6 +714,7 @@ fn apply<'py>(head: &Bound<'py, Expr>, args: &Bound<'py, PyTuple>) -> PyResult<B
         py,
         Expr {
             kind: sig.output,
+            hash: hash.map(|h| h as isize),
             form: Form::Apply { head: head.clone().unbind(), args: args.unbind() },
         },
     )
@@ -801,6 +893,11 @@ impl Expr {
     }
 
     #[getter]
+    fn is_atom(&self) -> bool {
+        !matches!(self.form, Form::Apply { .. })
+    }
+
+    #[getter]
     fn value(&self, py: Python<'_>) -> Option<Py<PyAny>> {
         match &self.form {
             Form::Literal { value } => Some(value.clone_ref(py)),
@@ -809,24 +906,7 @@ impl Expr {
     }
 
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
-        match &self.form {
-            Form::Symbol { name } | Form::Declared { name, .. } => Ok(name.bind(py).to_string()),
-            Form::Literal { value } => Ok(value.bind(py).repr()?.to_string()),
-            Form::Apply { head, args } => {
-                let head = head.get();
-                let args = args.bind(py);
-                let head = match head.plain_name() {
-                    Some(name) if args.is_empty() => return Ok(name.bind(py).to_string()),
-                    Some(name) => name.bind(py).to_string(),
-                    None => head.__repr__(py)?,
-                };
-                let mut parts = Vec::with_capacity(args.len());
-                for arg in args.iter() {
-                    parts.push(arg.repr()?.to_string());
-                }
-                Ok(format!("{}({})", head, parts.join(", ")))
-            }
-        }
+        expr_repr(py, self)
     }
 
     fn __add__<'py>(slf: &Bound<'py, Self>, other: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
@@ -901,17 +981,19 @@ impl Expr {
             CompareOp::Gt => Operator::Gt,
             CompareOp::Le => Operator::Le,
             CompareOp::Ge => Operator::Ge,
-            CompareOp::Eq | CompareOp::Ne => return compare(slf.get(), other, op),
+            CompareOp::Eq | CompareOp::Ne => return compare(slf, other, op),
         };
         Ok(binary(slf, other, operator)?.unbind())
     }
 
-    fn __hash__(&self, py: Python<'_>) -> PyResult<isize> {
-        expr_hash(py, self)
+    fn __hash__(&self) -> PyResult<isize> {
+        self.hash.ok_or_else(|| PyTypeError::new_err("unhashable literal in expression"))
     }
 
-    fn __getattr__(&self, py: Python<'_>, name: &Bound<'_, PyString>) -> PyResult<Py<PyAny>> {
-        if let Form::Apply { head, args } = &self.form {
+    fn __getattr__(slf: &Bound<'_, Self>, name: &Bound<'_, PyString>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        let this = slf.get();
+        if let Form::Apply { head, args } = &this.form {
             let head = head.get();
             if let (Form::Declared { names: Some(names), .. }, Some(sig)) =
                 (&head.form, &head.kind.signature)
@@ -926,6 +1008,12 @@ impl Expr {
                     }
                     return Ok(args.get_item(index)?.unbind());
                 }
+            }
+        }
+        if let (Some(_), Some(properties)) = (&this.kind.signature, PROPERTIES.get(py)) {
+            let properties = properties.bind(py).call1((slf,))?.cast_into::<PyDict>()?;
+            if let Some(value) = properties.get_item(name)? {
+                return Ok(value.unbind());
             }
         }
         Err(PyAttributeError::new_err(format!(
@@ -986,7 +1074,7 @@ fn declare_function<'py>(
         other => other,
     };
     let kind = function_kind(py, &kinds, returns)?;
-    Bound::new(py, Expr { kind, form: Form::Declared { name, names, symbols } })
+    new_expr(py, kind, Form::Declared { name, names, symbols })
 }
 
 #[pyfunction]
@@ -996,7 +1084,7 @@ fn declare_constant<'py>(
     kind: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, Expr>> {
     let kind = expect_kind(kind)?;
-    Bound::new(py, Expr { kind, form: Form::Declared { name, names: None, symbols: None } })
+    new_expr(py, kind, Form::Declared { name, names: None, symbols: None })
 }
 
 #[pyfunction]
@@ -1030,6 +1118,13 @@ fn set_operator(
     })
 }
 
+#[pyfunction(name = "_set_properties")]
+fn set_properties(py: Python<'_>, properties: Py<PyAny>) -> PyResult<()> {
+    PROPERTIES
+        .set(py, properties)
+        .map_err(|_| PyValueError::new_err("the properties are already set"))
+}
+
 #[pymodule]
 fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Expr>()?;
@@ -1049,5 +1144,6 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(declare_function, m)?)?;
     m.add_function(wrap_pyfunction!(declare_constant, m)?)?;
     m.add_function(wrap_pyfunction!(set_operator, m)?)?;
+    m.add_function(wrap_pyfunction!(set_properties, m)?)?;
     Ok(())
 }
