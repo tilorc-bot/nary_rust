@@ -312,13 +312,19 @@ def test_a_chain_100000_deep(check):
     assert run.returncode == 0
 
 
-def test_the_walker_imports_only_is_lambda():
+def test_the_walker_imports_only_is_lambda_and_typing():
     tree = ast.parse(Path(traversal.__file__).read_text(encoding="utf-8"))
     imports = [node for node in ast.walk(tree) if isinstance(node, (ast.Import, ast.ImportFrom))]
     assert [(node.module, [alias.name for alias in node.names]) for node in imports] == [
-        ("functions", ["is_lambda"])
+        ("__future__", ["annotations"]),
+        ("collections.abc", ["Callable", "Iterator"]),
+        ("typing", ["TypeVar"]),
+        ("_core", ["Expr"]),
+        ("functions", ["is_lambda"]),
     ]
     names = {name for name in vars(traversal) if not name.startswith("__")}
-    assert names == {"bottom_up", "is_lambda", "_never"}
+    assert names == {
+        "bottom_up", "is_lambda", "_never", "annotations", "Callable", "Iterator", "TypeVar", "Expr", "_Result"
+    }
     assert traversal.is_lambda is is_lambda
 

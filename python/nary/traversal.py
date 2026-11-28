@@ -1,13 +1,24 @@
+from __future__ import annotations
+
+from collections.abc import Callable, Iterator
+from typing import TypeVar
+
+from ._core import Expr
 from .functions import is_lambda
 
 __all__ = ["bottom_up"]
 
+_Result = TypeVar("_Result")
 
-def _never(head):
+
+def _never(head: Expr) -> bool:
     return False
 
 
-def bottom_up(at_node, flat=_never):
+def bottom_up(
+    at_node: Callable[[Expr | _Result, list[Expr | _Result]], _Result],
+    flat: Callable[[Expr], bool] = _never,
+) -> Callable[[Expr], Expr | _Result]:
     """Return a function walk(e) that gives the result for an expression, children first.
 
     at_node(head, args) is called once for each application, with its head and
@@ -56,11 +67,13 @@ def bottom_up(at_node, flat=_never):
     Add [x, y, z, sin(Add(x, y))]
     Add(x, y, z, sin(Add(x, y)))
     """
-    done = {}
+    done: dict[Expr, _Result] = {}
 
-    def walk(root):
-        results = []
-        stack = [(None, iter([root]), results, None)]
+    def walk(root: Expr) -> Expr | _Result:
+        results: list[Expr | _Result] = []
+        stack: list[tuple[Expr | None, Iterator[Expr], list[Expr | _Result], Expr | None]] = [
+            (None, iter([root]), results, None)
+        ]
         while stack:
             node, pending, done_args, run_head = stack[-1]
             for e in pending:
