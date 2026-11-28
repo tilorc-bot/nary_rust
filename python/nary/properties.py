@@ -1,16 +1,32 @@
 """
-    >>> import nary.arithmetic_rules
-    >>> from nary import Add, Mul, Pow
+    >>> from nary import Add, Mul, NumberKind, Pow
+    >>> from nary.calculus import NumberFunction
+    >>> from nary.functions import Lambda
     >>> Mul.is_associative, Mul.is_commutative, Mul.identity_element, Mul.absorbing_element
     (True, True, 1, 0)
     >>> Add.absorbing_element, Pow.is_associative, Pow.identity_element
     (None, False, None)
+    >>> x = NumberKind("x")
+    >>> f, square = NumberFunction("f"), Lambda(x, x * x)
+    >>> f.is_commutative, f.identity_element, square.is_associative, square.absorbing_element
+    (False, None, False, None)
+    >>> x.is_commutative
+    Traceback (most recent call last):
+        ...
+    AttributeError: 'Expr' object has no attribute 'is_commutative'
 """
 
 from . import _core
+from ._core import Expr
 from .rules import _check_declared_function, flat, rule, unordered
 
-__all__ = ["declare_properties", "declare_property", "is_property", "property_rules"]
+__all__ = [
+    "declare_properties",
+    "declare_property",
+    "declared_properties",
+    "is_property",
+    "property_rules",
+]
 
 _defaults = {}
 _elements = set()
@@ -90,6 +106,24 @@ def declare_properties(F, **given):
     if bound.get("is_commutative"):
         unordered(F)
     _declared[F] = bound
+
+
+def declared_properties(F):
+    """
+    >>> from nary import Add, NumberKind, Pow
+    >>> from nary.calculus import NumberFunction
+    >>> declared_properties(Add)
+    {'is_associative': True, 'is_commutative': True, 'identity_element': 0}
+    >>> declared_properties(Pow), declared_properties(NumberFunction("f"))
+    ({}, {})
+    >>> declared_properties(NumberKind("x"))
+    Traceback (most recent call last):
+        ...
+    TypeError: declared_properties expects a function, got x
+    """
+    if not (isinstance(F, Expr) and F.kind.inputs is not None):
+        raise TypeError(f"declared_properties expects a function, got {F!r}")
+    return dict(_declared.get(F, {}))
 
 
 def _properties_of(F):

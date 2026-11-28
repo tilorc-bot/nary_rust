@@ -936,9 +936,7 @@ impl Expr {
                 }
             }
         }
-        if let (Form::Declared { .. }, Some(_), Some(properties)) =
-            (&this.form, &this.kind.signature, PROPERTIES.get(py))
-        {
+        if let (Some(_), Some(properties)) = (&this.kind.signature, PROPERTIES.get(py)) {
             let properties = properties.bind(py).call1((slf,))?.cast_into::<PyDict>()?;
             if let Some(value) = properties.get_item(name)? {
                 return Ok(value.unbind());

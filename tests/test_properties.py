@@ -1,9 +1,18 @@
+import subprocess
+import sys
+
 import pytest
 
-from nary import Add, Many, Mul, NumberKind, Pow, declare_function, exp, log, pi
+from nary import Add, Lambda, Many, Mul, NumberKind, Pow, declare_function, exp, log, pi
 from nary.arithmetic_rules import rules
+from nary.calculus import Derivative, NumberFunction
 from nary.logic import true
-from nary.properties import declare_properties, declare_property, property_rules
+from nary.properties import (
+    declare_properties,
+    declare_property,
+    declared_properties,
+    property_rules,
+)
 from nary.relational import Ne
 from nary.rules import is_flat, is_unordered, rule
 
@@ -54,6 +63,49 @@ def test_argument_names_still_resolve():
     assert Add(x, 1).terms == (x, NumberKind(1)) and Mul().factors == ()
     with pytest.raises(AttributeError, match="no attribute 'terms'"):
         Pow(x, 2).terms
+
+
+def test_every_function_has_the_defaults():
+    x = NumberKind("x")
+    f = NumberFunction("f")
+    for F in (f, Lambda(x, x * x), Derivative(f)):
+        assert F.is_associative is False and F.is_commutative is False
+        assert F.identity_element is None and F.absorbing_element is None
+        with pytest.raises(AttributeError, match="'Expr' object has no attribute 'is_asociative'"):
+            F.is_asociative
+    assert Derivative(f).function == f
+    for e in (x, NumberKind(1), x + NumberKind("y"), f(x)):
+        with pytest.raises(AttributeError, match="no attribute 'is_commutative'"):
+            e.is_commutative
+
+
+def test_import_nary_alone_declares_add_and_mul():
+    code = (
+        "import sys, nary\n"
+        "from nary.rules import is_flat, is_unordered\n"
+        "assert 'nary.arithmetic_rules' not in sys.modules\n"
+        "assert nary.Mul.is_associative is True\n"
+        "zero = nary.Add.identity_element\n"
+        "assert zero == nary.NumberKind(0) and zero.kind is nary.NumberKind\n"
+        "assert all(is_flat(F) and is_unordered(F) for F in (nary.Add, nary.Mul))\n"
+        "assert not is_flat(nary.Pow) and not is_unordered(nary.Pow)\n"
+        "import nary.arithmetic_rules\n"
+        "assert len(nary.arithmetic_rules.rules) == 9\n"
+    )
+    subprocess.run([sys.executable, "-c", code], check=True)
+
+
+def test_declared_properties():
+    assert declared_properties(Mul) == {
+        "is_associative": True, "is_commutative": True,
+        "identity_element": NumberKind(1), "absorbing_element": NumberKind(0),
+    }
+    assert declared_properties(Pow) == {} and declared_properties(NumberFunction("f")) == {}
+    declared_properties(Mul).clear()
+    assert len(declared_properties(Mul)) == 4 and Mul.identity_element == NumberKind(1)
+    for e in (NumberKind("x"), NumberKind(1), Add(NumberKind("x"), 1), 1):
+        with pytest.raises(TypeError, match="declared_properties expects a function"):
+            declared_properties(e)
 
 
 def test_refusals_record_nothing():
