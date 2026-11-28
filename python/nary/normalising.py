@@ -20,6 +20,7 @@ from typing import Callable
 
 from . import arithmetic_rules, logic_rules  # noqa: F401
 from ._core import Expr
+from .literal_evaluation import literal_of
 from .property_steps import apply_property_steps
 from .logic import true
 from .rewriting import _has_a_value
@@ -50,10 +51,11 @@ def normalise(e: Expr, known: Callable[[Expr], object] | None = None) -> Expr:
         raise TypeError(f"normalise expects an expression, got {e!r}")
     known = known or (lambda condition: False)
 
-    walk = bottom_up(
-        lambda head, args: apply_property_steps(head, args, has_a_value),
-        flat=lambda head: head.is_associative,
-    )
+    def literal_or_property_steps(head: Expr, args: list[Expr]) -> Expr:
+        literal = None if head.is_associative else literal_of(head, args)
+        return apply_property_steps(head, args, has_a_value) if literal is None else literal
+
+    walk = bottom_up(literal_or_property_steps, flat=lambda head: head.is_associative)
 
     def holds(condition: Expr) -> bool:
         condition = walk(condition)

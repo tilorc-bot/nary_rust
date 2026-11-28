@@ -6,19 +6,22 @@ from nary import (
     Add, BoolKind, E, Eq, Ge, Gt, Le, Lt, Many, Mul, Ne, NumberKind, Pow, Rational,
     declare_function, declare_kind, log, re, sin,
 )
-from nary.properties import declare_properties
+from nary.calculus import NumberFunction
+from nary.properties import declare_properties, declare_property, is_property
 from nary._numbers import MAX_BITS
 from nary.logic import false, true
 from nary.normalising import normalise
 
 
-Max = declare_function("EvalMax", Many(NumberKind), returns=NumberKind, domain=true)
-declare_properties(
-    Max, is_associative=True, is_commutative=True,
-    evaluate_literals=max,
+Max = declare_function(
+    "EvalMax", Many(NumberKind), returns=NumberKind, domain=true, evaluate_literals=max,
 )
-First = declare_function("EvalFirst", Many(NumberKind), returns=NumberKind, domain=true)
-declare_properties(First, is_associative=True, evaluate_literals=lambda first, *rest: first)
+declare_properties(Max, is_associative=True, is_commutative=True)
+First = declare_function(
+    "EvalFirst", Many(NumberKind), returns=NumberKind, domain=true,
+    evaluate_literals=lambda first, *rest: first,
+)
+declare_properties(First, is_associative=True)
 
 
 def test_a_sum_of_integers():
@@ -305,6 +308,54 @@ def test_sin_does_not_declare_how_its_literals_compute():
     assert sin.evaluate_literals is None
 
 
+def test_a_function_declared_with_evaluate_literals_gives_it_back():
+    Smallest = declare_function(
+        "EvalSmallest", Many(NumberKind), returns=NumberKind, domain=true, evaluate_literals=min,
+    )
+    assert Smallest.evaluate_literals is min
+
+
+def test_a_function_declared_without_evaluate_literals_has_none():
+    Plain = declare_function("EvalPlain", NumberKind, returns=NumberKind, domain=true)
+    assert Plain.evaluate_literals is None
+
+
+def test_a_function_that_is_a_symbol_has_no_evaluate_literals():
+    assert NumberFunction("f").evaluate_literals is None
+
+
+def test_evaluate_literals_must_be_a_function():
+    with pytest.raises(TypeError, match="^evaluate_literals of EvalFive must be a function, got 5$"):
+        declare_function("EvalFive", NumberKind, returns=NumberKind, domain=true, evaluate_literals=5)
+
+
+def test_evaluate_literals_is_not_among_the_properties_of_add():
+    assert "evaluate_literals" not in Add.properties
+
+
+def test_evaluate_literals_is_not_a_property():
+    assert not is_property("evaluate_literals")
+
+
+def test_evaluate_literals_cannot_be_declared_as_a_property():
+    with pytest.raises(ValueError, match="^evaluate_literals is already an attribute of Expr$"):
+        declare_property("evaluate_literals")
+
+
+def test_evaluate_literals_cannot_be_given_to_declare_properties():
+    Late = declare_function("EvalLate", NumberKind, returns=NumberKind, domain=true)
+    with pytest.raises(TypeError, match="^evaluate_literals is not a property$"):
+        declare_properties(Late, evaluate_literals=abs)
+
+
+def test_a_freshly_declared_head_of_three_arguments_is_evaluated():
+    Clamp = declare_function(
+        "EvalClamp", NumberKind, NumberKind, NumberKind, returns=NumberKind, domain=true,
+        evaluate_literals=lambda low, value, high: min(max(low, value), high),
+    )
+    assert normalise(Clamp(0, 7, 5)) == NumberKind(5)
+
+
 def test_a_freshly_declared_maximum_of_two_numbers_is_the_larger():
     assert normalise(Max(2, 3)) == NumberKind(3)
 
@@ -314,14 +365,18 @@ def test_a_freshly_declared_maximum_combines_its_numbers_beside_a_symbol():
 
 
 def test_a_freshly_declared_head_of_one_argument_is_evaluated():
-    Negate = declare_function("EvalNegate", NumberKind, returns=NumberKind, domain=true)
-    declare_properties(Negate, evaluate_literals=lambda value: -value)
+    Negate = declare_function(
+        "EvalNegate", NumberKind, returns=NumberKind, domain=true,
+        evaluate_literals=lambda value: -value,
+    )
     assert normalise(Negate(Rational(1, 2))) == Rational(-1, 2)
 
 
 def test_a_freshly_declared_head_of_one_argument_is_left_alone_on_a_symbol():
-    Opposite = declare_function("EvalOpposite", NumberKind, returns=NumberKind, domain=true)
-    declare_properties(Opposite, evaluate_literals=lambda value: -value)
+    Opposite = declare_function(
+        "EvalOpposite", NumberKind, returns=NumberKind, domain=true,
+        evaluate_literals=lambda value: -value,
+    )
     assert normalise(Opposite(NumberKind("x"))) == Opposite(NumberKind("x"))
 
 
@@ -341,14 +396,18 @@ def test_numbers_of_a_head_that_is_not_commutative_are_not_combined_across_a_sym
 
 
 def test_a_freshly_declared_head_may_give_none_to_leave_its_literals():
-    Ratio = declare_function("EvalRatio", NumberKind, NumberKind, returns=NumberKind, domain=true)
-    declare_properties(Ratio, evaluate_literals=lambda a, b: Fraction(a) / b if b else None)
+    Ratio = declare_function(
+        "EvalRatio", NumberKind, NumberKind, returns=NumberKind, domain=true,
+        evaluate_literals=lambda a, b: Fraction(a) / b if b else None,
+    )
     assert (normalise(Ratio(1, 2)), normalise(Ratio(1, 0))) == (Rational(1, 2), Ratio(1, 0))
 
 
 def test_a_freshly_declared_comparison_gives_a_result_of_another_kind():
-    Divides = declare_function("EvalDivides", NumberKind, NumberKind, returns=BoolKind, domain=true)
-    declare_properties(Divides, evaluate_literals=lambda a, b: b % a == 0)
+    Divides = declare_function(
+        "EvalDivides", NumberKind, NumberKind, returns=BoolKind, domain=true,
+        evaluate_literals=lambda a, b: b % a == 0,
+    )
     assert (normalise(Divides(3, 6)), normalise(Divides(4, 6))) == (true, false)
 
 
@@ -459,30 +518,38 @@ def test_a_small_sum_of_rationals_with_one_large_denominator():
 
 
 def test_a_fraction_with_denominator_one_becomes_an_integer_literal():
-    Halve = declare_function("EvalHalve", NumberKind, returns=NumberKind, domain=true)
-    declare_properties(Halve, evaluate_literals=lambda value: Fraction(value, 2))
+    Halve = declare_function(
+        "EvalHalve", NumberKind, returns=NumberKind, domain=true,
+        evaluate_literals=lambda value: Fraction(value, 2),
+    )
     result = normalise(Halve(4))
     assert repr(result) == "2" and type(result.value) is int
 
 
 def test_a_freshly_declared_maximum_over_a_fresh_kind_gives_a_literal_of_that_kind():
     Count = declare_kind("EvalCount", literals=(int,))
-    CountMax = declare_function("EvalCountMax", Many(Count), returns=Count, domain=true)
-    declare_properties(CountMax, is_associative=True, is_commutative=True, evaluate_literals=max)
+    CountMax = declare_function(
+        "EvalCountMax", Many(Count), returns=Count, domain=true, evaluate_literals=max,
+    )
+    declare_properties(CountMax, is_associative=True, is_commutative=True)
     result = normalise(CountMax(Count(2), Count(3)))
     assert (result, result.kind) == (Count(3), Count) and result != NumberKind(3)
 
 
 def test_a_symbol_among_the_arguments_of_a_head_that_is_not_associative_is_left_alone():
-    Ratio = declare_function("EvalRatioOfSymbol", NumberKind, NumberKind, returns=NumberKind, domain=true)
-    declare_properties(Ratio, evaluate_literals=lambda a, b: Fraction(a) / b)
+    Ratio = declare_function(
+        "EvalRatioOfSymbol", NumberKind, NumberKind, returns=NumberKind, domain=true,
+        evaluate_literals=lambda a, b: Fraction(a) / b,
+    )
     assert normalise(Ratio(NumberKind("x"), 2)) == Ratio(NumberKind("x"), 2)
 
 
 def test_literals_of_two_kinds_are_both_passed_as_their_values():
     Count = declare_kind("EvalRepeats", literals=(int,))
-    Repeat = declare_function("EvalRepeat", NumberKind, Count, returns=NumberKind, domain=true)
-    declare_properties(Repeat, evaluate_literals=lambda number, times: number * times)
+    Repeat = declare_function(
+        "EvalRepeat", NumberKind, Count, returns=NumberKind, domain=true,
+        evaluate_literals=lambda number, times: number * times,
+    )
     assert normalise(Repeat(Rational(1, 2), Count(4))) == NumberKind(2)
 
 
@@ -493,7 +560,9 @@ def test_a_literal_of_another_kind_cannot_be_an_argument_of_add():
 
 
 def test_an_error_raised_by_evaluate_literals_propagates():
-    Quotient = declare_function("EvalQuotient", NumberKind, NumberKind, returns=NumberKind, domain=true)
-    declare_properties(Quotient, evaluate_literals=lambda a, b: a // b)
+    Quotient = declare_function(
+        "EvalQuotient", NumberKind, NumberKind, returns=NumberKind, domain=true,
+        evaluate_literals=lambda a, b: a // b,
+    )
     with pytest.raises(ZeroDivisionError):
         normalise(Quotient(1, 0))

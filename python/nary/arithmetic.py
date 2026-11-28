@@ -21,20 +21,19 @@ __all__ = ["Add", "Mul", "Pow", "NegativeOne"]
 base, exponent = NumberKind("base"), NumberKind("exp")
 terms, factors = Many(NumberKind)("terms"), Many(NumberKind)("factors")
 
-Add = declare_function("Add", terms, returns=NumberKind, domain=true)
-declare_properties(
-    Add, is_associative=True, is_commutative=True, identity_element=0, evaluate_literals=exact_sum,
+Add = declare_function("Add", terms, returns=NumberKind, domain=true, evaluate_literals=exact_sum)
+declare_properties(Add, is_associative=True, is_commutative=True, identity_element=0)
+Mul = declare_function(
+    "Mul", factors, returns=NumberKind, domain=true, evaluate_literals=exact_product,
 )
-Mul = declare_function("Mul", factors, returns=NumberKind, domain=true)
 declare_properties(
-    Mul, is_associative=True, is_commutative=True, identity_element=1, absorbing_element=0,
-    evaluate_literals=exact_product,
+    Mul, is_associative=True, is_commutative=True, identity_element=1, absorbing_element=0
 )
 Pow = declare_function(
     "Pow", base, exponent, returns=NumberKind,
     domain=Or(Ne(base, 0), Gt(re(exponent), 0)),
+    evaluate_literals=exact_power,
 )
-declare_properties(Pow, evaluate_literals=exact_power)
 
 NegativeOne = NumberKind(-1)
 

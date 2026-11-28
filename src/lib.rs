@@ -483,6 +483,7 @@ enum Form {
         name: Py<PyString>,
         names: Option<Py<PyTuple>>,
         symbols: Option<Box<[bool]>>,
+        evaluate_literals: Option<Py<PyAny>>,
     },
     Apply { head: Py<Expr>, args: Py<PyTuple> },
 }
@@ -919,6 +920,14 @@ impl Expr {
     }
 
     #[getter]
+    fn evaluate_literals(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        match &self.form {
+            Form::Declared { evaluate_literals: Some(function), .. } => Some(function.clone_ref(py)),
+            _ => None,
+        }
+    }
+
+    #[getter]
     fn params<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyTuple>>> {
         let (Form::Declared { symbols, .. }, Some(sig)) = (&self.form, &self.kind.signature) else {
             return Ok(None);
@@ -1081,13 +1090,14 @@ impl Expr {
 }
 
 #[pyfunction]
-#[pyo3(signature = (name, *arg_kinds, returns, names=None))]
+#[pyo3(signature = (name, *arg_kinds, returns, names=None, evaluate_literals=None))]
 fn declare_function<'py>(
     py: Python<'py>,
     name: Py<PyString>,
     arg_kinds: &Bound<'py, PyTuple>,
     returns: &Bound<'py, PyAny>,
     names: Option<Py<PyTuple>>,
+    evaluate_literals: Option<Py<PyAny>>,
 ) -> PyResult<Bound<'py, Expr>> {
     let returns = match returns.cast_exact::<Kind>() {
         Ok(kind) => kind.get().data,
@@ -1132,7 +1142,7 @@ fn declare_function<'py>(
         other => other,
     };
     let kind = function_kind(py, &kinds, returns)?;
-    new_expr(py, kind, Form::Declared { name, names, symbols })
+    new_expr(py, kind, Form::Declared { name, names, symbols, evaluate_literals })
 }
 
 #[pyfunction]
@@ -1142,7 +1152,7 @@ fn declare_constant<'py>(
     kind: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, Expr>> {
     let kind = expect_kind(kind)?;
-    new_expr(py, kind, Form::Declared { name, names: None, symbols: None })
+    new_expr(py, kind, Form::Declared { name, names: None, symbols: None, evaluate_literals: None })
 }
 
 #[pyfunction]

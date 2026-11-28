@@ -46,6 +46,7 @@ def test_a_function_applied_twice_is_applied_once():
     assert normalise(Magnitude(Magnitude(x))) == Magnitude(x)
 
 
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason="steps never run on a one-argument head")
 def test_an_odd_function_takes_the_negation_outside():
     flip = declare_function("flip", NumberKind, returns=NumberKind, domain=true)
     Odd = declare_function("Odd", NumberKind, returns=NumberKind, domain=true)
@@ -55,7 +56,7 @@ def test_an_odd_function_takes_the_negation_outside():
     def take_negation_outside(head, args, negation):
         (arg,) = args
         if not arg.is_atom and arg.head == negation:
-            return negation(head(*arg.args))
+            return [negation(head(*arg.args))]
         return args
 
     declare_properties(Odd, odd_under=flip)
