@@ -1,3 +1,5 @@
+mod simplex;
+
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{LazyLock, Mutex, PoisonError};
@@ -1057,6 +1059,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Kind>()?;
     m.add_class::<KindFamily>()?;
     m.add_class::<SymbolMarker>()?;
+    m.add_class::<simplex::Simplex>()?;
     let many = MANY.get_or_try_init(m.py(), || {
         Py::new(
             m.py(),
