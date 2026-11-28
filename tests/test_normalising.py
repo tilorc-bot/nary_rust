@@ -166,3 +166,16 @@ def test_lambdas_are_left_alone():
 def test_only_expressions_are_normalised():
     with pytest.raises(TypeError):
         normalise(3)
+
+
+def test_a_kind_declared_here_with_a_plain_head_and_a_multiset_head():
+    Shape = nr.declare_kind("Shape")
+    Rotate = declare_function("Rotate", Shape, returns=Shape, domain=true)
+    Overlay = declare_function("Overlay", Many(Shape), returns=Shape, domain=true)
+    declare_properties(Overlay, is_associative=True, is_commutative=True)
+    a, b, c = Shape("a"), Shape("b"), Shape("c")
+
+    assert normalise(Rotate(Rotate(a))) == Rotate(Rotate(a))
+    assert Counter(normalise(Overlay(b, Overlay(c, a))).args) == Counter([a, b, c])
+    assert normalise(Rotate(Overlay(c, Overlay(b, a)))) == Rotate(normalise(Overlay(a, b, c)))
+    assert normalise(Overlay(Overlay(a))) == a and normalise(Overlay(a)).kind is Shape
