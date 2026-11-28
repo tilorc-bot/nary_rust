@@ -53,6 +53,8 @@ to_lean_facts writes the facts recorded for a function.
       Nary.Flat Nary.Add
 """
 
+from __future__ import annotations
+
 import re as _re
 
 from . import arithmetic, calculus, constants, elementary, logic, relational
@@ -164,7 +166,7 @@ _KEYWORDS = frozenset("""
 _RESERVED = frozenset({"some", "none", "Nary"})
 
 
-def _identifier(name):
+def _identifier(name: str) -> str:
     if not name:
         raise ValueError("a symbol with an empty name cannot be written in Lean")
     if name in _RESERVED:
@@ -179,25 +181,25 @@ def _identifier(name):
     return f"«{name}»"
 
 
-def _no_definition(e, why=""):
+def _no_definition(e: Expr, why: str = "") -> ValueError:
     return ValueError(f"{e!r} has no Lean definition{why}")
 
 
-def _not_in_table(e):
+def _not_in_table(e: Expr) -> ValueError:
     return _no_definition(e, ": it is not in nary.lean.LEAN_NAMES")
 
 
-def _is_declared_function(e):
+def _is_declared_function(e: Expr) -> bool:
     return e.is_constant and e.kind.inputs is not None
 
 
 class _Printer:
-    def __init__(self, rule=False):
+    def __init__(self, rule: bool = False) -> None:
         self.rule = rule
-        self.free = {}
-        self.bound = []
+        self.free: dict[str, Expr] = {}
+        self.bound: list[Expr] = []
 
-    def symbol(self, e):
+    def symbol(self, e: Expr) -> str:
         for variable in reversed(self.bound):
             if variable.name == e.name:
                 if variable.kind is not e.kind:
@@ -221,11 +223,11 @@ class _Printer:
             )
         return _identifier(e.name)
 
-    def argument(self, e):
+    def argument(self, e: Expr) -> str:
         text, atomic = self.print(e)
         return text if atomic else f"({text})"
 
-    def print(self, e):
+    def print(self, e: Expr) -> tuple[str, bool]:
         if not isinstance(e, Expr):
             raise TypeError(f"to_lean expects an expression, got {e!r}")
 
@@ -293,11 +295,11 @@ class _Printer:
         return f"Nary.apply {self.argument(head)} {self.argument(argument)}", False
 
 
-def to_lean(e):
+def to_lean(e: Expr) -> str:
     return _Printer().print(e)[0]
 
 
-def to_lean_example(e):
+def to_lean_example(e: Expr) -> str:
     printer = _Printer()
     term = printer.print(e)[0]
     if e.kind not in _RESULT_TYPES:
@@ -312,7 +314,7 @@ def to_lean_example(e):
     )
 
 
-def _declaration_name(name, what):
+def _declaration_name(name: str | None, what: str) -> str:
     if name is None:
         raise ValueError(f"{what} has no name, so it cannot be a Lean theorem: give it name=")
     if not (_IDENTIFIER.match(name) and name not in _KEYWORDS):
@@ -323,7 +325,7 @@ def _declaration_name(name, what):
     return name
 
 
-def to_lean_rule(r):
+def to_lean_rule(r: Rule) -> str:
     if not isinstance(r, Rule):
         raise TypeError(f"to_lean_rule expects a Rule, got {r!r}")
     name = _declaration_name(r.name, f"the rule {r!r}")
@@ -344,7 +346,7 @@ def to_lean_rule(r):
     return f"abbrev {name} : Prop :=\n  {claim}"
 
 
-def to_lean_facts(f):
+def to_lean_facts(f: Expr) -> list[str]:
     if not _is_declared_function(f) or f not in LEAN_NAMES:
         raise _not_in_table(f)
     if len(f.kind.inputs) != 1 or f.kind.inputs[0].family is not Many:

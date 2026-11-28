@@ -20,8 +20,9 @@ jobs:
       - uses: astral-sh/setup-uv@v10.3.3
       - run: uv venv
       - run: uvx maturin develop -r
-      - run: uv pip install pytest
+      - run: uv pip install pytest mypy
       - run: .venv/bin/python -m pytest
+      - run: .venv/bin/python -m mypy
 
   lean:
     runs-on: ubuntu-latest

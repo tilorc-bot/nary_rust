@@ -23,22 +23,26 @@ A condition holds when known returns True for it.
     (Mul(x, Pow(x, -1)), 1)
 """
 
+from __future__ import annotations
+
+from collections.abc import Callable, Iterable, Iterator
+
 from ._core import Expr
 from .domains import domain_of
 from .functions import is_lambda
 from .logic import true
-from .rules import is_flat, is_unordered
+from .rules import Rule, is_flat, is_unordered
 
 __all__ = ["rewrite"]
 
 
-def rewrite(e, rules, known=None):
+def rewrite(e: Expr, rules: Iterable[Rule], known: Callable[[Expr], object] | None = None) -> Expr:
     if not isinstance(e, Expr):
         raise TypeError(f"rewrite expects an expression, got {e!r}")
     return _rewrite(e, tuple(rules), known or (lambda condition: False))
 
 
-def _rewrite(e, rules, known):
+def _rewrite(e: Expr, rules: tuple[Rule, ...], known: Callable[[Expr], object]) -> Expr:
     if e.is_atom or is_lambda(e):
         return e
     head = _rewrite(e.head, rules, known)
@@ -53,7 +57,7 @@ def _rewrite(e, rules, known):
     return e
 
 
-def _apply(rule, e, known):
+def _apply(rule: Rule, e: Expr, known: Callable[[Expr], object]) -> Expr | None:
     for bindings, used in _match_top(rule.pattern, e):
         condition = rule.condition
         if condition is not None and not _holds(_substitute(condition, bindings), known):
@@ -70,11 +74,11 @@ def _apply(rule, e, known):
     return None
 
 
-def _holds(condition, known):
+def _holds(condition: Expr, known: Callable[[Expr], object]) -> bool:
     return condition == true or known(condition) is True
 
 
-def _has_a_value(e, known):
+def _has_a_value(e: Expr, known: Callable[[Expr], object]) -> bool:
     """Whether e is known to have a value, given the conditions that known says hold.
 
     >>> from nary import Lambda, Ne, NumberKind, log, pi, sin
@@ -111,22 +115,22 @@ def _has_a_value(e, known):
     return all(_has_a_value(arg, known) for arg in e.args) and _holds(condition, known)
 
 
-def _flatten(e):
+def _flatten(e: Expr) -> Expr:
     if not (_is_declared(e.head) and is_flat(e.head)):
         return e
     if not any(arg.head == e.head for arg in e.args):
         return e
-    args = []
+    args: list[Expr] = []
     for arg in e.args:
         args.extend(arg.args if arg.head == e.head else (arg,))
     return e.head(*args)
 
 
-def _is_declared(head):
+def _is_declared(head: Expr | None) -> bool:
     return head is not None and head.is_constant
 
 
-def _match_top(pattern, e):
+def _match_top(pattern: Expr, e: Expr) -> Iterator[tuple[dict[Expr, Expr], set[int] | None]]:
     head = pattern.head
     if not (_is_declared(head) and is_unordered(head) and is_flat(head)):
         for bindings in _match(pattern, e, {}):
@@ -141,7 +145,7 @@ def _match_top(pattern, e):
             yield bindings, set(used)
 
 
-def _match(pattern, e, bindings):
+def _match(pattern: Expr, e: Expr, bindings: dict[Expr, Expr]) -> Iterator[dict[Expr, Expr]]:
     if pattern.is_symbol:
         if pattern.kind != e.kind:
             return
@@ -162,7 +166,7 @@ def _match(pattern, e, bindings):
                 yield from _match_in_order(pattern.args, e.args, with_head)
 
 
-def _match_in_order(patterns, args, bindings):
+def _match_in_order(patterns: tuple[Expr, ...], args: tuple[Expr, ...], bindings: dict[Expr, Expr]) -> Iterator[dict[Expr, Expr]]:
     if not patterns:
         yield bindings
         return
@@ -170,7 +174,9 @@ def _match_in_order(patterns, args, bindings):
         yield from _match_in_order(patterns[1:], args[1:], new)
 
 
-def _match_unordered(patterns, args, bindings, used):
+def _match_unordered(
+    patterns: tuple[Expr, ...], args: tuple[Expr, ...], bindings: dict[Expr, Expr], used: tuple[int, ...]
+) -> Iterator[tuple[dict[Expr, Expr], tuple[int, ...]]]:
     if not patterns:
         yield bindings, used
         return
@@ -180,7 +186,7 @@ def _match_unordered(patterns, args, bindings, used):
                 yield from _match_unordered(patterns[1:], args, new, used + (i,))
 
 
-def _substitute(e, bindings):
+def _substitute(e: Expr, bindings: dict[Expr, Expr]) -> Expr:
     if e.is_symbol:
         return bindings.get(e, e)
     if e.is_atom:

@@ -46,6 +46,16 @@ None, in Python, Rust, Lean, TOML and YAML.
 | how the code behaves | add a doctest or a test |
 | a decision that is still open | open an issue |
 
+## Types
+
+Every function in `python/nary` has annotations for its parameters and its
+result. A file whose name starts with `_` is exempt.
+
+- `python -m mypy` checks them, and CI runs it.
+- `python/nary/_core.pyi` describes the compiled module, and
+  `tests/test_stub.py` compares the two.
+- No `# type: ignore`: it is a comment.
+
 ## Markdown
 
 No README and no other Markdown file.

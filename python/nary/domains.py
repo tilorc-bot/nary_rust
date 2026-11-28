@@ -26,13 +26,17 @@ A domain must be a BoolKind expression whose symbols are all parameters.
     ValueError: the domain of f mentions y, which is not one of its parameters
 """
 
+from __future__ import annotations
+
+from collections.abc import Iterator
+
 from . import _core
-from ._core import Expr
+from ._core import Expr, Kind, Symbol
 from .kinds import BoolKind
 
 __all__ = ["declare_function", "domain", "domain_of"]
 
-_domains = {}
+_domains: dict[Expr, Expr] = {}
 
 _AWAITING_A_DECISION = {
     "Integral", "Sum", "Product", "Limit",
@@ -40,7 +44,9 @@ _AWAITING_A_DECISION = {
 }
 
 
-def declare_function(name, *parameters, returns, domain):
+def declare_function(
+    name: str, *parameters: Expr | Kind | Symbol, returns: Kind, domain: Expr | None
+) -> Expr:
     symbols = [p for p in parameters if isinstance(p, Expr) and p.is_symbol]
     if symbols and len(symbols) != len(parameters):
         raise TypeError(
@@ -72,7 +78,7 @@ def declare_function(name, *parameters, returns, domain):
     return function
 
 
-def _subexpressions(e):
+def _subexpressions(e: Expr) -> Iterator[Expr]:
     yield e
     if not e.is_atom:
         yield from _subexpressions(e.head)
@@ -80,17 +86,17 @@ def _subexpressions(e):
             yield from _subexpressions(arg)
 
 
-def _is_declared_function(e):
+def _is_declared_function(e: object) -> bool:
     return isinstance(e, Expr) and e.is_constant and e.kind.inputs is not None
 
 
-def domain(function):
+def domain(function: Expr) -> Expr | None:
     if not _is_declared_function(function):
         raise TypeError(f"domain expects a declared function, got {function!r}")
     return _domains.get(function)
 
 
-def domain_of(e):
+def domain_of(e: Expr) -> Expr | None:
     if not (isinstance(e, Expr) and _is_declared_function(e.head)):
         raise TypeError(f"domain_of expects an application of a declared function, got {e!r}")
     condition = domain(e.head)
@@ -100,7 +106,7 @@ def domain_of(e):
     return _replace(condition, dict(zip(parameters, e.args)))
 
 
-def _replace(e, replacements):
+def _replace(e: Expr, replacements: dict[Expr, Expr]) -> Expr:
     if e.is_symbol:
         return replacements.get(e, e)
     if e.is_atom:

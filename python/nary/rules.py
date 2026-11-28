@@ -32,17 +32,22 @@ Every symbol of the replacement must be in the pattern.
 
 """
 
+from __future__ import annotations
+
+from collections.abc import Iterator
+from typing import NoReturn
+
 from ._core import Expr, Kind
 from .functions import is_lambda
 from .kinds import BoolKind, Many
 
 __all__ = ["Rule", "flat", "is_flat", "is_unordered", "rule", "unordered"]
 
-_unordered = set()
-_flat = set()
+_unordered: set[Expr] = set()
+_flat: set[Expr] = set()
 
 
-def _subexpressions(e):
+def _subexpressions(e: Expr) -> Iterator[Expr]:
     stack = [e]
     while stack:
         e = stack.pop()
@@ -51,7 +56,7 @@ def _subexpressions(e):
             stack.extend(reversed((e.head, *e.args)))
 
 
-def _symbols(e):
+def _symbols(e: Expr) -> list[Expr]:
     symbols = []
     for sub in _subexpressions(e):
         if is_lambda(sub):
@@ -67,7 +72,16 @@ def _symbols(e):
 class Rule:
     __slots__ = ("condition", "erased", "name", "pattern", "replacement", "variables")
 
-    def __init__(self, pattern, replacement, when=None, name=None):
+    condition: Expr | None
+    erased: tuple[Expr, ...]
+    name: str | None
+    pattern: Expr
+    replacement: Expr
+    variables: tuple[Expr, ...]
+
+    def __init__(
+        self, pattern: Expr, replacement: object, when: Expr | None = None, name: str | None = None
+    ) -> None:
         if not isinstance(pattern, Expr):
             raise TypeError(f"the pattern of a rule must be an expression, got {pattern!r}")
         if pattern.is_symbol:
@@ -96,7 +110,7 @@ class Rule:
         variables = _symbols(pattern)
         in_replacement = _symbols(replacement)
         in_condition = _symbols(when) if when is not None else []
-        kinds = {}
+        kinds: dict[str, Kind] = {}
         for symbol in variables + in_replacement + in_condition:
             kind = kinds.setdefault(symbol.name, symbol.kind)
             if kind is not symbol.kind:
@@ -120,10 +134,10 @@ class Rule:
         set_(self, "variables", tuple(variables))
         set_(self, "erased", tuple(v for v in variables if v not in in_replacement))
 
-    def __setattr__(self, attribute, value):
+    def __setattr__(self, attribute: str, value: object) -> NoReturn:
         raise AttributeError("a Rule cannot be changed")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         parts = [repr(self.pattern), repr(self.replacement)]
         if self.condition is not None:
             parts.append(f"when={self.condition!r}")
@@ -132,20 +146,22 @@ class Rule:
         return f"Rule({', '.join(parts)})"
 
 
-def rule(pattern, replacement, when=None, name=None):
+def rule(
+    pattern: Expr, replacement: object, when: Expr | None = None, name: str | None = None
+) -> Rule:
     return Rule(pattern, replacement, when=when, name=name)
 
 
-def _is_declared_function(e):
+def _is_declared_function(e: object) -> bool:
     return isinstance(e, Expr) and e.is_constant and e.kind.inputs is not None
 
 
-def _check_declared_function(caller, f):
+def _check_declared_function(caller: str, f: object) -> None:
     if not _is_declared_function(f):
         raise TypeError(f"{caller} expects a declared function, got {f!r}")
 
 
-def unordered(f):
+def unordered(f: Expr) -> None:
     _check_declared_function("unordered", f)
     positions = tuple(
         p.params[0] if isinstance(p, Kind) and p.family is Many else p for p in f.params
@@ -165,7 +181,7 @@ def unordered(f):
     _unordered.add(f)
 
 
-def flat(f):
+def flat(f: Expr) -> None:
     _check_declared_function("flat", f)
     if f.kind.inputs != (Many(f.kind.output),):
         raise ValueError(
@@ -177,11 +193,11 @@ def flat(f):
     _flat.add(f)
 
 
-def is_unordered(f):
+def is_unordered(f: Expr) -> bool:
     _check_declared_function("is_unordered", f)
     return f in _unordered
 
 
-def is_flat(f):
+def is_flat(f: Expr) -> bool:
     _check_declared_function("is_flat", f)
     return f in _flat
