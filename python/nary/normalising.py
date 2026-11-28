@@ -27,18 +27,20 @@ __all__ = ["normalise"]
 
 
 def normalise(e: Expr, known: Callable[[Expr], object] | None = None) -> Expr:
-    """Normalise e and everything inside it.
+    """Rewrite e using the properties of the functions in it, such as Add.identity_element.
 
     Args:
-        e: The expression to normalise.
-        known: Called as known(condition) with condition normalised. Returning True
-            lets normalise erase an argument that has a value only under condition.
+        e: The expression to rewrite.
+        known: Called as known(condition). Where it returns True, an argument that has a
+            value only if condition holds may be removed.
 
     Returns:
-        The normal form of e.
+        The rewritten expression.
 
     >>> from nary import Ne, NumberKind, log
-    >>> x = NumberKind("x")
+    >>> x, y = NumberKind("x"), NumberKind("y")
+    >>> normalise((y + 0) + (x + y) * 1)
+    Add(x, y, y)
     >>> normalise(log(x) * 0), normalise(log(x) * 0, lambda condition: condition == Ne(x, 0))
     (Mul(0, log(x)), 0)
     """

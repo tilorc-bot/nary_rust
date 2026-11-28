@@ -12,22 +12,39 @@ _steps = {}
 
 
 def step(name: str, multiset_only: bool = False) -> Callable:
-    """Register the step of the property name.
+    """Register a function that changes the arguments of a head that has the property name.
 
     Args:
-        name: A name declare_property has declared.
-        multiset_only: If True, the step acts only on heads whose is_commutative is True.
+        name: A property, already declared with declare_property(name).
+        multiset_only: If True, the function is used only where head.is_commutative.
 
     Returns:
-        A decorator for fn. fn is called as fn(head, args) for an is_ name and as
-        fn(head, args, value) otherwise, with value = getattr(head, name), and returns
-        the new list of arguments. If an argument that may have no value is missing
-        from that list, the list is not used.
+        A decorator. The function it registers is called as fn(head, args) if name
+        starts with is_, and as fn(head, args, getattr(head, name)) otherwise. It returns
+        the new args.
 
-    >>> step("kind")
-    Traceback (most recent call last):
-        ...
-    ValueError: kind is not a property
+    >>> from nary import Many, NumberKind, declare_function, log
+    >>> from nary.logic import true
+    >>> from nary.normalising import normalise
+    >>> from nary.properties import declare_properties, declare_property
+    >>> declare_property("inverse_function")
+    >>> @step("inverse_function", multiset_only=True)
+    ... def cancel(head, args, inverse):
+    ...     for arg in args:
+    ...         if inverse(arg) in args:
+    ...             return [other for other in args if other not in (arg, inverse(arg))]
+    ...     return args
+    >>> undo = declare_function("undo", NumberKind, returns=NumberKind, domain=true)
+    >>> Tally = declare_function("Tally", Many(NumberKind), returns=NumberKind, domain=true)
+    >>> declare_properties(Tally, is_associative=True, is_commutative=True, inverse_function=undo)
+    >>> x, y = NumberKind("x"), NumberKind("y")
+    >>> normalise(Tally(x, y, undo(x)))
+    y
+
+    What fn returns is not used if it leaves out an argument that may have no value.
+
+    >>> normalise(Tally(log(x), y, undo(log(x))))
+    Tally(log(x), undo(log(x)), y)
     """
     if not is_property(name):
         raise ValueError(f"{name} is not a property")
@@ -42,21 +59,37 @@ def step(name: str, multiset_only: bool = False) -> Callable:
 
 
 def per_argument(fn: Callable) -> Callable:
-    """Turn a law about one argument and its copies into a function for step(name).
+    """Make the function for step(name) from one that says how many copies of an argument stay.
 
     Args:
-        fn: Called as fn(arg, copies) or fn(arg, copies, value) once for each run of
-            equal neighbouring arguments, with copies the length of the run. Returns
-            how many copies to keep.
+        fn: Called as fn(arg, copies) if name starts with is_, and as
+            fn(arg, copies, getattr(head, name)) otherwise. copies counts the arguments
+            equal to arg that are next to each other, which is all of them where
+            head.is_commutative. It returns how many of them to keep.
 
     Returns:
-        A function to decorate with step(name).
+        The function to register with step(name).
 
-    >>> from nary import NumberKind
-    >>> x = NumberKind("x")
-    >>> keep_an_odd_number = per_argument(lambda arg, copies: copies % 2)
-    >>> keep_an_odd_number(None, [x, x, x]), keep_an_odd_number(None, [x, x])
-    ([x], [])
+    >>> from nary import Many, NumberKind, declare_function
+    >>> from nary.logic import true
+    >>> from nary.normalising import normalise
+    >>> from nary.properties import declare_properties, declare_property
+    >>> declare_property("is_cancelled_by_a_copy")
+    >>> @step("is_cancelled_by_a_copy")
+    ... @per_argument
+    ... def keep_one_of_an_odd_number(arg, copies):
+    ...     return copies % 2
+    >>> Toggle = declare_function("Toggle", Many(NumberKind), returns=NumberKind, domain=true)
+    >>> declare_properties(
+    ...     Toggle, is_associative=True, is_commutative=True, is_cancelled_by_a_copy=True,
+    ... )
+    >>> x, y = NumberKind("x"), NumberKind("y")
+    >>> normalise(Toggle(x, y, x)), normalise(Toggle(x, y, x, x))
+    (y, Toggle(x, y))
+    >>> Queue = declare_function("Queue", Many(NumberKind), returns=NumberKind, domain=true)
+    >>> declare_properties(Queue, is_associative=True, is_cancelled_by_a_copy=True)
+    >>> normalise(Queue(x, x, y)), normalise(Queue(x, y, x))
+    (y, Queue(x, y, x))
     """
     def keep(head, copies, *value):
         return copies[:1] * fn(copies[0], len(copies), *value)
@@ -76,13 +109,13 @@ def _acting(head: Expr, unordered: bool) -> dict[str, object]:
 
 
 def acting_properties(head: Expr) -> list[str]:
-    """The properties of head whose steps act on its arguments.
+    """The properties of head that have a function registered with step.
 
     Args:
         head: A function, such as e.head.
 
     Returns:
-        Their names, in the order their steps were registered.
+        Their names, in the order normalise uses their functions.
 
     >>> from nary import Mul, Pow
     >>> acting_properties(Mul), acting_properties(Pow)
@@ -122,16 +155,17 @@ def _spliced(head: Expr, arg: Expr) -> tuple[Expr, ...]:
 
 
 def normalise_collection(head: Expr, args: list[Expr], has_a_value: Callable) -> Expr:
-    """Build head(*args), applying the steps that act on head.
+    """Build head(*args), with args changed by the functions that step registered.
 
     Args:
-        head: What e.head normalised to.
-        args: What each of e.args normalised to.
-        has_a_value: Called as has_a_value(arg). An argument is erased only where this
+        head: A function.
+        args: Its arguments, each already normalised.
+        has_a_value: Called as has_a_value(arg). An argument is removed only where this
             returns True.
 
     Returns:
-        head(*args) after the steps, or the one argument or the identity element left.
+        head applied to the arguments that are left. If one is left, that argument.
+        If none is left and head.identity_element is not None, head.identity_element.
 
     >>> from nary import Add, Mul, NumberKind, log, sin
     >>> from nary.rewriting import _has_a_value
