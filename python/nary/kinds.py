@@ -1,10 +1,11 @@
 from fractions import Fraction
 
-from ._core import Many, declare_kind
+from ._core import Many, _print_fractions_as_rational, declare_kind
 
 __all__ = ["BoolKind", "Many", "NumberKind", "Rational"]
 
 NumberKind = declare_kind("NumberKind", literals=(int, Fraction))
+_print_fractions_as_rational(NumberKind)
 BoolKind = declare_kind("BoolKind")
 
 

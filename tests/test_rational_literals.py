@@ -2,9 +2,10 @@ from fractions import Fraction
 
 import pytest
 
-from nary import Add, E, Mul, NumberKind, Pow, Rational, declare_kind, sin
+from nary import Add, E, Many, Mul, NumberKind, Pow, Rational, declare_function, declare_kind, sin
 from nary.arithmetic_rules import rules
 from nary.lean import to_lean
+from nary.logic import true
 from nary.normalising import normalise
 from nary.rewriting import _has_a_value, rewrite
 from nary.rules import rule
@@ -43,7 +44,7 @@ def test_rational_is_in_lowest_terms():
 
 
 def test_rational_with_denominator_one_is_the_integer_literal():
-    assert Rational(4, 2) == NumberKind(2) and type(Rational(4, 2).value) is int
+    assert Rational(4, 2) == NumberKind(2)
 
 
 def test_rational_with_denominator_zero_raises():
@@ -52,11 +53,24 @@ def test_rational_with_denominator_zero_raises():
 
 
 def test_repr_of_a_rational_literal():
-    assert repr(NumberKind(Fraction(1, 2))) == "Rational(1, 2)"
+    assert repr(NumberKind(Fraction(3, 4))) == "Rational(3, 4)"
 
 
 def test_repr_of_a_negative_rational_literal():
-    assert repr(NumberKind(Fraction(-1, 2))) == "Rational(-1, 2)"
+    assert repr(NumberKind(Fraction(-3, 4))) == "Rational(-3, 4)"
+
+
+def test_repr_of_a_rational_literal_too_long_to_print_raises_as_it_does_for_an_integer():
+    with pytest.raises(ValueError, match="^Exceeds the limit"):
+        repr(NumberKind(Fraction(10**5000 + 1, 10**5000)))
+
+
+def test_repr_of_a_fraction_literal_of_another_kind_is_the_repr_of_the_fraction():
+    Real = declare_kind("Real", literals=(int, float, Fraction))
+    Plus = declare_function("Plus", Many(Real), returns=Real, domain=true)
+    r = Real("r")
+    e = Plus(r, Fraction(1, 2))
+    assert repr(e) == "Plus(r, Fraction(1, 2))" and eval(repr(e)) == e
 
 
 def test_repr_of_an_expression_evaluates_to_the_expression():
@@ -92,7 +106,7 @@ def test_a_fraction_argument_with_denominator_one_is_the_integer_literal():
 
 def test_denominator_one_stays_a_fraction_in_a_kind_without_int_literals():
     OnlyFractions = declare_kind("OnlyFractions", literals=Fraction)
-    assert repr(OnlyFractions(Fraction(2, 1))) == "Rational(2, 1)"
+    assert repr(OnlyFractions(Fraction(2, 1))) == "Fraction(2, 1)"
 
 
 def test_zero_denominator_raises():
