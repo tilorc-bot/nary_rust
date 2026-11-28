@@ -6,7 +6,7 @@ from nary import (
     BoolKind, Many, Ne, NumberKind, declare_constant, declare_function, declare_kind,
 )
 from nary.arithmetic import Add, Mul
-from nary.argument_collections import collection_step
+from nary.argument_collections import step
 from nary.logic import true
 from nary.normalising import normalise
 from nary.properties import declare_properties, declare_property
@@ -20,8 +20,8 @@ def test_an_involution_undoes_itself():
     Invert = declare_function("Invert", Polarity, returns=Polarity, domain=true)
     declare_property("is_involution")
 
-    @collection_step("is_involution")
-    def undo_twice(head, args, has_a_value):
+    @step("is_involution")
+    def undo_twice(head, args):
         (arg,) = args
         return list(arg.args) if not arg.is_atom and arg.head == head else args
 
@@ -36,8 +36,8 @@ def test_a_function_applied_twice_is_applied_once():
     Magnitude = declare_function("Magnitude", NumberKind, returns=NumberKind, domain=true)
     declare_property("is_projection")
 
-    @collection_step("is_projection")
-    def apply_once(head, args, has_a_value):
+    @step("is_projection")
+    def apply_once(head, args):
         (arg,) = args
         return [arg] if not arg.is_atom and arg.head == head else args
 
@@ -52,8 +52,8 @@ def test_an_odd_function_takes_the_negation_outside():
     Odd = declare_function("Odd", NumberKind, returns=NumberKind, domain=true)
     declare_property("odd_under")
 
-    @collection_step("odd_under")
-    def take_negation_outside(head, args, has_a_value, negation):
+    @step("odd_under")
+    def take_negation_outside(head, args, negation):
         (arg,) = args
         if not arg.is_atom and arg.head == negation:
             return [negation(head(*arg.args))]
@@ -71,8 +71,8 @@ def test_a_function_has_a_known_value_at_a_special_argument():
     Damp = declare_function("Damp", Wave, returns=Wave, domain=true)
     declare_property("fixed_point")
 
-    @collection_step("fixed_point")
-    def keep_the_fixed_point(head, args, has_a_value, fixed):
+    @step("fixed_point")
+    def keep_the_fixed_point(head, args, fixed):
         return [fixed] if args == [fixed] else args
 
     declare_properties(Damp, fixed_point=flat)
@@ -98,8 +98,8 @@ def test_a_choice_between_equal_branches_is_that_branch():
     Pick = declare_function("Pick", BoolKind, NumberKind, NumberKind, returns=NumberKind, domain=true)
     declare_property("is_choice")
 
-    @collection_step("is_choice")
-    def same_branches(head, args, has_a_value):
+    @step("is_choice")
+    def same_branches(head, args):
         condition, then, otherwise = args
         return [then] if then == otherwise else args
 
@@ -115,8 +115,8 @@ def test_a_step_that_merges_arguments_into_a_new_sum():
     Ex = declare_function("Ex", NumberKind, returns=NumberKind, domain=true)
     declare_property("merges_exponents")
 
-    @collection_step("merges_exponents", multiset_only=True)
-    def merge(head, args, has_a_value, exp):
+    @step("merges_exponents", multiset_only=True)
+    def merge(head, args, exp):
         powers = [e for e in args if not e.is_atom and e.head == exp]
         if len(powers) < 2:
             return args
@@ -135,8 +135,8 @@ def test_a_step_that_collects_repeats_into_a_product():
     declare_properties(Times, is_associative=True, is_commutative=True, identity_element=1)
     declare_property("collects_into")
 
-    @collection_step("collects_into", multiset_only=True)
-    def collect(head, args, has_a_value, times):
+    @step("collects_into", multiset_only=True)
+    def collect(head, args, times):
         counts = Counter(args)
         return [arg if n == 1 else times(n, arg) for arg, n in counts.items()]
 
@@ -147,23 +147,54 @@ def test_a_step_that_collects_repeats_into_a_product():
     assert normalise(Gather(Times(3, y), Times(3, y))) == normalise(Times(2, 3, y))
 
 
-def test_a_step_can_ask_a_condition_only_through_a_function_whose_domain_it_is():
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason="steps cannot ask whether a condition holds")
+def test_a_step_that_needs_a_condition_beyond_the_values_of_what_it_erases():
     one = NumberKind(1)
-    r = NumberKind("r")
-    Recip = declare_function("Recip", r, returns=NumberKind, domain=Ne(r, 0))
     declare_property("is_self_cancelling_ratio")
 
-    @collection_step("is_self_cancelling_ratio")
-    def cancel(head, args, has_a_value):
-        if len(args) == 2 and args[0] == args[1] and has_a_value(Recip(args[1])):
-            return [one]
-        return args
+    @step("is_self_cancelling_ratio")
+    def cancel(head, args):
+        return [one] if len(args) == 2 and args[0] == args[1] else args
 
     Over = declare_function("Over", NumberKind, NumberKind, returns=NumberKind, domain=true)
     declare_properties(Over, is_self_cancelling_ratio=True)
 
-    assert normalise(Over(x, x)) == Over(x, x)
     assert normalise(Over(x, x), lambda c: c == Ne(x, 0)) == one
+    assert normalise(Over(x, x)) == Over(x, x)
+
+
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason="a whole-list step erases all or nothing")
+def test_pairs_with_values_cancel_beside_a_pair_that_may_have_none():
+    Turn = declare_kind("Turn")
+    t = Turn("t")
+    undo = declare_function("undo", Turn, returns=Turn, domain=true)
+    Halvable = declare_function("Halvable", Turn, returns=BoolKind, domain=true)
+    Halve = declare_function("Halve", t, returns=Turn, domain=Halvable(t))
+    declare_property("cancelled_by")
+
+    @step("cancelled_by", multiset_only=True)
+    def cancel_opposites(head, args, opposite):
+        counts = Counter(args)
+        for e in list(counts):
+            if not e.is_atom and e.head == opposite:
+                pairs = min(counts[e], counts[e.args[0]])
+                counts[e] -= pairs
+                counts[e.args[0]] -= pairs
+        return list(counts.elements())
+
+    Turns = declare_function("Turns", Many(Turn), returns=Turn, domain=true)
+    declare_properties(Turns, is_associative=True, is_commutative=True, cancelled_by=undo)
+    a = Turn("a")
+
+    assert Counter(normalise(Turns(a, undo(a), Halve(a), undo(Halve(a)))).args) == Counter(
+        [Halve(a), undo(Halve(a))]
+    )
+
+
+def test_without_a_step_a_ratio_of_equal_arguments_stays():
+    Ratio = declare_function("Ratio", NumberKind, NumberKind, returns=NumberKind, domain=true)
+
+    assert normalise(Ratio(x, x)) == Ratio(x, x)
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason="Add and Mul have no step that evaluates literals")
@@ -176,8 +207,8 @@ def test_the_package_adds_and_multiplies_literals():
 def test_a_maximum_drops_an_argument_another_one_dominates():
     declare_property("is_maximum")
 
-    @collection_step("is_maximum", multiset_only=True)
-    def drop_dominated(head, args, has_a_value):
+    @step("is_maximum", multiset_only=True)
+    def drop_dominated(head, args):
         return [
             a for a in args if not any(normalise(a < b) == true for b in args if b is not a)
         ]
@@ -225,8 +256,8 @@ def test_a_positional_law_on_a_two_argument_head():
     silence = declare_constant("silence", Track)
     declare_property("right_unit_element", element=True)
 
-    @collection_step("right_unit_element")
-    def drop_on_the_right(head, args, has_a_value, unit):
+    @step("right_unit_element")
+    def drop_on_the_right(head, args, unit):
         return [args[0]] if len(args) == 2 and args[1] == unit else args
 
     Then = declare_function("Then", Track, Track, returns=Track, domain=true)
@@ -242,8 +273,8 @@ def test_a_two_argument_head_rewritten_to_another_head_by_returning_one_argument
     Below = declare_function("Below", NumberKind, NumberKind, returns=BoolKind, domain=true)
     declare_property("mirrored_by")
 
-    @collection_step("mirrored_by")
-    def mirror(head, args, has_a_value, other):
+    @step("mirrored_by")
+    def mirror(head, args, other):
         return [other(*reversed(args))] if len(args) == 2 else args
 
     declare_properties(Above, mirrored_by=Below)
