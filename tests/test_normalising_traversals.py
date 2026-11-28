@@ -78,8 +78,10 @@ def generated_boolean(rng, depth):
 
 
 @pytest.mark.xfail(strict=True, reason=(
-    "test_number_literals_inside_brackets_are_combined_only_when_every_node_is_handled and "
-    "test_an_absorbing_element_inside_brackets_erases_more_when_every_node_is_handled fail"
+    "test_number_literals_inside_brackets_are_combined_only_when_every_node_is_handled, "
+    "test_an_absorbing_element_inside_brackets_erases_more_when_every_node_is_handled and "
+    "test_an_argument_that_becomes_the_same_head_once_normal_is_merged_only_when_every_node_is_handled "
+    "fail"
 ))
 def test_both_traversals_give_the_same_result_for_generated_expressions():
     rng = random.Random(20261128)
@@ -119,4 +121,20 @@ def test_an_absorbing_element_erases_nothing_once_flattening_has_put_an_argument
 ))
 def test_an_absorbing_element_inside_brackets_erases_more_when_every_node_is_handled():
     e = Mul(Mul(x, 0), log(y))
+    assert normalise(e) == normalise_flattening_first(e)
+
+
+def test_an_argument_that_becomes_the_same_head_once_normal_is_merged():
+    assert normalise(Add(x, Mul(1, Add(y, z)))) == Add(x, y, z)
+
+
+def test_an_argument_that_becomes_the_same_head_once_normal_is_not_merged_by_flattening_first():
+    assert normalise_flattening_first(Add(x, Mul(1, Add(y, z)))) == Add(Add(y, z), x)
+
+
+@pytest.mark.xfail(strict=True, reason=(
+    "bottom_up flattens on the way down only: Mul(1, Add(y, z)) becomes Add(y, z) after that"
+))
+def test_an_argument_that_becomes_the_same_head_once_normal_is_merged_only_when_every_node_is_handled():
+    e = Add(x, Mul(1, Add(y, z)))
     assert normalise(e) == normalise_flattening_first(e)

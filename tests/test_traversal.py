@@ -285,9 +285,18 @@ def test_deeper_than_the_recursion_limit():
 
 
 def test_every_node_is_handled_including_one_with_the_head_of_the_node_around_it():
-    assert calls_of(bottom_up_every_node, Add(Add(x, y), z)) == [
+    assert calls_of(bottom_up_every_node, Mul(Mul(x, y), z)) == [
+        (Mul, [x, y]),
+        (Mul, [x, y, z]),
+    ]
+
+
+def test_an_argument_with_the_associative_head_of_its_node_is_replaced_by_its_arguments():
+    assert calls_of(bottom_up_every_node, Add(Add(x, y), Add(z, Add(u, v)))) == [
         (Add, [x, y]),
-        (Add, [Add(x, y), z]),
+        (Add, [u, v]),
+        (Add, [z, u, v]),
+        (Add, [x, y, z, u, v]),
     ]
 
 
@@ -380,7 +389,7 @@ def test_the_walker_imports_only_is_lambda():
     ]
     names = {name for name in vars(traversal) if not name.startswith("__")}
     assert names == {
-        "bottom_up", "bottom_up_every_node", "is_lambda", "_never", "annotations", "Callable", "Iterator", "Expr"
+        "bottom_up", "bottom_up_every_node", "_args_if_headed_by", "is_lambda", "_never", "annotations", "Callable", "Iterator", "Expr"
     }
     assert traversal.is_lambda is is_lambda
 

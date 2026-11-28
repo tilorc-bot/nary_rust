@@ -358,6 +358,11 @@ def test_an_absorbing_element_beside_an_argument_without_a_value_ignores_bracket
     assert normalise(bracketed, known) == normalise(flat, known)
 
 
+def test_a_step_that_adds_an_argument_with_the_associative_head_of_the_node_is_an_error():
+    with pytest.raises(ValueError, match="_unwrap put OrderUnwrap\\(y, z\\) among the arguments"):
+        normalise(Unwrap(x, wrap(Unwrap(y, z))))
+
+
 def test_a_step_that_keeps_the_number_of_arguments():
     once = normalise(Unwrap(x, wrap(x)))
     assert normalise(once) == once

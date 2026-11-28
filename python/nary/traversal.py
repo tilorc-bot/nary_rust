@@ -86,29 +86,48 @@ def bottom_up(
     return walk
 
 
+def _args_if_headed_by(head: Expr, e: Expr) -> list[Expr]:
+    """
+    >>> from nary import Add, Mul, NumberKind
+    >>> x, y = NumberKind("x"), NumberKind("y")
+    >>> _args_if_headed_by(Add, Add(x, y)), _args_if_headed_by(Add, Mul(x, y)), _args_if_headed_by(Add, x)
+    ([x, y], [Mul(x, y)], [x])
+    """
+    return [e] if e.is_atom or e.head != head else list(e.args)
+
+
 def bottom_up_every_node(at_node: Callable[[Expr, list[Expr]], Expr]) -> Callable[[Expr], Expr]:
     """Return a function walk(e) that calls at_node wherever a constructor would run.
 
     Args:
         at_node: Called as at_node(head, args) for e and for everything inside it that
             has a head, innermost first, skipping lambdas whole. head and args are what
-            walk returned for e.head and each of e.args.
+            walk returned for e.head and each of e.args, except that where
+            head.is_associative an argument with that same head is replaced by its own
+            arguments.
 
     Returns:
         walk, where walk(e) is what at_node returned for e, or e itself if at_node
         was not called for e.
 
-    >>> from nary import Add, NumberKind, sin
+    >>> from nary import Add, Mul, NumberKind, sin
     >>> x, y, z = NumberKind("x"), NumberKind("y"), NumberKind("z")
     >>> def show(head, args):
     ...     print(head, args)
     ...     return head(*args)
     >>> bottom_up_every_node(show)((x + y) + z)
     Add [x, y]
-    Add [Add(x, y), z]
-    Add(Add(x, y), z)
+    Add [x, y, z]
+    Add(x, y, z)
     >>> bottom_up(show, flat=lambda head: head == Add)((x + y) + z)
     Add [x, y, z]
+    Add(x, y, z)
+
+    An Add that appears once at_node has handled the Mul around it is merged too.
+
+    >>> def unwrap(head, args):
+    ...     return args[1] if head == Mul and args[0] == NumberKind(1) else head(*args)
+    >>> bottom_up_every_node(unwrap)(x + Mul(1, y + z))
     Add(x, y, z)
     >>> bottom_up_every_node(show)(sin(x) * sin(x))
     sin [x]
@@ -119,6 +138,10 @@ def bottom_up_every_node(at_node: Callable[[Expr, list[Expr]], Expr]) -> Callabl
     def walk(e: Expr) -> Expr:
         if e.is_atom or is_lambda(e):
             return e
-        return at_node(walk(e.head), [walk(arg) for arg in e.args])
+        head = walk(e.head)
+        args = [walk(arg) for arg in e.args]
+        if head.is_associative:
+            args = [inner for arg in args for inner in _args_if_headed_by(head, arg)]
+        return at_node(head, args)
 
     return walk
