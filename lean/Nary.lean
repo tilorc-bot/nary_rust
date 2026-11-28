@@ -3,3 +3,4 @@ import Nary.Logic
 import Nary.Calculus
 import Nary.Facts
 import Nary.ArithmeticRules
+import Nary.Catalogue
