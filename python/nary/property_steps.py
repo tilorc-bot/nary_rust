@@ -8,6 +8,7 @@ from .properties import is_property
 
 __all__ = ["apply_property_steps", "step"]
 
+
 class _Step(NamedTuple):
     function: Callable
     commutative_only: bool
