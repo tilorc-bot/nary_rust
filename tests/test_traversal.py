@@ -320,7 +320,7 @@ def test_the_walker_imports_only_is_lambda_and_typing():
     ]
     names = {name for name in vars(traversal) if not name.startswith("__")}
     assert names == {
-        "bottom_up", "is_lambda", "_never", "annotations", "Callable", "Iterator", "TypeVar", "Expr", "_Result"
+        "bottom_up", "is_lambda", "_never", "annotations", "Callable", "Iterator", "TypeVar", "Expr", "Result"
     }
     assert traversal.is_lambda is is_lambda
 

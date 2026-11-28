@@ -8,7 +8,7 @@ from .functions import is_lambda
 
 __all__ = ["bottom_up"]
 
-_Result = TypeVar("_Result")
+Result = TypeVar("Result")
 
 
 def _never(head: Expr) -> bool:
@@ -16,28 +16,40 @@ def _never(head: Expr) -> bool:
 
 
 def bottom_up(
-    at_node: Callable[[Expr | _Result, list[Expr | _Result]], _Result],
+    at_node: Callable[[Expr | Result, list[Expr | Result]], Result],
     flat: Callable[[Expr], bool] = _never,
-) -> Callable[[Expr], Expr | _Result]:
-    """Return a function walk(e) that gives the result for an expression, children first.
+) -> Callable[[Expr], Expr | Result]:
+    """Return a function walk(e).
 
-    at_node(head, args) is called once for each application, with its head and
-    the list of its arguments already processed, and returns the result for
-    that node. Atoms and lambdas are returned as they are; at_node is not
-    called for them. Each distinct subexpression is processed once per walker:
-    walk may be called again, also from inside at_node, and shares those results.
+    walk(e) calls at_node for e and for the expressions inside it, each before
+    any expression that contains it, and returns what at_node returned for e.
 
-    flat(head) is asked with a node's unprocessed head. When it is true, every
-    argument that is an application of the same head is expanded in place,
-    through every nested layer, so at_node is called once for the whole run with
-    the arguments in written order; the inner nodes are neither built nor passed
-    to at_node. An argument that only becomes an application of that head once
-    it is processed is not expanded.
+    If e.is_atom or is_lambda(e) is true, walk(e) returns e itself: at_node is
+    not called, and nothing inside a lambda is visited.
 
-    The walk uses an explicit stack, so depth is limited by memory, not by the
-    recursion limit.
+    Otherwise walk(e) is at_node(head, args), with head = walk(e.head), so the
+    head is included, and args = [walk(a) for a in e.args].
 
-    >>> from nary import Add, NumberKind, sin
+    at_node must depend only on head and args. walk remembers what at_node
+    returned for each e, so when the same e occurs again at_node is not called
+    a second time. The values are kept as long as walk exists, also across
+    calls, and walk may be called from inside at_node.
+
+    flat is optional; by default nothing is merged. It is called as
+    flat(e.head), with the head as written in e. When it is true, each a in
+    e.args with a.head == e.head is replaced by a.args, and so on inside those,
+    so at_node is called once for e, with all the arguments in order, and not
+    for the replaced a. A replaced a gets no remembered value: if it also
+    occurs where it is not replaced, at_node is called for it there.
+
+    Only what is written in e is replaced. In Add(x, Mul(1, Add(y, z))) the
+    inner Add is an argument of Mul, so it is not merged, even if at_node turns
+    the Mul into Add(y, z).
+
+    walk keeps its own stack, so e can be nested as deeply as memory allows,
+    whatever Python's recursion limit.
+
+    >>> from nary import Add, Mul, NumberKind, sin
     >>> x, y, z = NumberKind("x"), NumberKind("y"), NumberKind("z")
     >>> def show(head, args):
     ...     print(head, args)
@@ -66,12 +78,24 @@ def bottom_up(
     sin [Add(x, y)]
     Add [x, y, z, sin(Add(x, y))]
     Add(x, y, z, sin(Add(x, y)))
-    """
-    done: dict[Expr, _Result] = {}
 
-    def walk(root: Expr) -> Expr | _Result:
-        results: list[Expr | _Result] = []
-        stack: list[tuple[Expr | None, Iterator[Expr], list[Expr | _Result], Expr | None]] = [
+    An Add that only appears once at_node has handled the Mul around it is not merged.
+
+    >>> def drop_ones(head, args):
+    ...     print(head, args)
+    ...     args = [a for a in args if a != NumberKind(1)]
+    ...     return args[0] if len(args) == 1 else head(*args)
+    >>> bottom_up(drop_ones, flat=lambda head: head == Add)(Add(x, Mul(1, Add(y, z))))
+    Add [y, z]
+    Mul [1, Add(y, z)]
+    Add [x, Add(y, z)]
+    Add(x, Add(y, z))
+    """
+    done: dict[Expr, Result] = {}
+
+    def walk(root: Expr) -> Expr | Result:
+        results: list[Expr | Result] = []
+        stack: list[tuple[Expr | None, Iterator[Expr], list[Expr | Result], Expr | None]] = [
             (None, iter([root]), results, None)
         ]
         while stack:
