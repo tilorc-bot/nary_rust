@@ -12,11 +12,10 @@ __all__ = ["apply_property_steps", "step"]
 
 def _sort_key(e: Expr) -> tuple:
     """
-    >>> from fractions import Fraction
-    >>> from nary import E, NumberKind
-    >>> x, half = NumberKind("x"), NumberKind(Fraction(1, 2))
+    >>> from nary import E, NumberKind, Rational
+    >>> x, half = NumberKind("x"), Rational(1, 2)
     >>> sorted([x, E, NumberKind(2), half, NumberKind(-3)], key=_sort_key)
-    [-3, Fraction(1, 2), 2, E, x]
+    [-3, Rational(1, 2), 2, E, x]
     """
     if e.is_literal and e.kind is NumberKind:
         return (0, e.value)
