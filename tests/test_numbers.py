@@ -29,7 +29,7 @@ def test_calling_a_kind_with_a_value_makes_a_literal():
         NumberKind(True)
     with pytest.raises(TypeError, match="^NumberKind takes .*, got float: 1.5$"):
         NumberKind(1.5)
-    with pytest.raises(TypeError, match=r"^BoolKind takes a name \(a str\), got int: 1; it accepts no literals$"):
+    with pytest.raises(TypeError, match=r"^BoolKind takes a name \(a str\) or True or False, got int: 1$"):
         BoolKind(1)
 
 
