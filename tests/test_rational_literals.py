@@ -241,8 +241,8 @@ def test_normalise_orders_integers_by_value_not_by_their_digits():
 
 
 def test_normalise_orders_negative_numbers_by_value():
-    e = normalise(Add(Rational(-1, 2), -1, -2, Rational(-3, 2)))
-    assert repr(e) == "Add(-2, Rational(-3, 2), -1, Rational(-1, 2))"
+    e = normalise(Add(Rational(-1, 2), -1, NumberKind("x"), -2, Rational(-3, 2)))
+    assert repr(e) == "Add(-2, Rational(-3, 2), -1, Rational(-1, 2), x)"
 
 
 def test_normalise_puts_a_number_before_a_capitalised_name():
