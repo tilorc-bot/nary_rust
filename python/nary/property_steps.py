@@ -237,20 +237,20 @@ def _only_the_absorbing_element(head: Expr, args: list[Expr], absorbing: Expr) -
     return [absorbing] if absorbing in args else args
 
 
-@step("value_of_literals")
-def _literals_replaced_by_their_value(
-    head: Expr, args: list[Expr], value_of_literals: Callable,
+@step("evaluate_literals")
+def _literals_evaluated(
+    head: Expr, args: list[Expr], evaluate_literals: Callable,
 ) -> list[Expr] | Expr:
     if not head.is_associative:
         if not all(arg.is_literal for arg in args):
             return args
-        value = value_of_literals(*(arg.value for arg in args))
+        value = evaluate_literals(*(arg.value for arg in args))
         return args if value is None else value
     ordered = sorted(args, key=lambda arg: not arg.is_literal) if head.is_commutative else args
     new_args = []
     for literal, run in groupby(ordered, key=lambda arg: arg.is_literal):
         run = list(run)
-        value = value_of_literals(*(arg.value for arg in run)) if literal and len(run) > 1 else None
+        value = evaluate_literals(*(arg.value for arg in run)) if literal and len(run) > 1 else None
         new_args += run if value is None else [value]
     return new_args if len(new_args) < len(args) else args
 
