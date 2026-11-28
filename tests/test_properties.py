@@ -92,7 +92,7 @@ def test_import_nary_alone_declares_add_and_mul():
         "one, zero = nary.NumberKind(1), nary.NumberKind(0)\n"
         "assert dict(nary.Mul.properties) == {'is_associative': True, 'is_commutative': True,"
         " 'identity_element': one, 'absorbing_element': zero,"
-        " 'evaluate_literals': nary._numbers.exact_product}\n"
+        " 'evaluate_literals': nary._numbers.exact_product, 'distributes_over': nary.Add}\n"
         "assert dict(nary.Pow.properties) == {'evaluate_literals': nary._numbers.exact_power}\n"
         "import nary.arithmetic_rules\n"
         "assert len(nary.arithmetic_rules.rules) == 9\n"
@@ -109,6 +109,7 @@ def test_properties_in_the_order_declared():
         ("is_associative", True), ("is_commutative", True),
         ("identity_element", NumberKind(1)), ("absorbing_element", NumberKind(0)),
         ("evaluate_literals", exact_product),
+        ("distributes_over", Add),
     ]
     assert Mul.properties["identity_element"] is Mul.identity_element
     assert Mul.properties["identity_element"].kind is NumberKind
@@ -140,7 +141,7 @@ def test_properties_are_read_only():
             F.properties["is_idempotent"] = True
         with pytest.raises(AttributeError):
             F.properties.clear()
-    assert len(Mul.properties) == 5 and dict(sin.properties) == {}
+    assert len(Mul.properties) == 6 and dict(sin.properties) == {}
     assert Mul.identity_element == NumberKind(1)
 
 
@@ -158,7 +159,7 @@ def test_a_property_declared_after_functions_were_read():
     for F in (Add, Mul, Pow, NumberFunction("f")):
         assert F.is_cancellative is False and F.unit_count is None
         assert "is_cancellative" not in F.properties
-    assert Mul.identity_element == NumberKind(1) and len(Mul.properties) == 5
+    assert Mul.identity_element == NumberKind(1) and len(Mul.properties) == 6
 
 
 def test_a_function_that_declares_after_it_was_read():

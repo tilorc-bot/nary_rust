@@ -156,7 +156,7 @@ def test_bracketings_of_four_arguments():
 
 
 @pytest.mark.parametrize("f, args, expected", [
-    (Add, [x, y, x, n(0)], Add(x, x, y)),
+    (Add, [x, y, x, n(0)], Add(Mul(2, x), y)),
     (Mul, [sin(x), n(0), y, n(1)], n(0)),
     (Mul, [Add(y, x), x, Add(x, y)], Mul(x, Add(x, y), Add(x, y))),
     (And, [p, q, true, Or(q, p)], And(p, q, Or(p, q))),

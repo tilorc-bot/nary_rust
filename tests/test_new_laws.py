@@ -9,7 +9,6 @@ import pytest
 from nary import (
     BoolKind, Many, Ne, NumberKind, declare_constant, declare_function, declare_kind, log,
 )
-from nary.arithmetic import Add
 from nary.property_steps import step
 from nary.logic import false, true
 from nary.normalising import normalise
@@ -417,7 +416,10 @@ def test_a_step_does_not_reach_heads_without_its_property():
     def cancel(arg, copies, n):
         return copies % n
 
-    assert normalise(x + x + x) == Add(x, x, x)
+    Pile = declare_function("Pile", Many(NumberKind), returns=NumberKind, domain=true)
+    declare_properties(Pile, is_associative=True, is_commutative=True)
+
+    assert normalise(Pile(x, x, x)) == Pile(x, x, x)
 
 
 def test_a_property_takes_one_step():

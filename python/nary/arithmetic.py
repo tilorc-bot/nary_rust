@@ -29,6 +29,7 @@ Mul = declare_function("Mul", factors, returns=NumberKind, domain=true)
 declare_properties(
     Mul, is_associative=True, is_commutative=True, identity_element=1, absorbing_element=0,
     evaluate_literals=exact_product,
+    distributes_over=Add,
 )
 Pow = declare_function(
     "Pow", base, exponent, returns=NumberKind,
