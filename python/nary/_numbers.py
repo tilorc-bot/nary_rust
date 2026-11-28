@@ -4,9 +4,8 @@ from fractions import Fraction
 from math import prod
 
 from .kinds import NumberKind
-from .logic import false, true
 
-__all__ = ["MAX_BITS", "exact_power", "exact_product", "exact_sum", "true_or_false"]
+__all__ = ["MAX_BITS", "exact_power", "exact_product", "exact_sum"]
 
 MAX_BITS = 14_000
 
@@ -75,22 +74,6 @@ def exact_power(base, exponent):
     if abs(exponent) * max(_bits(base.numerator), _bits(base.denominator)) > MAX_BITS:
         return None
     return NumberKind(Fraction(base) ** exponent)
-
-
-def true_or_false(compare):
-    """The function that gives true where compare(a, b) is True and false elsewhere.
-
-    Args:
-        compare: A function of two numbers, such as operator.lt.
-
-    Returns:
-        A function of two numbers.
-
-    >>> import operator
-    >>> true_or_false(operator.lt)(1, 2), true_or_false(operator.lt)(2, 2)
-    (true, false)
-    """
-    return lambda a, b: true if compare(a, b) else false
 
 
 def _bits(n):

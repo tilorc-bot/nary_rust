@@ -92,8 +92,8 @@ def test_import_nary_alone_declares_add_and_mul():
         "one, zero = nary.NumberKind(1), nary.NumberKind(0)\n"
         "assert dict(nary.Mul.properties) == {'is_associative': True, 'is_commutative': True,"
         " 'identity_element': one, 'absorbing_element': zero,"
-        " 'value_of_literals': nary._numbers.exact_product}\n"
-        "assert dict(nary.Pow.properties) == {'value_of_literals': nary._numbers.exact_power}\n"
+        " 'evaluate_literals': nary._numbers.exact_product}\n"
+        "assert dict(nary.Pow.properties) == {'evaluate_literals': nary._numbers.exact_power}\n"
         "import nary.arithmetic_rules\n"
         "assert len(nary.arithmetic_rules.rules) == 9\n"
     )
@@ -103,12 +103,12 @@ def test_import_nary_alone_declares_add_and_mul():
 def test_properties_in_the_order_declared():
     assert list(Add.properties.items()) == [
         ("is_associative", True), ("is_commutative", True), ("identity_element", NumberKind(0)),
-        ("value_of_literals", exact_sum),
+        ("evaluate_literals", exact_sum),
     ]
     assert list(Mul.properties.items()) == [
         ("is_associative", True), ("is_commutative", True),
         ("identity_element", NumberKind(1)), ("absorbing_element", NumberKind(0)),
-        ("value_of_literals", exact_product),
+        ("evaluate_literals", exact_product),
     ]
     assert Mul.properties["identity_element"] is Mul.identity_element
     assert Mul.properties["identity_element"].kind is NumberKind

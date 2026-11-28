@@ -87,7 +87,7 @@ def test_a_power_is_not_combined_with_the_numbers_beside_it():
     assert normalise(Mul(2, Pow(x, 2), 3)) == Mul(6, Pow(x, 2))
 
 
-def test_numbers_of_a_freshly_declared_head_without_value_of_literals_are_not_combined():
+def test_numbers_of_a_freshly_declared_head_without_evaluate_literals_are_not_combined():
     Total = declare_function("NumbersTotal", Many(NumberKind), returns=NumberKind, domain=true)
     declare_properties(Total, is_associative=True, is_commutative=True, identity_element=0)
     assert normalise(Total(x, 1, 2)) == Total(1, 2, x)
