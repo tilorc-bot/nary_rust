@@ -116,20 +116,9 @@ def bottom_up_every_node(at_node: Callable[[Expr, list[Expr]], Expr]) -> Callabl
     Mul [sin(x), sin(x)]
     Mul(sin(x), sin(x))
     """
-    def walk(root: Expr) -> Expr:
-        to_visit, results = [(root, False)], []
-        while to_visit:
-            e, head_and_args_are_done = to_visit.pop()
-            if e.is_atom or is_lambda(e):
-                results.append(e)
-            elif head_and_args_are_done:
-                first_arg = len(results) - len(e.args)
-                head, args = results[first_arg - 1], results[first_arg:]
-                del results[first_arg - 1:]
-                results.append(at_node(head, args))
-            else:
-                to_visit.append((e, True))
-                to_visit.extend((part, False) for part in reversed((e.head, *e.args)))
-        return results[0]
+    def walk(e: Expr) -> Expr:
+        if e.is_atom or is_lambda(e):
+            return e
+        return at_node(walk(e.head), [walk(arg) for arg in e.args])
 
     return walk
