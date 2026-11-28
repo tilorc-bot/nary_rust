@@ -586,6 +586,15 @@ enum Piece<'py> {
     Expr(Bound<'py, Expr>),
 }
 
+fn literal_repr(value: &Bound<'_, PyAny>) -> PyResult<String> {
+    let fraction = FRACTION.import(value.py(), "fractions", "Fraction")?;
+    if value.get_type().is(fraction) {
+        let (numerator, denominator) = (value.getattr("numerator")?, value.getattr("denominator")?);
+        return Ok(format!("Rational({numerator}, {denominator})"));
+    }
+    Ok(value.repr()?.to_cow()?.into_owned())
+}
+
 fn expr_repr(py: Python<'_>, root: &Expr) -> PyResult<String> {
     let mut text = String::new();
     let mut pending = Vec::new();
@@ -597,7 +606,7 @@ fn expr_repr(py: Python<'_>, root: &Expr) -> PyResult<String> {
                 Form::Symbol { name } | Form::Declared { name, .. } => {
                     text.push_str(&name.bind(py).to_cow()?)
                 }
-                Form::Literal { value } => text.push_str(&value.bind(py).repr()?.to_cow()?),
+                Form::Literal { value } => text.push_str(&literal_repr(value.bind(py))?),
                 Form::Apply { head, args } => {
                     let args = args.bind(py);
                     if !(args.is_empty() && head.get().plain_name().is_some()) {
