@@ -14,10 +14,10 @@
     Traceback (most recent call last):
         ...
     AttributeError: 'Expr' object has no attribute 'is_commutative'
-    >>> Mul.properties
-    mappingproxy({'is_associative': True, 'is_commutative': True, 'identity_element': 1, 'absorbing_element': 0})
-    >>> Pow.properties, f.properties
-    (mappingproxy({}), mappingproxy({}))
+    >>> list(Mul.properties)
+    ['is_associative', 'is_commutative', 'identity_element', 'absorbing_element', 'evaluate_literals']
+    >>> Mul.evaluate_literals(2, 3), list(Pow.properties), f.properties
+    (6, ['evaluate_literals'], mappingproxy({}))
 """
 
 from types import MappingProxyType
@@ -68,6 +68,7 @@ declare_property("is_commutative")
 declare_property("identity_element", element=True)
 declare_property("absorbing_element", element=True)
 declare_property("is_idempotent")
+declare_property("evaluate_literals")
 
 
 def is_property(name):

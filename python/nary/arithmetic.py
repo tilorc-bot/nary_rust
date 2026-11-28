@@ -9,6 +9,7 @@
 """
 
 from ._core import set_operator
+from ._numbers import exact_power, exact_product, exact_sum
 from .domains import declare_function
 from .kinds import Many, NumberKind
 from .logic import Or, true
@@ -21,15 +22,19 @@ base, exponent = NumberKind("base"), NumberKind("exp")
 terms, factors = Many(NumberKind)("terms"), Many(NumberKind)("factors")
 
 Add = declare_function("Add", terms, returns=NumberKind, domain=true)
-declare_properties(Add, is_associative=True, is_commutative=True, identity_element=0)
+declare_properties(
+    Add, is_associative=True, is_commutative=True, identity_element=0, evaluate_literals=exact_sum,
+)
 Mul = declare_function("Mul", factors, returns=NumberKind, domain=true)
 declare_properties(
-    Mul, is_associative=True, is_commutative=True, identity_element=1, absorbing_element=0
+    Mul, is_associative=True, is_commutative=True, identity_element=1, absorbing_element=0,
+    evaluate_literals=exact_product,
 )
 Pow = declare_function(
     "Pow", base, exponent, returns=NumberKind,
     domain=Or(Ne(base, 0), Gt(re(exponent), 0)),
 )
+declare_properties(Pow, evaluate_literals=exact_power)
 
 NegativeOne = NumberKind(-1)
 

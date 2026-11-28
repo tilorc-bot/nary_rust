@@ -11,7 +11,7 @@
     >>> normalise(sin(x) * 0), normalise(log(x) * 0)
     (0, Mul(0, log(x)))
     >>> normalise(NumberKind(3) / 2 + 1), normalise(Pow(2, 3) < 9), normalise(x + 1 + 2)
-    (Rational(5, 2), true, Add(1, 2, x))
+    (Rational(5, 2), true, Add(3, x))
 """
 
 from __future__ import annotations
@@ -20,7 +20,6 @@ from typing import Callable
 
 from . import arithmetic_rules, logic_rules  # noqa: F401
 from ._core import Expr
-from ._numbers import evaluate
 from .property_steps import apply_property_steps
 from .logic import true
 from .rewriting import _has_a_value
@@ -51,11 +50,10 @@ def normalise(e: Expr, known: Callable[[Expr], object] | None = None) -> Expr:
         raise TypeError(f"normalise expects an expression, got {e!r}")
     known = known or (lambda condition: False)
 
-    def literal_or_property_steps(head: Expr, args: list[Expr]) -> Expr:
-        literal = evaluate(head, args)
-        return apply_property_steps(head, args, has_a_value) if literal is None else literal
-
-    walk = bottom_up(literal_or_property_steps, flat=lambda head: head.is_associative)
+    walk = bottom_up(
+        lambda head, args: apply_property_steps(head, args, has_a_value),
+        flat=lambda head: head.is_associative,
+    )
 
     def holds(condition: Expr) -> bool:
         condition = walk(condition)

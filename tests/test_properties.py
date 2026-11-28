@@ -3,7 +3,8 @@ import sys
 
 import pytest
 
-from nary import Add, Lambda, Many, Mul, NumberKind, Pow, declare_function, exp, log, pi
+from nary import Add, Lambda, Many, Mul, NumberKind, Pow, declare_function, exp, log, pi, sin
+from nary._numbers import exact_product, exact_sum
 from nary.arithmetic_rules import rules
 from nary.calculus import Derivative, NumberFunction
 from nary.logic import true
@@ -90,8 +91,9 @@ def test_import_nary_alone_declares_add_and_mul():
         "assert not is_flat(nary.Pow) and not is_unordered(nary.Pow)\n"
         "one, zero = nary.NumberKind(1), nary.NumberKind(0)\n"
         "assert dict(nary.Mul.properties) == {'is_associative': True, 'is_commutative': True,"
-        " 'identity_element': one, 'absorbing_element': zero}\n"
-        "assert dict(nary.Pow.properties) == {}\n"
+        " 'identity_element': one, 'absorbing_element': zero,"
+        " 'evaluate_literals': nary._numbers.exact_product}\n"
+        "assert dict(nary.Pow.properties) == {'evaluate_literals': nary._numbers.exact_power}\n"
         "import nary.arithmetic_rules\n"
         "assert len(nary.arithmetic_rules.rules) == 9\n"
     )
@@ -101,10 +103,12 @@ def test_import_nary_alone_declares_add_and_mul():
 def test_properties_in_the_order_declared():
     assert list(Add.properties.items()) == [
         ("is_associative", True), ("is_commutative", True), ("identity_element", NumberKind(0)),
+        ("evaluate_literals", exact_sum),
     ]
     assert list(Mul.properties.items()) == [
         ("is_associative", True), ("is_commutative", True),
         ("identity_element", NumberKind(1)), ("absorbing_element", NumberKind(0)),
+        ("evaluate_literals", exact_product),
     ]
     assert Mul.properties["identity_element"] is Mul.identity_element
     assert Mul.properties["identity_element"].kind is NumberKind
@@ -123,7 +127,7 @@ def test_properties_in_the_order_declared():
 def test_properties_of_functions_that_declared_nothing():
     x = NumberKind("x")
     f = NumberFunction("f")
-    for F in (Pow, f, Lambda(x, x * x), Derivative(f)):
+    for F in (sin, f, Lambda(x, x * x), Derivative(f)):
         assert dict(F.properties) == {}
     for e in (x, NumberKind(1), pi, Add(x, 1), f(x)):
         with pytest.raises(AttributeError, match="no attribute 'properties'"):
@@ -131,12 +135,12 @@ def test_properties_of_functions_that_declared_nothing():
 
 
 def test_properties_are_read_only():
-    for F in (Mul, Pow):
+    for F in (Mul, sin):
         with pytest.raises(TypeError):
             F.properties["is_idempotent"] = True
         with pytest.raises(AttributeError):
             F.properties.clear()
-    assert len(Mul.properties) == 4 and dict(Pow.properties) == {}
+    assert len(Mul.properties) == 5 and dict(sin.properties) == {}
     assert Mul.identity_element == NumberKind(1)
 
 
@@ -144,7 +148,7 @@ def test_properties_is_reserved():
     with pytest.raises(ValueError, match="properties is already an attribute of functions"):
         declare_property("properties")
     with pytest.raises(TypeError, match="properties is not a property"):
-        declare_properties(Pow, properties={})
+        declare_properties(sin, properties={})
 
 
 def test_a_property_declared_after_functions_were_read():
@@ -154,7 +158,7 @@ def test_a_property_declared_after_functions_were_read():
     for F in (Add, Mul, Pow, NumberFunction("f")):
         assert F.is_cancellative is False and F.unit_count is None
         assert "is_cancellative" not in F.properties
-    assert Mul.identity_element == NumberKind(1) and len(Mul.properties) == 4
+    assert Mul.identity_element == NumberKind(1) and len(Mul.properties) == 5
 
 
 def test_a_function_that_declares_after_it_was_read():

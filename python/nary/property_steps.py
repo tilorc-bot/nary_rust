@@ -32,8 +32,9 @@ def step(name: str, commutative_only: bool = False, per_argument: bool = False) 
 
     Returns:
         A decorator. Unless per_argument is True, the function it registers is called as
-        fn(head, args) and returns the new args. Either way getattr(head, name) is passed
-        as one more argument, unless name starts with is_.
+        fn(head, args) and returns the new args, or an expression equal to head(*args).
+        Either way getattr(head, name) is passed as one more argument, unless name starts
+        with is_.
 
     >>> from nary import Many, NumberKind, declare_function, log
     >>> from nary.logic import true
@@ -99,6 +100,7 @@ def apply_property_steps(head: Expr, args: list[Expr], has_a_value: Callable) ->
     Returns:
         head applied to the arguments that are left. If one is left, that argument.
         If none is left and head.identity_element is not None, head.identity_element.
+        If a function returned an expression in place of the arguments, that expression.
 
     >>> from nary import Add, Mul, NumberKind, log, sin
     >>> from nary.rewriting import _has_a_value
@@ -120,12 +122,15 @@ def apply_property_steps(head: Expr, args: list[Expr], has_a_value: Callable) ->
         for arg in args:
             flattened += arg.args if not arg.is_atom and arg.head == head else [arg]
         args = flattened
-    if associative or len(args) == 2:
-        args = _apply_steps_until_unchanged(head, args, commutative, has_a_value)
-        if len(args) == 1:
-            return args[0]
-        if not args and head.identity_element is not None:
+    if associative or len(args) <= 2:
+        new_args = _apply_steps_until_unchanged(head, args, commutative, has_a_value)
+        if isinstance(new_args, Expr):
+            return new_args
+        if len(new_args) == 1 and (associative or len(args) > 1):
+            return new_args[0]
+        if not new_args and head.identity_element is not None:
             return head.identity_element
+        args = new_args
     if commutative:
         args = sorted(args, key=_sort_key)
     return head(*args)
@@ -133,7 +138,7 @@ def apply_property_steps(head: Expr, args: list[Expr], has_a_value: Callable) ->
 
 def _apply_steps_until_unchanged(
     head: Expr, args: list[Expr], commutative: bool, has_a_value: Callable,
-) -> list[Expr]:
+) -> list[Expr] | Expr:
     properties = head.properties
     seen_before = set()
     while True:
@@ -151,6 +156,8 @@ def _apply_steps_until_unchanged(
             args_after_steps = _apply_step_keeping_arguments_without_a_value(
                 registered, head, args_after_steps, declared_value, has_a_value,
             )
+            if isinstance(args_after_steps, Expr):
+                return args_after_steps
         if args_after_steps == args:
             return args
         args = args_after_steps
@@ -158,10 +165,10 @@ def _apply_steps_until_unchanged(
 
 def _apply_step_keeping_arguments_without_a_value(
     registered: _Step, head: Expr, args: list[Expr], declared_value: tuple, has_a_value: Callable,
-) -> list[Expr]:
+) -> list[Expr] | Expr:
     if not registered.per_argument:
         new_args = registered.function(head, args, *declared_value)
-        removed = set(args) - set(new_args)
+        removed = set(args) if isinstance(new_args, Expr) else set(args) - set(new_args)
         return new_args if all(map(has_a_value, removed)) else args
     new_args = []
     for arg, equal_args in groupby(args):
@@ -186,3 +193,26 @@ def _one_copy_of_each(arg: Expr, copies: int) -> int:
 @step("absorbing_element")
 def _only_the_absorbing_element(head: Expr, args: list[Expr], absorbing: Expr) -> list[Expr]:
     return [absorbing] if absorbing in args else args
+
+
+@step("evaluate_literals")
+def _literals_evaluated(
+    head: Expr, args: list[Expr], evaluate_literals: Callable,
+) -> list[Expr] | Expr:
+    if not head.is_associative:
+        if not all(arg.is_literal for arg in args):
+            return args
+        literal = _evaluated(head, args, evaluate_literals)
+        return args if literal is None else literal
+    ordered = sorted(args, key=lambda arg: not arg.is_literal) if head.is_commutative else args
+    new_args = []
+    for is_literal, run in groupby(ordered, key=lambda arg: arg.is_literal):
+        run = list(run)
+        literal = _evaluated(head, run, evaluate_literals) if is_literal and len(run) > 1 else None
+        new_args += run if literal is None else [literal]
+    return new_args if len(new_args) < len(args) else args
+
+
+def _evaluated(head: Expr, literals: list[Expr], evaluate_literals: Callable) -> Expr | None:
+    value = evaluate_literals(*(literal.value for literal in literals))
+    return None if value is None else head.kind.output(value)
